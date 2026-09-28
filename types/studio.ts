@@ -1,8 +1,10 @@
 // Shapes returned by the Podcast Studio API (app/api/studio) to the dashboard.
 
+import type { BrollStyle } from '@/lib/broll';
 import type { ShowNotes, SpokenWord } from '@/lib/showNotes';
 import type { ReviewUtterance } from '@/lib/transcript';
-import type { DetectedSpeaker, EpisodeBroll, EpisodeDescript, EpisodeFinal, EpisodePackage, EpisodeNotes, EpisodeStage, EpisodeStatus, TranscriptCorrections } from './episode';
+import type { ThumbKind } from '@/lib/thumbnail';
+import type { DetectedSpeaker, EpisodeBroll, EpisodeDescript, EpisodeFinal, EpisodePackage, EpisodeNotes, EpisodeStage, EpisodeStatus, EpisodeThumbnails, TranscriptCorrections } from './episode';
 
 export interface DriveVideo {
     id: string;
@@ -142,4 +144,25 @@ export interface FinalView {
     quoteCount: number;
     warnings: string[];
     finishedAt: number | null;
+}
+
+// Thumbnail options and Checkpoint D on the show notes page (docs/specs/011-thumbnails.md).
+// Images are fetched by name (frame-0…, ai, approved); `key` changes when the image does.
+export interface ThumbnailsView {
+    status: EpisodeThumbnails['status'] | null;
+    only: 'image' | null;
+    error: string | null;
+    canStart: boolean;                  // approved notes and a current final cut
+    stale: boolean;                     // made from an earlier final cut
+    hooks: string[];
+    text: string;
+    frames: { atMs: number; speaker: string; text: string; key: string }[];
+    frame: number;
+    image: { idea: string; style: BrollStyle; prompt: string; key: string } | null;
+    choice: ThumbKind | null;
+    finishedAt: number | null;
+    title: string | null;               // the approved YouTube title
+    chapterCount: number;
+    blockers: string[];                 // what stands before approval
+    approval: { by: string; at: number; kind: ThumbKind; text: string; key: string; stale: boolean } | null;
 }

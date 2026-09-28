@@ -27,8 +27,10 @@ agent/src/    scout.ts — YouTube scorer, runs in GitHub Actions, NOT on App Ho
               podcast/package.ts — spec 005 step 8 part 1 (edit package for Descript), GitHub Actions only
               podcast/descript.ts — spec 005 step 8 part 2 (Descript project via its API), GitHub Actions only
               podcast/final.ts — spec 005 steps 10-11 (final cut from Descript, loudness, re-timed chapters), GitHub Actions only
+              podcast/thumbnails.ts — spec 005 step 12 (thumbnail texts, frames and AI background), GitHub Actions only;
+              the Studio draws the options (components/studio/thumbnailCanvas.ts) and approves them (Checkpoint D)
 scripts/      make_admin.ts
-docs/specs/   numbered specs, 001-010
+docs/specs/   numbered specs, 001-011
 types/
 ```
 
@@ -91,7 +93,9 @@ the episode, teaser clips, b-roll and notes in `03 For Descript/<episode>`; "Sen
 starts `podcast_descript.yml` (`agent/src/podcast/descript.ts`), which makes the Descript project through
 Descript's API with the `DESCRIPT_API_TOKEN` repo secret. Descript is the final edit (spec 005 step 9). "Get the final cut from Descript" starts
 `podcast_final.yml` (`agent/src/podcast/final.ts`, `docs/specs/010-final-cut.md`), which publishes the edit through the
-same API, normalizes it to −14 LUFS, saves it to `04 Final` in Drive, and moves the chapter and quote times onto it. The transcript Google Doc beside the video only works in a shared drive:
+same API, normalizes it to −14 LUFS, saves it to `04 Final` in Drive, and moves the chapter and quote times onto it. "Make thumbnail options" starts `podcast_thumbnails.yml` (`agent/src/podcast/thumbnails.ts`,
+`docs/specs/011-thumbnails.md`), which needs `ANTHROPIC_API_KEY` and `OPENAI_API_KEY`; the producer picks one and
+approves the episode there (Checkpoint D). The transcript Google Doc beside the video only works in a shared drive:
 service accounts have no My Drive storage and cannot create files there. Secrets: `PODCAST_SA_JSON`,
 `ASSEMBLYAI_API_KEY`, `RESEND_API_KEY`. Repo variables: `DRIVE_TO_PROCESS_FOLDER_ID`,
 `DRIVE_PROCESSED_FOLDER_ID`, `ALERT_EMAIL`.

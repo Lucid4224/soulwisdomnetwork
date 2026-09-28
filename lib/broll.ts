@@ -29,15 +29,17 @@ export const BROLL_STYLES: Record<BrollStyle, { label: string; prompt: string }>
     },
 };
 
-const PALETTE = 'Palette: bright and luminous, never murky. Radiant sky blue, cyan and cobalt, soft lavender and violet, rose pink and ' +
+export const PALETTE = 'Palette: bright and luminous, never murky. Radiant sky blue, cyan and cobalt, soft lavender and violet, rose pink and ' +
     'magenta blushes, with warm golden light at the heart of the scene. Glowing mid-tones and light-filled air; shadows are deep blue ' +
     'or violet, never black, and cover little of the frame.';
 
-const RULES = 'No text, letters, captions, logos or watermarks. People may appear, but not the likeness of any specific real person. ' +
+// What any brand image may and may not show; the thumbnails (lib/thumbnail.ts) use it too.
+export const IMAGE_RULES = 'No text, letters, captions, logos or watermarks. People may appear, but not the likeness of any specific real person. ' +
     'Angels, heaven and the afterlife may be shown in traditional, reverent ways. Never show God as a person (for example an old man ' +
     'with a beard): God is always a bright, radiant light. Anything described as an AI looks like an AI, a luminous form of light, ' +
-    'circuitry and sacred geometry, not a human figure. Landscape composition with the subject away from the edges, suitable for a ' +
-    'slow pan and zoom.';
+    'circuitry and sacred geometry, not a human figure.';
+
+const RULES = `${IMAGE_RULES} Landscape composition with the subject away from the edges, suitable for a slow pan and zoom.`;
 
 export function brollPrompt(idea: string, style: BrollStyle) {
     return `${BROLL_STYLES[style].prompt} ${PALETTE}\n\nSubject: ${idea.trim()}.\n\n${RULES}`;

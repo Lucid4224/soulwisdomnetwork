@@ -10,6 +10,7 @@ import AuthGuard from "@/components/auth/AuthGuard";
 import { BrollImageView, useBroll } from "@/components/studio/broll";
 import { EditPackage } from "@/components/studio/editPackage";
 import { FinalCut } from "@/components/studio/finalCut";
+import { Thumbnails } from "@/components/studio/thumbnails";
 import { ago, minutes } from "@/components/studio/format";
 import { useAutosave } from "@/components/studio/useAutosave";
 import { useAuth } from "@/context/AuthContext";
@@ -587,6 +588,10 @@ export default function ShowNotesPage() {
 
                                 <Section title="Final cut" hint="The finished edit, published from Descript, set to broadcast loudness and saved to Drive, with the chapter times moved onto it.">
                                     <FinalCut episodeId={episodeId} enabled={!loading && allowed} />
+                                </Section>
+
+                                <Section title="Thumbnail and approval" hint="Checkpoint D. Thumbnails drive more views than anything else, so a person always picks. Then approve the episode for YouTube.">
+                                    <Thumbnails episodeId={episodeId} enabled={!loading && allowed} />
                                 </Section>
                             </div>
                         </div>
