@@ -4,7 +4,8 @@ import type { BrollStyle } from '@/lib/broll';
 import type { ShowNotes, SpokenWord } from '@/lib/showNotes';
 import type { ReviewUtterance } from '@/lib/transcript';
 import type { ThumbKind } from '@/lib/thumbnail';
-import type { DetectedSpeaker, EpisodeBroll, EpisodeDescript, EpisodeFinal, EpisodePackage, EpisodeNotes, EpisodeStage, EpisodeStatus, EpisodeThumbnails, TranscriptCorrections } from './episode';
+import type { YoutubeMetadata } from '@/lib/youtube';
+import type { DetectedSpeaker, EpisodeBroll, EpisodeDescript, EpisodeFinal, EpisodePackage, EpisodeNotes, EpisodeStage, EpisodeStatus, EpisodeThumbnails, EpisodeYoutube, TranscriptCorrections } from './episode';
 
 export interface DriveVideo {
     id: string;
@@ -165,4 +166,19 @@ export interface ThumbnailsView {
     chapterCount: number;
     blockers: string[];                 // what stands before approval
     approval: { by: string; at: number; kind: ThumbKind; text: string; key: string; stale: boolean } | null;
+}
+
+// The YouTube upload on the show notes page (docs/specs/012-youtube-upload.md).
+export interface YoutubeView {
+    status: EpisodeYoutube['status'] | null;
+    error: string | null;
+    blocker: string | null;             // why it cannot be uploaded yet
+    videoId: string | null;
+    url: string | null;
+    privacyStatus: string | null;       // as YouTube last reported it
+    finishedAt: number | null;
+    warnings: string[];
+    finalOutdated: boolean;             // the video on YouTube is an earlier final cut
+    detailsOutdated: boolean;           // approved again since the last upload or update
+    preview: YoutubeMetadata | null;    // exactly what is sent
 }

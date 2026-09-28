@@ -198,6 +198,24 @@ export interface EpisodeApproval {
     finalAt: number;
 }
 
+// The YouTube upload (spec 005 step 13; docs/specs/012-youtube-upload.md). Uploaded once; a
+// second run updates the title, description, tags, thumbnail and captions of the same video.
+export interface EpisodeYoutube {
+    status: 'queued' | 'uploading' | 'processing' | 'ready' | 'failed';
+    requestedAt?: unknown;
+    startedAt?: unknown;
+    finishedAt?: unknown;
+    error?: string | null;
+    videoId?: string;
+    url?: string;
+    privacyStatus?: string;               // as YouTube reports it after the upload
+    uploadedAt?: unknown;
+    finalAt?: number;                     // the final cut that was uploaded (its finishedAt)
+    approvalAt?: number;                  // the approval it was uploaded or updated under
+    captionId?: string | null;
+    warnings?: string[];
+}
+
 export interface Episode {
     title: string;                        // from the file name, Zoom prefix stripped
     recordedAt: string | null;            // ISO date from a Zoom file name, if present
@@ -241,6 +259,7 @@ export interface Episode {
     final?: EpisodeFinal;                 // the finished episode, spec 005 steps 10-11
     thumbnails?: EpisodeThumbnails;       // thumbnail options, spec 005 step 12
     approval?: EpisodeApproval;           // Checkpoint D
+    youtube?: EpisodeYoutube;             // the upload, spec 005 step 13
     corrections?: TranscriptCorrections;  // speaker review fixes, a layer over raw.json
     correctionsVersion?: number;          // bumped on every save; stops two people overwriting
     costs: { items: CostItem[]; totalUsd: number };
