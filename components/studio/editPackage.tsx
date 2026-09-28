@@ -73,6 +73,9 @@ export function EditPackage({ episodeId, enabled, upToDate }: { episodeId: strin
     const built = view?.status === "ready";
     const stale = built && (view.builtFromVersion !== view.approvedVersion || !view.clipsStored);
     const canSend = upToDate && built && !stale && !working && !sending && !starting;
+    // A project made from earlier notes, or before the package was last rebuilt, has old clips and images.
+    const descriptStale = d?.status === "ready" && (d.builtFromVersion !== view?.approvedVersion
+        || (view?.finishedAt != null && d.finishedAt != null && view.finishedAt > d.finishedAt));
 
     return (
         <div className="flex flex-col gap-2">
@@ -122,6 +125,9 @@ export function EditPackage({ episodeId, enabled, upToDate }: { episodeId: strin
                                 ? `Made ${d.finishedAt ? ago(d.finishedAt) : ""}${d.mediaMinutes != null ? ` · ${d.mediaMinutes} media minutes` : ""}${d.aiCredits ? ` · ${d.aiCredits} AI credits` : ""}. Edit it in Descript; that is the final cut.`
                                 : "Makes a Descript project: the \u201cIn this episode\u201d clips, the intro and the full episode on one timeline, filler words removed and Studio Sound on, b-roll images in the media bin. Uses the Descript plan\u2019s media minutes and AI credits."}
                 </p>
+                {descriptStale && !sending && (
+                    <p className="text-sm text-amber-300">This Descript project was made from an earlier edit package, so it has the old clips and images. Send to Descript again to use the current ones.</p>
+                )}
                 {d?.status === "ready" && d.agentResponse && <p className="text-xs text-gray-400">Underlord: {d.agentResponse}</p>}
                 {d?.status === "ready" && d.warnings.map(w => <p key={w} className="text-xs text-amber-300">{w}</p>)}
                 {d?.error && d.status === "failed" && <p className="text-sm text-red-300">{d.error}</p>}
