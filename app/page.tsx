@@ -91,9 +91,9 @@ export default function Home() {
                 <footer className="mt-auto border-t border-white/5 py-8 text-center text-xs text-gray-600">
                     <p>&copy; 2026 Soul Wisdom Network. All rights reserved.</p>
                     <div className="flex justify-center gap-4 mt-2">
-                        <span className="hover:text-gray-400 cursor-pointer">Privacy Policy</span>
-                        <span className="hover:text-gray-400 cursor-pointer">Terms of Service</span>
-                        <span className="hover:text-gray-400 cursor-pointer">Contact</span>
+                        <Link href="/privacy" className="hover:text-gray-400">Privacy Policy</Link>
+                        <Link href="/terms" className="hover:text-gray-400">Terms of Service</Link>
+                        <a href="mailto:soulwisdomcollective@gmail.com" className="hover:text-gray-400">Contact</a>
                     </div>
                 </footer>
 
