@@ -9,6 +9,7 @@ import { useParams } from "next/navigation";
 import AuthGuard from "@/components/auth/AuthGuard";
 import { BrollImageView, useBroll } from "@/components/studio/broll";
 import { EditPackage } from "@/components/studio/editPackage";
+import { FinalCut } from "@/components/studio/finalCut";
 import { ago, minutes } from "@/components/studio/format";
 import { useAutosave } from "@/components/studio/useAutosave";
 import { useAuth } from "@/context/AuthContext";
@@ -582,6 +583,10 @@ export default function ShowNotesPage() {
 
                                 <Section title="Edit package and Descript" hint="Built from the approved notes. Descript has the final say: the edit happens there.">
                                     <EditPackage episodeId={episodeId} enabled={!loading && allowed} upToDate={upToDate} />
+                                </Section>
+
+                                <Section title="Final cut" hint="The finished edit, published from Descript, set to broadcast loudness and saved to Drive, with the chapter times moved onto it.">
+                                    <FinalCut episodeId={episodeId} enabled={!loading && allowed} />
                                 </Section>
                             </div>
                         </div>

@@ -26,8 +26,9 @@ agent/src/    scout.ts — YouTube scorer, runs in GitHub Actions, NOT on App Ho
               podcast/broll.ts — spec 005 step 7 (b-roll images), GitHub Actions only
               podcast/package.ts — spec 005 step 8 part 1 (edit package for Descript), GitHub Actions only
               podcast/descript.ts — spec 005 step 8 part 2 (Descript project via its API), GitHub Actions only
+              podcast/final.ts — spec 005 steps 10-11 (final cut from Descript, loudness, re-timed chapters), GitHub Actions only
 scripts/      make_admin.ts
-docs/specs/   numbered specs, 001-009
+docs/specs/   numbered specs, 001-010
 types/
 ```
 
@@ -88,7 +89,9 @@ images" on that page starts `podcast_broll.yml` (`agent/src/podcast/broll.ts`,
 `podcast_package.yml` (`agent/src/podcast/package.ts`, `docs/specs/009-edit-package.md`), which puts
 the episode, teaser clips, b-roll and notes in `03 For Descript/<episode>`; "Send to Descript" then
 starts `podcast_descript.yml` (`agent/src/podcast/descript.ts`), which makes the Descript project through
-Descript's API with the `DESCRIPT_API_TOKEN` repo secret. Descript is the final edit (spec 005 step 9). The transcript Google Doc beside the video only works in a shared drive:
+Descript's API with the `DESCRIPT_API_TOKEN` repo secret. Descript is the final edit (spec 005 step 9). "Get the final cut from Descript" starts
+`podcast_final.yml` (`agent/src/podcast/final.ts`, `docs/specs/010-final-cut.md`), which publishes the edit through the
+same API, normalizes it to −14 LUFS, saves it to `04 Final` in Drive, and moves the chapter and quote times onto it. The transcript Google Doc beside the video only works in a shared drive:
 service accounts have no My Drive storage and cannot create files there. Secrets: `PODCAST_SA_JSON`,
 `ASSEMBLYAI_API_KEY`, `RESEND_API_KEY`. Repo variables: `DRIVE_TO_PROCESS_FOLDER_ID`,
 `DRIVE_PROCESSED_FOLDER_ID`, `ALERT_EMAIL`.

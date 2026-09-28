@@ -1,0 +1,53 @@
+# Spec 005 steps 10-11: the final cut (agent/src/podcast/final.ts, docs/specs/010-final-cut.md).
+# Publishes the edited episode from Descript, normalizes its loudness, saves it to Cloud Storage
+# and "04 Final" in Drive, then moves the show notes' chapter and quote times onto it. Started
+# from the show notes page, or by hand from the Actions tab with the episode ID.
+
+name: Podcast Final Cut
+
+on:
+  workflow_dispatch:
+    inputs:
+      episode_id:
+        description: 'Episode ID (the Drive file ID in the Podcast Studio URL)'
+        required: true
+
+# One run per episode at a time; a second request for the same episode waits.
+concurrency:
+  group: podcast-final-${{ inputs.episode_id }}
+  cancel-in-progress: false
+
+jobs:
+  final:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v7
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v7
+      with:
+        node-version: '24'
+        cache: 'npm'
+
+    - name: Install Dependencies
+      run: npm ci
+
+    - name: Install ffmpeg
+      run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+
+    - name: Make the Final Cut
+      env:
+        EPISODE_ID: ${{ inputs.episode_id }}
+        PODCAST_SA_JSON: ${{ secrets.PODCAST_SA_JSON }}
+        DESCRIPT_API_TOKEN: ${{ secrets.DESCRIPT_API_TOKEN }}
+        ASSEMBLYAI_API_KEY: ${{ secrets.ASSEMBLYAI_API_KEY }}
+        RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+        ALERT_EMAIL: ${{ vars.ALERT_EMAIL }}
+        DRIVE_PROCESSED_FOLDER_ID: ${{ vars.DRIVE_PROCESSED_FOLDER_ID }}
+        DRIVE_FINAL_FOLDER_ID: ${{ vars.DRIVE_FINAL_FOLDER_ID }}
+        ASSEMBLYAI_SPEECH_MODELS: ${{ vars.ASSEMBLYAI_SPEECH_MODELS }}
+        GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      run: npx tsx agent/src/podcast/final.ts

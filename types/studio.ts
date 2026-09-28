@@ -2,7 +2,7 @@
 
 import type { ShowNotes, SpokenWord } from '@/lib/showNotes';
 import type { ReviewUtterance } from '@/lib/transcript';
-import type { DetectedSpeaker, EpisodeBroll, EpisodeDescript, EpisodePackage, EpisodeNotes, EpisodeStage, EpisodeStatus, TranscriptCorrections } from './episode';
+import type { DetectedSpeaker, EpisodeBroll, EpisodeDescript, EpisodeFinal, EpisodePackage, EpisodeNotes, EpisodeStage, EpisodeStatus, TranscriptCorrections } from './episode';
 
 export interface DriveVideo {
     id: string;
@@ -124,4 +124,22 @@ export interface PackageView {
         finishedAt: number | null;
         builtFromVersion: number | null;
     };
+}
+
+// GET /api/studio/episodes/[id]/final: the final cut on the Checkpoint B page.
+export interface FinalView {
+    status: EpisodeFinal['status'] | null;
+    error: string | null;
+    canStart: boolean;                  // there is a finished Descript project to publish
+    stale: boolean;                     // published from an earlier Descript project or notes
+    driveUrl: string | null;
+    folderUrl: string | null;
+    shareUrl: string | null;
+    durationSeconds: number | null;
+    loudness: EpisodeFinal['loudness'] | null;
+    coverage: number | null;
+    chapters: NonNullable<EpisodeFinal['chapters']>;
+    quoteCount: number;
+    warnings: string[];
+    finishedAt: number | null;
 }

@@ -12,15 +12,13 @@ import { getStorage } from 'firebase-admin/storage';
 import { mmss } from '../../../lib/showNotes';
 import type { Episode } from '../../../types/episode';
 import { loadAlert } from './config';
+import { createDescript } from './descriptApi';
 import { sendEmail } from './notify';
 
-const API = 'https://descriptapi.com/v1';
 const FOLDER = 'Soul Wisdom Podcast';
 const COMPOSITION = 'Episode';
 // Descript asks for URLs that stay valid 12-48 hours.
 const LINK_MS = 36 * 60 * 60_000;
-const POLL_MS = 20_000;
-const JOB_TIMEOUT_MS = 110 * 60_000;
 
 const CLEAN_PROMPT = `In the composition "${COMPOSITION}", remove filler words (such as um, uh, and repeated false ` +
     'starts) throughout, and apply Studio Sound to every clip. Do not remove, shorten, reorder or add anything else: ' +
@@ -34,7 +32,7 @@ function required(name: string) {
 
 const episodeId = required('EPISODE_ID');
 if (!/^[\w-]{10,}$/.test(episodeId)) throw new Error(`Not a valid episode ID: ${episodeId}`);
-const token = required('DESCRIPT_API_TOKEN');
+const { call: descript, waitFor } = createDescript(required('DESCRIPT_API_TOKEN'));
 const alert = loadAlert();
 const runUrl = process.env.GITHUB_RUN_URL || '';
 initializeApp({
@@ -44,66 +42,7 @@ initializeApp({
 const ref = getFirestore().collection('episodes').doc(episodeId);
 const bucket = getStorage().bucket();
 
-const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 const safe = (s: string) => s.replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').trim().slice(0, 100);
-
-async function descript<T>(method: 'GET' | 'POST', route: string, body?: unknown): Promise<T> {
-    for (let attempt = 1; ; attempt++) {
-        const res = await fetch(`${API}${route}`, {
-            method,
-            headers: { Authorization: `Bearer ${token}`, ...(body ? { 'Content-Type': 'application/json' } : {}) },
-            body: body ? JSON.stringify(body) : undefined,
-        });
-        if (res.ok) return res.json() as Promise<T>;
-        const text = await res.text();
-        // Rate limited or a passing server error: wait as told, a few times.
-        if ((res.status === 429 || res.status >= 500) && attempt < 5) {
-            const wait = Number(res.headers.get('retry-after')) || 5 * attempt;
-            console.log(`  ⏳ Descript ${res.status}; retrying in ${wait}s`);
-            await sleep(wait * 1000);
-            continue;
-        }
-        let message = text.slice(0, 300);
-        try {
-            const e = JSON.parse(text) as { error?: string; message?: string };
-            message = [e.error, e.message].filter(Boolean).join(': ') || message;
-        } catch { /* not JSON */ }
-        const hint = res.status === 401 ? ' (check the DESCRIPT_API_TOKEN secret)'
-            : res.status === 402 ? ' (the Descript plan is out of media minutes or AI credits)' : '';
-        throw new Error(`Descript ${method} ${route} failed with ${res.status}: ${message}${hint}`);
-    }
-}
-
-interface Job {
-    job_id: string;
-    job_state: 'queued' | 'running' | 'stopped' | 'cancelled';
-    project_url?: string;
-    progress?: { label: string; percent?: number };
-    result?: {
-        status: string;
-        error_message?: string;
-        media_status?: Record<string, { status: string; error_message?: string }>;
-        media_seconds_used?: number;
-        created_compositions?: { id: string; name: string }[];
-        agent_response?: string;
-        ai_credits_used?: number;
-    };
-}
-
-async function waitFor(jobId: string, what: string): Promise<Job> {
-    const started = Date.now();
-    let last = '';
-    while (Date.now() - started < JOB_TIMEOUT_MS) {
-        const job = await descript<Job>('GET', `/jobs/${encodeURIComponent(jobId)}`);
-        if (job.job_state === 'stopped') return job;
-        if (job.job_state === 'cancelled') throw new Error(`The Descript ${what} job was cancelled`);
-        const now = job.progress ? `${job.progress.label}${job.progress.percent != null ? ` ${job.progress.percent}%` : ''}` : job.job_state;
-        if (now !== last) console.log(`  … ${what}: ${now}`);
-        last = now;
-        await sleep(POLL_MS);
-    }
-    throw new Error(`The Descript ${what} job did not finish within ${JOB_TIMEOUT_MS / 60_000} minutes; check the project in Descript`);
-}
 
 const signed = async (objectPath: string) =>
     (await bucket.file(objectPath).getSignedUrl({ action: 'read', expires: Date.now() + LINK_MS }))[0];

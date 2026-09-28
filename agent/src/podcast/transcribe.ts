@@ -25,6 +25,18 @@ export async function submitTranscription(client: Client, audioFile: string, spe
     return transcript.id;
 }
 
+// Words and their times only, no speakers: for lining the finished episode up with the
+// original (spec 005 step 11). Waits for the result.
+export async function transcribeWords(client: Client, audioFile: string, speechModels: string[]) {
+    const uploadUrl = await withRetry('AssemblyAI upload', () => client.files.upload(audioFile));
+    const submitted = await withRetry('AssemblyAI submit', () => client.transcripts.submit({ audio: uploadUrl, speech_models: speechModels }));
+    const transcript = await waitForTranscript(client, submitted.id);
+    return {
+        id: transcript.id,
+        words: (transcript.words ?? []).map(w => ({ text: w.text, start: w.start, end: w.end })),
+    };
+}
+
 // A job that errored on AssemblyAI's side is resubmitted on retry rather than re-polled.
 export async function hasFailed(client: Client, id: string) {
     const transcript = await withRetry('AssemblyAI get', () => client.transcripts.get(id));
