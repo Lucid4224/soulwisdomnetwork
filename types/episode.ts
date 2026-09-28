@@ -213,6 +213,7 @@ export interface EpisodeYoutube {
     finalAt?: number;                     // the final cut that was uploaded (its finishedAt)
     approvalAt?: number;                  // the approval it was uploaded or updated under
     captionId?: string | null;
+    playlistId?: string | null;           // the podcast playlist it was added to
     warnings?: string[];
 }
 

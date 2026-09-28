@@ -43,5 +43,6 @@ jobs:
         YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
         RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
         ALERT_EMAIL: ${{ vars.ALERT_EMAIL }}
+        YOUTUBE_PLAYLIST_ID: ${{ vars.YOUTUBE_PLAYLIST_ID }}
         GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
       run: npx tsx agent/src/podcast/youtube.ts
