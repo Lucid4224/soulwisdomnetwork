@@ -95,6 +95,18 @@ export function cutClip(input: string, output: string, startSeconds: number, dur
     ]);
 }
 
+// One still, filled to 1280x720, for a thumbnail. `input` may be a URL: seeking before -i
+// reads only the part of the file around that moment.
+export function grabFrame(input: string, output: string, seconds: number) {
+    return run('ffmpeg', [
+        '-y', '-hide_banner', '-loglevel', 'error',
+        '-ss', seconds.toFixed(3), '-i', input, '-frames:v', '1',
+        '-vf', 'scale=iw*sar:ih,setsar=1,scale=1280:720:force_original_aspect_ratio=increase:flags=lanczos,crop=1280:720',
+        '-q:v', '2',
+        output,
+    ]);
+}
+
 // Loudness for the finished episode: -14 LUFS integrated with peaks under -1 dBTP, what
 // YouTube and Spotify play at, so nothing is turned down or sounds quiet beside other shows.
 export const LOUDNESS = { integrated: -14, truePeak: -1, range: 11 };

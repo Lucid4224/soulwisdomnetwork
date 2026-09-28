@@ -1,4 +1,6 @@
+import type { BrollStyle } from '../lib/broll';
 import type { ShowNotes } from '../lib/showNotes';
+import type { ThumbKind } from '../lib/thumbnail';
 
 // Firestore `episodes/{driveFileId}` — written by agent/src/podcast/ingest.ts via the
 // Admin SDK. See docs/specs/005-podcast-production-pipeline.md, steps 1-3.
@@ -155,6 +157,47 @@ export interface EpisodeFinal {
     warnings?: string[];
 }
 
+// Thumbnail options (spec 005 step 12; docs/specs/011-thumbnails.md). The job makes the raw
+// material: short texts from Claude, frames from the final cut, an AI background. The Studio
+// draws the three options from it and the producer picks one at Checkpoint D.
+export interface ThumbnailFrame {
+    path: string;                         // Cloud Storage, 1280x720 JPEG
+    atMs: number;                         // in the final cut
+    speaker: string;                      // the quote it was taken at
+    text: string;
+}
+
+export interface EpisodeThumbnails {
+    status: 'queued' | 'working' | 'ready' | 'failed';
+    only?: 'image' | null;                // just a new AI image
+    imageRequest?: { idea: string; style: BrollStyle } | null;   // an idea the producer wrote
+    requestedAt?: unknown;
+    startedAt?: unknown;
+    finishedAt?: unknown;
+    error?: string | null;
+    hooks?: string[];                     // Claude's texts, best first
+    frames?: ThumbnailFrame[];
+    image?: {
+        idea: string; style: BrollStyle; prompt: string; model: string; path: string; usd: number; createdAt: unknown;
+    };
+    finalAt?: number;                     // the final cut they were made from (its finishedAt)
+    // The producer's choices, saved as they go.
+    text?: string;
+    frame?: number;
+    choice?: ThumbKind | null;
+}
+
+// Checkpoint D: the thumbnail as approved, and who approved the episode for publishing.
+export interface EpisodeApproval {
+    thumbnailPath: string;                // Cloud Storage, JPEG as it will be uploaded
+    kind: ThumbKind;
+    text: string;
+    approvedBy: { uid: string; name: string };
+    approvedAt: unknown;
+    notesVersion: number;                 // what was approved; later changes make it stale
+    finalAt: number;
+}
+
 export interface Episode {
     title: string;                        // from the file name, Zoom prefix stripped
     recordedAt: string | null;            // ISO date from a Zoom file name, if present
@@ -196,6 +239,8 @@ export interface Episode {
     package?: EpisodePackage;             // edit package for Descript, spec 005 step 8
     descript?: EpisodeDescript;           // the Descript project made from it
     final?: EpisodeFinal;                 // the finished episode, spec 005 steps 10-11
+    thumbnails?: EpisodeThumbnails;       // thumbnail options, spec 005 step 12
+    approval?: EpisodeApproval;           // Checkpoint D
     corrections?: TranscriptCorrections;  // speaker review fixes, a layer over raw.json
     correctionsVersion?: number;          // bumped on every save; stops two people overwriting
     costs: { items: CostItem[]; totalUsd: number };

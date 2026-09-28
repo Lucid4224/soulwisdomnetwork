@@ -46,7 +46,7 @@ Fourteen steps. The numbers in brackets map to the ten steps discussed in planni
 | 9 | **Checkpoint C — the human edit, in Descript.** Descript is the final say: arrange the teaser clips, place b-roll, taste cuts, fixes | Human, 20-40 min | 1 |
 | 10 | Pipeline pulls the finished cut back and normalizes loudness **[6]**. Built: "Get the final cut from Descript" publishes through Descript's API, sets −14 LUFS, and saves to Storage and `04 Final` in Drive (spec 010) | Automatic | 1 |
 | 11 | **Re-transcribe the finished video.** This becomes the permanent record, and fixes the chapter times. Built in the same run: the chapter and quote times are moved onto the final cut (spec 010) | Automatic | 1 |
-| 12 | Generate 3 thumbnail options; **Checkpoint D — pick one and approve the episode** **[7]** | Human, ~7 min | 1 |
+| 12 | Generate 3 thumbnail options; **Checkpoint D — pick one and approve the episode** **[7]**. Built: "Make thumbnail options" on the notes page (texts from Claude, frames from the final cut, an AI background), the options drawn in the Studio, and "Approve episode" (spec 011) | Human, ~7 min | 1 |
 | 13 | Publish to YouTube with captions, chapters and thumbnail **[8]** | Automatic | 1 |
 | 14 | Cut shorts, **Checkpoint E — review**, distribute to social **[9]** | Human, ~10 min | 2 |
 | 15 | Everything stored, searchable, linked to published media **[10]**; performance pulled back weekly | Automatic | 3 & 4 |
@@ -242,7 +242,7 @@ A note on scope: this is roughly double the build estimate in the executive repo
 2. **Who owns the checkpoints?** One person for all five, or split by type?
 3. **Which day of the week is backlog day?** A fixed slot makes the rhythm stick; an unscheduled one will slip.
 4. **Publish backlog episodes public or unlisted first?** Recommend unlisted for the first three, then public once we trust the output.
-5. **Brand assets for thumbnails and captions** — colours, fonts, logo treatment.
+5. **Brand assets for thumbnails and captions** — colours, fonts, logo treatment. Thumbnails decided 28 Sept 2026: Outfit Black (the site's heading font), white with gold for key words, the oval logo, the b-roll palette (spec 011). Captions still open.
 6. **Which order do the 20 backlog episodes go in?** Best-first builds an audience faster than chronological.
 
 ---

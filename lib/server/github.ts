@@ -1,5 +1,5 @@
 // Starts and watches the Podcast Ingest workflow (.github/workflows/podcast_ingest.yml)
-// and starts Podcast Show Notes, B-roll, Edit Package, Descript and Final Cut (podcast_notes, _broll, _package, _descript, _final.yml), with GITHUB_ACTIONS_TOKEN: a fine-grained token for this repository, Actions read/write.
+// and starts Podcast Show Notes, B-roll, Edit Package, Descript, Final Cut and Thumbnails (podcast_notes, _broll, _package, _descript, _final, _thumbnails.yml), with GITHUB_ACTIONS_TOKEN: a fine-grained token for this repository, Actions read/write.
 
 const REPO = 'masterytv/soulwisdomnetwork';
 const WORKFLOW = 'podcast_ingest.yml';
@@ -89,5 +89,13 @@ export async function startFinal(episodeId: string) {
     await github('/actions/workflows/podcast_final.yml/dispatches', {
         method: 'POST',
         body: JSON.stringify({ ref: 'main', inputs: { episode_id: episodeId } }),
+    });
+}
+
+// Makes thumbnail options (spec 005 step 12); `onlyImage` makes just a new AI background.
+export async function startThumbnails(episodeId: string, onlyImage: boolean) {
+    await github('/actions/workflows/podcast_thumbnails.yml/dispatches', {
+        method: 'POST',
+        body: JSON.stringify({ ref: 'main', inputs: { episode_id: episodeId, only: onlyImage ? 'image' : '' } }),
     });
 }
