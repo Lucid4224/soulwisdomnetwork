@@ -47,7 +47,7 @@ Fourteen steps. The numbers in brackets map to the ten steps discussed in planni
 | 10 | Pipeline pulls the finished cut back and normalizes loudness **[6]**. Built: "Get the final cut from Descript" publishes through Descript's API, sets −14 LUFS, and saves to Storage and `04 Final` in Drive (spec 010) | Automatic | 1 |
 | 11 | **Re-transcribe the finished video.** This becomes the permanent record, and fixes the chapter times. Built in the same run: the chapter and quote times are moved onto the final cut (spec 010) | Automatic | 1 |
 | 12 | Generate 3 thumbnail options; **Checkpoint D — pick one and approve the episode** **[7]**. Built: "Make thumbnail options" on the notes page (texts from Claude, frames from the final cut, an AI background), the options drawn in the Studio, and "Approve episode" (spec 011) | Human, ~7 min | 1 |
-| 13 | Publish to YouTube with captions, chapters and thumbnail **[8]** | Automatic | 1 |
+| 13 | Publish to YouTube with captions, chapters and thumbnail **[8]**. Built: "Upload to YouTube" on the notes page after Checkpoint D; uploads stay Private until YouTube's API audit passes (spec 012) | Automatic | 1 |
 | 14 | Cut shorts, **Checkpoint E — review**, distribute to social **[9]** | Human, ~10 min | 2 |
 | 15 | Everything stored, searchable, linked to published media **[10]**; performance pulled back weekly | Automatic | 3 & 4 |
 
