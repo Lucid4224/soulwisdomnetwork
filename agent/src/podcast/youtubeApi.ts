@@ -179,5 +179,17 @@ export function createYoutube(creds: YoutubeCredentials) {
             { body, type: `multipart/related; boundary=${boundary}`, what: 'captions' });
     }
 
-    return { upload, getVideo, updateVideo, setThumbnail, listCaptions, deleteCaption, insertCaption };
+    // Adds the video to a playlist (such as the channel's podcast) unless it is already there.
+    async function addToPlaylist(playlistId: string, videoId: string) {
+        const existing = await call<{ items: unknown[] }>('GET',
+            `${API}/playlistItems?part=id&playlistId=${encodeURIComponent(playlistId)}&videoId=${encodeURIComponent(videoId)}`, { what: 'playlist lookup' });
+        if (existing.items.length) return false;
+        await call('POST', `${API}/playlistItems?part=snippet`, {
+            body: JSON.stringify({ snippet: { playlistId, resourceId: { kind: 'youtube#video', videoId } } }),
+            type: 'application/json', what: 'playlist add',
+        });
+        return true;
+    }
+
+    return { upload, getVideo, updateVideo, setThumbnail, listCaptions, deleteCaption, insertCaption, addToPlaylist };
 }

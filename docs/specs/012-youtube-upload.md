@@ -49,6 +49,10 @@ After Checkpoint D, one button puts the approved episode on YouTube with:
      shown for 1 to 6 seconds, and breaks at pauses and at the ends of sentences. They go up
      as a track named "English", which replaces our earlier track and leaves any added by hand
      alone.
+   - **Podcast playlist:** when the repo variable `YOUTUBE_PLAYLIST_ID` is set (the channel's
+     podcast, added 28 Sept 2026), the video is added to that playlist unless it is already
+     there. This also runs on **Update on YouTube**, so a video uploaded earlier gets added then.
+     A failure is a warning, not a failure.
    - It waits up to 10 minutes for YouTube to accept the file, so a rejection is reported.
    - It records `youtube.*` (`types/episode.ts`, `EpisodeYoutube`): `videoId`, `url`, the
      visibility YouTube reports, the final cut and approval it was sent under, and warnings.
@@ -82,7 +86,8 @@ paste the client secret or the token into chat, files or commits.
    - Continue past the warning, then **Exchange authorization code for tokens**, and copy the
      refresh token.
 5. **GitHub → Settings → Secrets and variables → Actions:** add `YOUTUBE_CLIENT_ID`,
-   `YOUTUBE_CLIENT_SECRET` and `YOUTUBE_REFRESH_TOKEN`.
+   `YOUTUBE_CLIENT_SECRET` and `YOUTUBE_REFRESH_TOKEN`. Under **Variables**, add `YOUTUBE_PLAYLIST_ID`
+   (the podcast playlist's ID, after `list=` in its URL).
 6. **YouTube Studio → Settings → Channel → Feature eligibility:** verify the channel by phone,
    or custom thumbnails are refused.
 7. **Apply for the audit** with the YouTube API Services audit and quota extension form
@@ -100,6 +105,5 @@ default quota comfortably covers a few episodes a day.
 
 ## Later
 
-- Add episodes to a podcast playlist, and set YouTube's podcast fields.
 - Set a scheduled publish time from the page once the audit has passed.
 - Pull views and click-through back weekly (spec 005 step 15).

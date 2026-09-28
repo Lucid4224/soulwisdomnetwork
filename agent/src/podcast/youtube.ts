@@ -5,7 +5,8 @@
 // docs/specs/012-youtube-upload.md
 //
 // The video is uploaded once. Running it again updates that video's title, description, tags,
-// thumbnail and captions, and keeps whatever visibility was set in YouTube Studio.
+// thumbnail and captions, and keeps whatever visibility was set in YouTube Studio. With the
+// YOUTUBE_PLAYLIST_ID repo variable set, each video is also added to that playlist (the podcast).
 
 import * as fs from 'fs';
 import * as path from 'path';
@@ -145,6 +146,18 @@ async function main() {
         warnings.push(`The captions were not added: ${message}`);
     }
 
+    // The channel's podcast (repo variable YOUTUBE_PLAYLIST_ID); runs on updates too, so older uploads get added.
+    const playlistId = process.env.YOUTUBE_PLAYLIST_ID?.trim();
+    if (playlistId) {
+        try {
+            console.log(await youtube.addToPlaylist(playlistId, videoId) ? '  ✅ Added to the podcast playlist' : '  ✅ Already in the podcast playlist');
+        } catch (error) {
+            const message = (error as Error).message;
+            console.warn(`  ⚠️ ${message}`);
+            warnings.push(`The video was not added to the podcast playlist (check the YOUTUBE_PLAYLIST_ID repo variable): ${message}`);
+        }
+    }
+
     // Wait a little for YouTube to accept the file, so a rejection shows up here.
     const waitUntil = Date.now() + PROCESSING_WAIT_MS;
     let current = await youtube.getVideo(videoId);
@@ -167,6 +180,7 @@ async function main() {
         'youtube.privacyStatus': privacyStatus,
         'youtube.approvalAt': approvalAt,
         'youtube.captionId': captionId,
+        'youtube.playlistId': playlistId || null,
         'youtube.warnings': warnings,
         'youtube.finishedAt': FieldValue.serverTimestamp(),
         'youtube.error': null,
