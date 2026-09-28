@@ -15,6 +15,11 @@ export const MAX_ATTEMPTS = 3;
 // Skip a video added this recently, so a file still uploading is never picked up.
 export const SETTLE_MINUTES = 15;
 
+// Speech models to try in order; the first AssemblyAI accepts is used.
+export function speechModels() {
+    return (process.env.ASSEMBLYAI_SPEECH_MODELS || 'universal-3-5-pro,universal-2').split(',').map(s => s.trim()).filter(Boolean);
+}
+
 function required(name: string): string {
     const value = process.env[name];
     if (!value) throw new Error(`Missing required environment variable ${name}`);
@@ -37,8 +42,7 @@ export function loadConfig() {
         toProcessFolderId: required('DRIVE_TO_PROCESS_FOLDER_ID'),
         processedFolderId: required('DRIVE_PROCESSED_FOLDER_ID'),
         bucket: process.env.PODCAST_STORAGE_BUCKET || 'soulwisdomnetwork.firebasestorage.app',
-        speechModels: (process.env.ASSEMBLYAI_SPEECH_MODELS || 'universal-3-5-pro,universal-2')
-            .split(',').map(s => s.trim()).filter(Boolean),
+        speechModels: speechModels(),
         costCapUsd: Number(process.env.PODCAST_EPISODE_COST_CAP_USD || 5),
         workDir: process.env.RUNNER_TEMP || '/tmp',
         retryFileId: process.env.RETRY_FILE_ID || '',

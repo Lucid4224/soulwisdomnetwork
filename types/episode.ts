@@ -130,6 +130,31 @@ export interface EpisodeDescript {
     notesVersion?: number;
 }
 
+// The final cut (spec 005 steps 10-11; docs/specs/010-final-cut.md): the edited episode
+// published from Descript, loudness-normalized and kept in Storage and Drive, with the show
+// notes' chapter and quote times moved onto it.
+export interface EpisodeFinal {
+    status: 'queued' | 'publishing' | 'mastering' | 'retiming' | 'ready' | 'failed';
+    requestedAt?: unknown;
+    startedAt?: unknown;
+    finishedAt?: unknown;
+    error?: string | null;
+    projectId?: string;                   // the Descript project it was published from
+    shareUrl?: string;                    // Descript's share page for it
+    videoPath?: string;                   // Cloud Storage
+    driveFileId?: string;
+    driveUrl?: string;
+    folderUrl?: string;                   // "04 Final"
+    durationSeconds?: number;
+    loudness?: { beforeLufs: number; afterLufs: number; truePeak: number };
+    wordsPath?: string;                   // the final cut's words and times, Cloud Storage
+    coverage?: number;                    // share of the original's words found in the final cut
+    chapters?: { title: string; originalMs: number; startMs: number }[];
+    quotes?: { text: string; speaker: string; originalMs: number; startMs: number; endMs: number }[];
+    notesVersion?: number;                // the approved notes the times came from
+    warnings?: string[];
+}
+
 export interface Episode {
     title: string;                        // from the file name, Zoom prefix stripped
     recordedAt: string | null;            // ISO date from a Zoom file name, if present
@@ -170,6 +195,7 @@ export interface Episode {
     broll?: EpisodeBroll;                 // b-roll images, spec 005 step 7
     package?: EpisodePackage;             // edit package for Descript, spec 005 step 8
     descript?: EpisodeDescript;           // the Descript project made from it
+    final?: EpisodeFinal;                 // the finished episode, spec 005 steps 10-11
     corrections?: TranscriptCorrections;  // speaker review fixes, a layer over raw.json
     correctionsVersion?: number;          // bumped on every save; stops two people overwriting
     costs: { items: CostItem[]; totalUsd: number };

@@ -2,6 +2,11 @@ import { spawn } from 'child_process';
 import { PermanentError } from './errors';
 
 function run(cmd: string, args: string[]): Promise<string> {
+    return runWithLog(cmd, args).then(r => r.stdout);
+}
+
+// Also returns the end of stderr, where ffmpeg's filters print their reports.
+function runWithLog(cmd: string, args: string[]): Promise<{ stdout: string; stderr: string }> {
     return new Promise((resolve, reject) => {
         const child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'] });
         let stdout = '';
@@ -10,7 +15,7 @@ function run(cmd: string, args: string[]): Promise<string> {
         child.stderr.on('data', d => { stderr = (stderr + d).slice(-4000); });
         child.on('error', reject);
         child.on('close', code => {
-            if (code === 0) resolve(stdout);
+            if (code === 0) resolve({ stdout, stderr });
             // ffmpeg failing on a file is bad input, not a network blip.
             else reject(new PermanentError(`${cmd} exited with ${code}: ${stderr.split('\n').slice(-5).join(' ').trim()}`));
         });
@@ -88,4 +93,38 @@ export function cutClip(input: string, output: string, startSeconds: number, dur
         '-movflags', '+faststart',
         output,
     ]);
+}
+
+// Loudness for the finished episode: -14 LUFS integrated with peaks under -1 dBTP, what
+// YouTube and Spotify play at, so nothing is turned down or sounds quiet beside other shows.
+export const LOUDNESS = { integrated: -14, truePeak: -1, range: 11 };
+
+interface LoudnormReport { input_i: string; input_tp: string; input_lra: string; input_thresh: string; target_offset: string; output_i: string; output_tp: string }
+
+function loudnormReport(stderr: string): LoudnormReport {
+    const json = stderr.slice(stderr.lastIndexOf('{'), stderr.lastIndexOf('}') + 1);
+    try {
+        return JSON.parse(json) as LoudnormReport;
+    } catch {
+        throw new PermanentError(`Could not read the loudness measurement: ${stderr.slice(-300)}`);
+    }
+}
+
+// Two passes of ffmpeg's loudnorm: measure, then correct in one linear gain change (no
+// pumping). The picture is copied untouched. Returns the loudness before and after, in LUFS.
+export async function normalizeLoudness(input: string, output: string) {
+    const target = `I=${LOUDNESS.integrated}:TP=${LOUDNESS.truePeak}:LRA=${LOUDNESS.range}`;
+    const measured = loudnormReport((await runWithLog('ffmpeg', [
+        '-hide_banner', '-nostats', '-i', input, '-vn', '-af', `loudnorm=${target}:print_format=json`, '-f', 'null', '-',
+    ])).stderr);
+    const done = loudnormReport((await runWithLog('ffmpeg', [
+        '-y', '-hide_banner', '-nostats', '-i', input,
+        '-af', `loudnorm=${target}:measured_I=${measured.input_i}:measured_TP=${measured.input_tp}` +
+            `:measured_LRA=${measured.input_lra}:measured_thresh=${measured.input_thresh}` +
+            `:offset=${measured.target_offset}:linear=true:print_format=json`,
+        '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-ar', '48000',
+        '-movflags', '+faststart',
+        output,
+    ])).stderr);
+    return { beforeLufs: Number(measured.input_i), afterLufs: Number(done.output_i), truePeak: Number(done.output_tp) };
 }
