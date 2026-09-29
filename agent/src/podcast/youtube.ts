@@ -19,7 +19,7 @@ import { youtubeMetadata } from '../../../lib/youtube';
 import type { Episode } from '../../../types/episode';
 import { loadAlert } from './config';
 import { withRetry } from './errors';
-import { sendEmail } from './notify';
+import { describeError, failureSubject, sendEmail } from './notify';
 import { createYoutube, type VideoResource } from './youtubeApi';
 
 // Our captions track, told apart from any added by hand in YouTube Studio.
@@ -202,7 +202,7 @@ main().catch(async error => {
         'youtube.status': 'failed', 'youtube.error': message, 'youtube.finishedAt': FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
     }).catch(() => {});
-    await sendEmail({ alert }, `YouTube upload failed: ${episodeId}`,
-        `The YouTube upload could not be finished.\n\nError: ${message}\n\nTry again from the show notes page.${runUrl ? `\n\nRun log: ${runUrl}` : ''}`);
+    await sendEmail({ alert }, failureSubject(`YouTube upload failed: ${episodeId}`, message),
+        `The YouTube upload could not be finished.\n\n${describeError(message)}\n\nTry again from the show notes page.${runUrl ? `\n\nRun log: ${runUrl}` : ''}`);
     process.exit(1);
 });

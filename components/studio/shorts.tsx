@@ -13,6 +13,7 @@ import {
     DAY_MS, DEFAULT_ASPECT, HEADLINE_MAX_CHARS, publishSlot, QUOTE_MATCH_LOW, renderInputs, sameRender, SHORT_ASPECTS, SHORT_MAX_MS, SHORT_MIN_MS,
     SHORT_TARGET_MS, SHORT_TITLE_MAX, sideCrop, wordBounds, type ShortAspect, type ShortEdit,
 } from "@/lib/shorts";
+import { ErrorNote } from "@/components/studio/ErrorNote";
 import { studioFetch } from "@/lib/studioClient";
 import { useStep, type ReportStep } from "@/components/studio/steps";
 import type { ShortItemView, ShortsView } from "@/types/studio";
@@ -107,7 +108,7 @@ export function Shorts({ episodeId, enabled, report, revision }: { episodeId: st
     const working = view?.status === "queued" || view?.status === "working";
     const scheduled = view?.items.filter(i => i.youtube).length ?? 0;
     useStep({
-        step: "shorts", done: scheduled > 0,
+        step: "shorts", failed: view?.status === "failed", done: scheduled > 0,
         key: view ? `${view.status}:${view.finishedAt}:${view.blocker}:${scheduled}` : null,
         report, revision, enabled, load,
     });
@@ -218,6 +219,7 @@ export function Shorts({ episodeId, enabled, report, revision }: { episodeId: st
 
     return (
         <div className="flex flex-col gap-4">
+            {view?.status === "failed" && <ErrorNote title="The shorts job failed" message={view.error} />}
             {view?.blocker ? (
                 <p className="text-xs text-gray-500">{view.blocker}</p>
             ) : (
@@ -240,7 +242,7 @@ export function Shorts({ episodeId, enabled, report, revision }: { episodeId: st
                     ? view?.job === "render" ? "About a minute a short. This page updates by itself and you get an email." : "This page updates by itself."
                     : "Tick the key quotes to make into shorts. Click a word to move the nearer end of a short there (20-60 seconds holds viewers best), preview it, then make it: 1080x1920, the episode above large captions with the spoken word in gold."}
             </p>
-            {saveError && <p className="text-sm text-red-300">{saveError}</p>}
+            <ErrorNote title="Your changes were not saved" message={saveError} />
             {view?.warnings.map(w => <p key={w} className="text-xs text-amber-300">{w}</p>)}
 
             {!view?.blocker && finalUrl && (
@@ -334,8 +336,7 @@ export function Shorts({ episodeId, enabled, report, revision }: { episodeId: st
                 </div>
             )}
 
-            {view?.status === "failed" && view.error && <p className="text-sm text-red-300">{view.error}</p>}
-            {error && <p className="text-sm text-red-300">{error}</p>}
+            <ErrorNote message={error} />
         </div>
     );
 }
@@ -433,7 +434,7 @@ function ShortCard({ n, item, view, url, drawnAsIs, saved, working, count, onCha
                             {item.title.trim() ? "Approve this short" : "Add a title to approve"}
                         </button>
                     ) : null}
-                    {view?.error && !view.youtube && <p className="text-red-300">{view.error}</p>}
+                    {view && !view.youtube && <ErrorNote message={view.error} />}
                 </div>
             </div>
         </div>

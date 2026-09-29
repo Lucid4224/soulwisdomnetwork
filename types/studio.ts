@@ -29,6 +29,8 @@ export interface EpisodeSummary {
     createdAt: number | null;      // epoch ms
     updatedAt: number | null;
     stuck: boolean;
+    // Later steps whose last run failed (b-roll, edit package, Descript, ...), for the Studio home page.
+    stepErrors: { step: string; message: string }[];
     notesStatus: EpisodeNotes['status'] | null;   // show notes, once the transcript is accepted                // in progress and unchanged for 24 hours (spec 005 section 5)
 }
 

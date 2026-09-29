@@ -11,7 +11,7 @@ import { mmss } from '../../../lib/showNotes';
 import type { Episode } from '../../../types/episode';
 import { loadAlert } from './config';
 import { draftNotes, type ReviewedLine } from './notesDraft';
-import { sendEmail } from './notify';
+import { describeError, failureSubject, sendEmail } from './notify';
 
 const SITE = 'https://soulwisdomcollective.com';
 
@@ -92,7 +92,7 @@ main().catch(async error => {
         await ref.update({ 'notes.status': 'failed', 'notes.error': message, updatedAt: FieldValue.serverTimestamp() })
             .catch(() => {});
     }
-    await sendEmail({ alert }, `Show notes failed: ${episodeId}`,
-        `Show notes could not be drafted.\n\nError: ${message}\n\nTry again from the Podcast Studio.${runUrl ? `\n\nRun log: ${runUrl}` : ''}`);
+    await sendEmail({ alert }, failureSubject(`Show notes failed: ${episodeId}`, message),
+        `Show notes could not be drafted.\n\n${describeError(message)}\n\nTry again from the Podcast Studio.${runUrl ? `\n\nRun log: ${runUrl}` : ''}`);
     process.exit(1);
 });

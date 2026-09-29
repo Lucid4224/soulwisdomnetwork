@@ -3,6 +3,7 @@
 // Tests every service the Studio relies on (GET /api/studio/health), one line each.
 
 import { useCallback, useEffect, useState } from "react";
+import { ErrorNote } from "@/components/studio/ErrorNote";
 import { studioFetch } from "@/lib/studioClient";
 
 type Check = { ok: boolean; detail: string };
@@ -46,7 +47,7 @@ export default function SetupCheck() {
                 )}
             </summary>
             <div className="mt-4">
-                {error && <p className="text-red-400 text-sm mb-3">{error}</p>}
+                <ErrorNote message={error} className="mb-3" />
                 <ul className="divide-y divide-white/5">
                     {Object.entries(LABELS).map(([key, label]) => {
                         const c = checks?.[key];

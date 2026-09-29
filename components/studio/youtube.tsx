@@ -5,6 +5,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { ago } from "@/components/studio/format";
+import { ErrorNote } from "@/components/studio/ErrorNote";
 import { studioFetch } from "@/lib/studioClient";
 import { useStep, type ReportStep } from "@/components/studio/steps";
 import { YOUTUBE_CATEGORY_LABEL } from "@/lib/youtube";
@@ -41,7 +42,7 @@ export function Youtube({ episodeId, enabled, report, revision }: { episodeId: s
 
     const working = !!view?.status && view.status in LABEL;
     useStep({
-        step: "youtube", done: !!view?.videoId,
+        step: "youtube", failed: view?.status === "failed", done: !!view?.videoId,
         key: view ? `${view.status}:${view.finishedAt}:${view.videoId}:${view.blocker}` : null,
         report, revision, enabled, load,
     });
@@ -123,8 +124,8 @@ export function Youtube({ episodeId, enabled, report, revision }: { episodeId: s
                     </dl>
                 </details>
             )}
-            {view?.status === "failed" && view.error && <p className="text-sm text-red-300">{view.error}</p>}
-            {error && <p className="text-sm text-red-300">{error}</p>}
+            {view?.status === "failed" && <ErrorNote title="The YouTube upload failed" message={view.error} />}
+            <ErrorNote message={error} />
         </div>
     );
 }

@@ -25,7 +25,7 @@ import { loadAlert } from './config';
 import { withRetry } from './errors';
 import { grabFrame } from './media';
 import { NOTES_EFFORT, NOTES_MODEL } from './notesDraft';
-import { sendEmail } from './notify';
+import { describeError, failureSubject, sendEmail } from './notify';
 
 // US dollars per million tokens, for the cost record.
 const HOOKS_USD_PER_MTOK = { input: 4, output: 20 };
@@ -219,7 +219,7 @@ main().catch(async error => {
         'thumbnails.status': 'failed', 'thumbnails.error': message, 'thumbnails.finishedAt': FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
     }).catch(() => {});
-    await sendEmail({ alert }, `Thumbnails failed: ${episodeId}`,
-        `The thumbnail options could not be made.\n\nError: ${message}\n\nTry again from the show notes page.${runUrl ? `\n\nRun log: ${runUrl}` : ''}`);
+    await sendEmail({ alert }, failureSubject(`Thumbnails failed: ${episodeId}`, message),
+        `The thumbnail options could not be made.\n\n${describeError(message)}\n\nTry again from the show notes page.${runUrl ? `\n\nRun log: ${runUrl}` : ''}`);
     process.exit(1);
 });

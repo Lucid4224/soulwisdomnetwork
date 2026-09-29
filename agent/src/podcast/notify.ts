@@ -1,4 +1,14 @@
+import { describeError, explainError } from '../../../lib/serviceErrors';
 import type { Config } from './config';
+
+export { describeError };
+
+// A failure email's subject, led by the cause when it is a known one ("OpenAI is out of
+// credits"), so it stands out in the inbox.
+export function failureSubject(subject: string, message: string) {
+    const help = explainError(message);
+    return help ? `${help.outOfMoney ? '💳' : '⚠️'} ${help.problem}: ${subject}` : `⚠️ ${subject}`;
+}
 
 export interface Failure {
     episode: string;
@@ -13,7 +23,7 @@ export async function sendFailureAlert(config: Config, failures: Failure[]) {
     if (failures.length === 0) return;
 
     const lines = failures.map(f =>
-        `• ${f.episode}\n  Stage: ${f.stage}\n  Error: ${f.message}\n  Retry: run "Podcast Ingest" with retry_file_id = ${f.fileId}`,
+        `• ${f.episode}\n  Stage: ${f.stage}\n  ${describeError(f.message).replace(/\n/g, '\n  ')}\n  Retry: run "Podcast Ingest" with retry_file_id = ${f.fileId}`,
     );
     const text = [
         `${failures.length} podcast episode(s) stopped and need attention.`,
@@ -23,7 +33,7 @@ export async function sendFailureAlert(config: Config, failures: Failure[]) {
         config.runUrl ? `Run log: ${config.runUrl}` : '',
     ].join('\n');
 
-    await sendEmail(config, `Podcast pipeline: ${failures.length} episode(s) failed`, text);
+    await sendEmail(config, failureSubject(`Podcast pipeline: ${failures.length} episode(s) failed`, failures[0].message), text);
 }
 
 export interface Attachment {

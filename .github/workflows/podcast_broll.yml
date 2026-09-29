@@ -44,4 +44,7 @@ jobs:
         BROLL_INDEX: ${{ inputs.index }}
         PODCAST_SA_JSON: ${{ secrets.PODCAST_SA_JSON }}
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+        ALERT_EMAIL: ${{ vars.ALERT_EMAIL }}
+        GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
       run: npx tsx agent/src/podcast/broll.ts

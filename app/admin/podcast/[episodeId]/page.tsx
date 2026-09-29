@@ -10,6 +10,7 @@ import AuthGuard from "@/components/auth/AuthGuard";
 import LineRow, { type LineActions, type Voice } from "@/components/studio/review/LineRow";
 import SpeakersPanel, { type VoiceRow } from "@/components/studio/review/SpeakersPanel";
 import * as edit from "@/components/studio/review/corrections";
+import { ErrorNote } from "@/components/studio/ErrorNote";
 import { ago, minutes } from "@/components/studio/format";
 import { useAuth } from "@/context/AuthContext";
 import { studioFetch } from "@/lib/studioClient";
@@ -291,7 +292,7 @@ export default function SpeakerReviewPage() {
                         </div>
                     </div>
 
-                    {error && <p className="text-red-400 text-sm">{error}</p>}
+                    <ErrorNote message={error} />
                     {!review && !error && <p className="text-gray-400">Loading transcript…</p>}
 
                     {review && corrections && (

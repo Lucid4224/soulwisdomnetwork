@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ago } from "@/components/studio/format";
 import { mmss } from "@/lib/showNotes";
+import { ErrorNote } from "@/components/studio/ErrorNote";
 import { studioFetch } from "@/lib/studioClient";
 import { useStep, type ReportStep } from "@/components/studio/steps";
 import type { FinalView } from "@/types/studio";
@@ -59,7 +60,7 @@ export function FinalCut({ episodeId, enabled, report, revision }: { episodeId: 
     }
 
     const ready = view?.status === "ready";
-    useStep({ step: "final", done: ready && !view.stale, key: view ? `${view.status}:${view.finishedAt}` : null, report, revision, enabled, load });
+    useStep({ step: "final", failed: view?.status === "failed", done: ready && !view.stale, key: view ? `${view.status}:${view.finishedAt}` : null, report, revision, enabled, load });
     return (
         <div className="flex flex-col gap-2">
             <div className="flex flex-wrap items-center gap-3">
@@ -103,8 +104,8 @@ export function FinalCut({ episodeId, enabled, report, revision }: { episodeId: 
                 </div>
             )}
             {ready && view.warnings.map(w => <p key={w} className="text-xs text-amber-300">{w}</p>)}
-            {view?.status === "failed" && view.error && <p className="text-sm text-red-300">{view.error}</p>}
-            {error && <p className="text-sm text-red-300">{error}</p>}
+            {view?.status === "failed" && <ErrorNote title="Getting the final cut failed" message={view.error} />}
+            <ErrorNote message={error} />
         </div>
     );
 }

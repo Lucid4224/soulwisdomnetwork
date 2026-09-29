@@ -1,3 +1,5 @@
+import { explainError } from '../../../lib/serviceErrors';
+
 // Bad input, rejected requests, the cost cap: retrying will not help, so stop and alert.
 export class PermanentError extends Error {
     constructor(message: string) {
@@ -8,6 +10,8 @@ export class PermanentError extends Error {
 
 function isTransient(error: unknown): boolean {
     if (error instanceof PermanentError) return false;
+    // An account out of credits answers 429 too, but waiting will not help.
+    if (explainError((error as Error)?.message)?.outOfMoney) return false;
     const e = error as { code?: unknown; status?: unknown; response?: { status?: unknown } };
     const status = Number(e?.status ?? e?.response?.status ?? e?.code);
     if (status === 429 || status === 408 || (status >= 500 && status < 600)) return true;

@@ -15,6 +15,7 @@ import { Thumbnails } from "@/components/studio/thumbnails";
 import { Youtube } from "@/components/studio/youtube";
 import { ago, minutes } from "@/components/studio/format";
 import { STEPS, type StepId } from "@/components/studio/steps";
+import { ErrorNote } from "@/components/studio/ErrorNote";
 import { useAutosave } from "@/components/studio/useAutosave";
 import { useAuth } from "@/context/AuthContext";
 import { BROLL_STYLE_IDS, BROLL_STYLES, BROLL_USD_PER_IMAGE, type BrollStyle } from "@/lib/broll";
@@ -95,10 +96,12 @@ export default function ShowNotesPage() {
     // changes after the first report (a job finished, something approved), every section fetches
     // its view again, so the next step shows as soon as it is possible.
     const [done, setDone] = useState<Partial<Record<StepId, boolean>>>({});
+    const [failed, setFailed] = useState<Partial<Record<StepId, boolean>>>({});
     const [revision, setRevision] = useState(0);
     const stepKeys = useRef<Partial<Record<StepId, string>>>({});
-    const report = useCallback((step: StepId, isDone: boolean, key: string) => {
+    const report = useCallback((step: StepId, isDone: boolean, key: string, isFailed = false) => {
         setDone(d => (d[step] === isDone ? d : { ...d, [step]: isDone }));
+        setFailed(f => (!!f[step] === isFailed ? f : { ...f, [step]: isFailed }));
         const before = stepKeys.current[step];
         stepKeys.current[step] = key;
         if (before !== undefined && before !== key) setRevision(r => r + 1);
@@ -270,13 +273,13 @@ export default function ShowNotesPage() {
         return image?.idea !== b.idea.trim() || image.style !== b.style;
     }).length : null;
     useEffect(() => {
-        if (notesKey !== null) report("notes", !!view?.notes?.approved, notesKey);
+        if (notesKey !== null) report("notes", !!view?.notes?.approved, notesKey, view?.notes?.status === "failed");
     }, [notesKey, view, report]);
     // Keyed on the images, not the ideas, so typing an idea does not refresh every section.
     const brollKey = broll.view ? `${broll.view.status}:${broll.view.images.map(i => i.createdAt).join(",")}` : null;
     useEffect(() => {
-        if (brollPending !== null && brollKey !== null && !broll.working) report("broll", !!view?.notes?.approved && brollPending === 0, brollKey);
-    }, [brollPending, brollKey, broll.working, view, report]);
+        if (brollPending !== null && brollKey !== null && !broll.working) report("broll", !!view?.notes?.approved && brollPending === 0, brollKey, broll.view?.status === "failed");
+    }, [brollPending, brollKey, broll.working, broll.view?.status, view, report]);
 
     const copyDescription = () => {
         if (!notes) return;
@@ -327,7 +330,7 @@ export default function ShowNotesPage() {
                         )}
                     </div>
 
-                    {error && <p className="text-red-400 text-sm">{error}</p>}
+                    <ErrorNote message={error} />
                     {!view && !error && <p className="text-gray-400">Loading…</p>}
 
                     {view && !view.transcriptAccepted && (
@@ -343,7 +346,7 @@ export default function ShowNotesPage() {
                                 <p className="text-gray-300">Claude is drafting the show notes. This usually takes two to five minutes; this page updates by itself.</p>
                             ) : (
                                 <>
-                                    {status === "failed" && <p className="text-sm text-red-300">Drafting failed: {view.notes?.error}</p>}
+                                    {status === "failed" && <ErrorNote title="Drafting failed" message={view.notes?.error ?? "No reason given"} />}
                                     <p className="text-gray-300">No show notes yet.</p>
                                     <button onClick={() => draft(false)} disabled={busy} className={primary}>Draft show notes</button>
                                 </>
@@ -362,7 +365,7 @@ export default function ShowNotesPage() {
                                     &quot;Add at video time&quot; uses where the video is paused.
                                 </p>
                                 {drafting && <p className="text-sm text-amber-300">Claude is drafting new notes; they will replace this page when ready.</p>}
-                                {status === "failed" && view.notes?.error && <p className="text-sm text-red-300">Last redraft failed: {view.notes.error}</p>}
+                                {status === "failed" && <ErrorNote title="The last redraft failed" message={view.notes?.error} />}
                                 <button onClick={() => draft(true)} disabled={busy || drafting} className={`${secondary} self-start`}>
                                     Draft again with Claude
                                 </button>
@@ -370,13 +373,13 @@ export default function ShowNotesPage() {
                                     <h2 className="text-sm font-semibold text-gray-300 mb-1.5">Actions</h2>
                                     <ol className="flex flex-col gap-1 text-sm list-decimal pl-5 marker:text-gray-500">
                                         {STEPS.map(([id, label]) => (
-                                            <li key={id} className={done[id] ? "marker:text-emerald-400" : ""}>
+                                            <li key={id} className={failed[id] ? "marker:text-red-400" : done[id] ? "marker:text-emerald-400" : ""}>
                                                 <a
                                                     href={`#${id}`}
-                                                    className={`hover:underline ${done[id] ? "text-emerald-300/80" : id === next ? "text-amber-300 font-semibold" : "text-gray-400"}`}
+                                                    className={`hover:underline ${failed[id] ? "text-red-300 font-bold" : done[id] ? "text-emerald-300/80" : id === next ? "text-amber-300 font-semibold" : "text-gray-400"}`}
                                                     aria-current={id === next ? "step" : undefined}
                                                 >
-                                                    {done[id] ? "✓ " : ""}{label}{id === next ? " ←" : ""}
+                                                    {failed[id] ? "⚠️ " : done[id] ? "✓ " : ""}{label}{failed[id] ? " (failed)" : id === next ? " ←" : ""}
                                                 </a>
                                             </li>
                                         ))}
@@ -628,7 +631,7 @@ export default function ShowNotesPage() {
                                         </span>
                                     </div>
                                     {(broll.error || broll.view?.error) && (
-                                        <p className="text-sm text-red-300">{broll.error || broll.view?.error}</p>
+                                        <ErrorNote title={broll.error ? undefined : "Some b-roll images failed"} message={broll.error || broll.view?.error} />
                                     )}
                                 </Section>
 
@@ -664,7 +667,7 @@ export default function ShowNotesPage() {
                             </span>
                             {autosave.saveState === "error" && (
                                 <>
-                                    <span className="text-sm text-red-300">{autosave.saveError}</span>
+                                    <span className="text-sm font-bold text-red-300">⚠️ Not saved: {autosave.saveError}</span>
                                     <button onClick={() => { void flush(); }} className={secondary}>Try again</button>
                                 </>
                             )}

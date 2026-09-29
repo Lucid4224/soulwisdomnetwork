@@ -6,6 +6,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { ago } from "@/components/studio/format";
+import { ErrorNote } from "@/components/studio/ErrorNote";
 import { studioFetch } from "@/lib/studioClient";
 import { useStep, type ReportStep } from "@/components/studio/steps";
 import type { PackageView } from "@/types/studio";
@@ -85,9 +86,9 @@ export function EditPackage({ episodeId, enabled, upToDate, report, revision }: 
     // A project made from earlier notes, or before the package was last rebuilt, has old clips and images.
     const descriptStale = d?.status === "ready" && (d.builtFromVersion !== view?.approvedVersion
         || (view?.finishedAt != null && d.finishedAt != null && view.finishedAt > d.finishedAt));
-    useStep({ step: "package", done: built && !stale, key: view ? `${view.status}:${view.finishedAt}:${stale}` : null, report, revision, enabled, load });
+    useStep({ step: "package", failed: view?.status === "failed", done: built && !stale, key: view ? `${view.status}:${view.finishedAt}:${stale}` : null, report, revision, enabled, load });
     // Reported only; the line above already reloads this section.
-    useStep({ step: "descript", done: d?.status === "ready" && !descriptStale, key: d ? `${d.status}:${d.finishedAt}:${descriptStale}` : null, report, enabled: false, load });
+    useStep({ step: "descript", failed: d?.status === "failed", done: d?.status === "ready" && !descriptStale, key: d ? `${d.status}:${d.finishedAt}:${descriptStale}` : null, report, enabled: false, load });
     // What to do to bring the changes into Descript, from where things stand.
     const staleNext = !upToDate
         ? "Approve the changes to the show notes, rebuild the edit package, then Send to Descript again."
@@ -159,9 +160,9 @@ export function EditPackage({ episodeId, enabled, upToDate, report, revision }: 
                 )}
                 {d?.status === "ready" && d.agentResponse && <p className="text-xs text-gray-400">Underlord: {d.agentResponse}</p>}
                 {d?.status === "ready" && d.warnings.map(w => <p key={w} className="text-xs text-amber-300">{w}</p>)}
-                {d?.error && d.status === "failed" && <p className="text-sm text-red-300">{d.error}</p>}
+                {d?.status === "failed" && <ErrorNote title="Sending to Descript failed" message={d.error} />}
             </div>
-            {(error || view?.error) && <p className="text-sm text-red-300">{error || view?.error}</p>}
+            <ErrorNote title={error ? undefined : "The edit package failed"} message={error || view?.error} />
         </div>
     );
 }
