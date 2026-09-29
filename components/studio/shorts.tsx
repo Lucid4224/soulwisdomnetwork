@@ -1,16 +1,16 @@
 "use client";
 
-// Shorts and Checkpoint E on the show notes page (docs/specs/013-shorts.md). Claude suggests the
-// moments; the producer moves their ends by clicking words, edits the headline and title,
-// previews the cut, has them drawn, watches and approves each one, and schedules the approved ones
-// on YouTube one a day. Edits save as they go.
+// Shorts and Checkpoint E on the show notes page (docs/specs/013-shorts.md). The producer ticks the
+// key quotes to make into shorts, moves their ends by clicking words, has Claude write headlines
+// and titles (or writes them), previews the cut, has them drawn, watches and approves each one,
+// and schedules the approved ones on YouTube one a day. Edits save as they go.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ago } from "@/components/studio/format";
 import { useAutosave } from "@/components/studio/useAutosave";
 import { mmss } from "@/lib/showNotes";
 import {
-    DAY_MS, DEFAULT_ASPECT, HEADLINE_MAX_CHARS, publishSlot, renderInputs, sameRender, SHORT_ASPECTS, SHORT_MAX_MS, SHORT_MIN_MS,
+    DAY_MS, DEFAULT_ASPECT, HEADLINE_MAX_CHARS, publishSlot, QUOTE_MATCH_LOW, renderInputs, sameRender, SHORT_ASPECTS, SHORT_MAX_MS, SHORT_MIN_MS,
     SHORT_TARGET_MS, SHORT_TITLE_MAX, sideCrop, wordBounds, type ShortAspect, type ShortEdit,
 } from "@/lib/shorts";
 import { studioFetch } from "@/lib/studioClient";
@@ -22,7 +22,7 @@ const secondary = `${button} border-white/10 text-gray-300 hover:bg-white/10`;
 const approveButton = "text-xs px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed";
 const input = "bg-black/30 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white w-full";
 
-const WORKING = { suggest: "Suggesting shorts…", render: "Drawing the shorts…", upload: "Scheduling on YouTube…" } as const;
+const WORKING: Record<string, string> = { titles: "Writing headlines and titles…", render: "Drawing the shorts…", upload: "Scheduling on YouTube…" };
 
 type Edits = { aspect: ShortAspect; items: ShortEdit[] };
 
@@ -59,7 +59,6 @@ export function Shorts({ episodeId, enabled }: { episodeId: string; enabled: boo
     const [error, setError] = useState("");
     const [starting, setStarting] = useState(false);
     const [firstAt, setFirstAt] = useState("");
-    const [addQuote, setAddQuote] = useState("");
     // Signed links change on every load; keep the first one per render so a playing video is not reset.
     const [urls, setUrls] = useState<Record<string, string>>({});
     const [finalUrl, setFinalUrl] = useState<string | null>(null);
@@ -108,7 +107,7 @@ export function Shorts({ episodeId, enabled }: { episodeId: string; enabled: boo
     const wasWorking = useRef(false);
     useEffect(() => {
         if (!working) {
-            // The job just finished: take its results (new suggestions, renders, uploads).
+            // The job just finished: take its results (new texts, renders, uploads).
             if (wasWorking.current) load();
             wasWorking.current = false;
             return;
@@ -134,8 +133,16 @@ export function Shorts({ episodeId, enabled }: { episodeId: string; enabled: boo
         update({ ...edits, items });
     }
 
-    async function add() {
-        const index = Number(addQuote);
+    // Ticking a key quote makes it a short (the whole quote, to trim); unticking removes it.
+    async function toggle(index: number) {
+        const existing = edits.items.find(i => i.quoteIndex === index);
+        if (existing) {
+            const v = byId.get(existing.id);
+            if (v?.youtube) return;
+            if ((v?.render || existing.headline || existing.title) && !confirm("Remove this short, with its trim, texts and drawing?")) return;
+            update({ ...edits, items: edits.items.filter(i => i.id !== existing.id) });
+            return;
+        }
         const q = view?.quotes[index];
         if (!q) return;
         const item: ShortEdit = {
@@ -143,14 +150,11 @@ export function Shorts({ episodeId, enabled }: { episodeId: string; enabled: boo
             startMs: q.startMs, endMs: Math.min(q.endMs, q.startMs + SHORT_MAX_MS), headline: "", title: "", synthetic: false,
         };
         update({ ...edits, items: [...edits.items, item] });
-        setAddQuote("");
         // Saved at once, so its words for trimming come back.
         if (await flush()) await load(true);
     }
 
-    async function start(mode: "suggest" | "render" | "upload") {
-        if (mode === "suggest" && edits.items.some(i => !view?.items.find(v => v.id === i.id)?.youtube)
-            && !confirm("Suggesting again replaces the shorts here that are not on YouTube yet. Go ahead?")) return;
+    async function start(mode: "titles" | "render" | "upload") {
         setStarting(true);
         try {
             if (!(await flush())) throw new Error("Your changes could not be saved; fix that first");
@@ -175,8 +179,8 @@ export function Shorts({ episodeId, enabled }: { episodeId: string; enabled: boo
         }
     }
 
-    // Plays a short's stretch of the final cut, before it is drawn.
-    function preview(item: ShortEdit) {
+    // Plays a short's (or a key quote's) stretch of the final cut, before it is drawn.
+    function preview(item: { id: string; startMs: number; endMs: number }) {
         const video = player.current;
         if (!video) return;
         setPreviewing(item.id);
@@ -202,6 +206,7 @@ export function Shorts({ episodeId, enabled }: { episodeId: string; enabled: boo
     const waiting = edits.items.filter(i => drawn(i) && byId.get(i.id)?.approved && !byId.get(i.id)?.youtube);
     const firstMs = firstAt ? new Date(firstAt).getTime() : NaN;
     const used = new Set(edits.items.map(i => i.quoteIndex));
+    const needTexts = edits.items.filter(i => !byId.get(i.id)?.youtube && (!i.headline.trim() || !i.title.trim())).length;
     const crop = `${sideCrop(edits.aspect) * 100}%`;
 
     return (
@@ -210,8 +215,9 @@ export function Shorts({ episodeId, enabled }: { episodeId: string; enabled: boo
                 <p className="text-xs text-gray-500">{view.blocker}</p>
             ) : (
                 <div className="flex flex-wrap items-center gap-3">
-                    <button onClick={() => start("suggest")} disabled={working || starting || !view} className={edits.items.length ? secondary : primary}>
-                        {working && view?.job === "suggest" ? WORKING.suggest : edits.items.length ? "Suggest again" : "Suggest shorts"}
+                    <button onClick={() => start("titles")} disabled={working || starting || !needTexts} className={secondary}
+                        title="Claude writes a headline and title for each short that is missing one; clear a field to have it rewritten">
+                        {working && view?.job === "titles" ? WORKING.titles : `Write headlines and titles${needTexts ? ` (${needTexts})` : ""}`}
                     </button>
                     <button onClick={() => start("render")} disabled={working || starting || !toDraw} className={primary}>
                         {working && view?.job === "render" ? WORKING.render : `Draw ${toDraw || ""} short${toDraw === 1 ? "" : "s"}`.replace("  ", " ")}
@@ -225,9 +231,8 @@ export function Shorts({ episodeId, enabled }: { episodeId: string; enabled: boo
             <p className="text-xs text-gray-500">
                 {working
                     ? view?.job === "render" ? "About a minute a short. This page updates by itself and you get an email." : "This page updates by itself."
-                    : "Claude picks the best key quotes and trims them to 20-60 seconds. Click a word to move the nearer end of a short there, preview it, then draw it: 1080x1920, the episode above large captions with the spoken word in gold."}
+                    : "Tick the key quotes to make into shorts. Click a word to move the nearer end of a short there (20-60 seconds holds viewers best), preview it, then draw it: 1080x1920, the episode above large captions with the spoken word in gold."}
             </p>
-            {view?.stale && <p className="text-sm text-amber-300">These were suggested from an earlier final cut, so their times may be off. Suggest again, or check each one.</p>}
             {saveError && <p className="text-sm text-red-300">{saveError}</p>}
             {view?.warnings.map(w => <p key={w} className="text-xs text-amber-300">{w}</p>)}
 
@@ -254,6 +259,34 @@ export function Shorts({ episodeId, enabled }: { episodeId: string; enabled: boo
                 </div>
             )}
 
+            {!view?.blocker && !!view?.quotes.length && (
+                <div className="flex flex-col gap-2">
+                    <p className="text-sm text-gray-300">
+                        Key quotes <span className="text-xs text-gray-500">({used.size} of {view.quotes.length} ticked as shorts; they are scheduled in the order below)</span>
+                    </p>
+                    <ul className="flex flex-col gap-1 max-h-96 overflow-y-auto pr-1">
+                        {view.quotes.map((q, i) => {
+                            const item = edits.items.find(x => x.quoteIndex === i);
+                            const seconds = Math.round((q.endMs - q.startMs) / 1000);
+                            return (
+                                <li key={i} className={`flex items-start gap-2 text-xs rounded-lg px-2 py-1.5 ${item ? "bg-amber-500/10" : "hover:bg-white/5"}`}>
+                                    <input type="checkbox" checked={!!item} disabled={working || !!(item && byId.get(item.id)?.youtube)}
+                                        onChange={() => toggle(i)} className="mt-0.5" aria-label={`Make a short from the quote at ${mmss(q.startMs)}`} />
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-gray-400">
+                                            {mmss(q.startMs)} · {q.speaker} · <span className={seconds > SHORT_TARGET_MS / 1000 ? "text-amber-300" : ""}>{seconds}s</span>
+                                            {q.match < QUOTE_MATCH_LOW && <span className="text-amber-300"> · much of it was cut in the edit; preview it</span>}
+                                        </p>
+                                        <p className="text-gray-200 line-clamp-2" title={q.text}>{q.text}</p>
+                                    </div>
+                                    <button onClick={() => preview({ id: `quote-${i}`, startMs: q.startMs, endMs: q.endMs })} className={secondary}>▶</button>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                </div>
+            )}
+
             {edits.items.map((item, n) => (
                 <ShortCard key={item.id} n={n} item={item} view={byId.get(item.id)} url={urls[byId.get(item.id)?.render?.key ?? ""]}
                     drawnAsIs={drawn(item)} saved={saveState === "saved"} working={working} count={edits.items.length}
@@ -261,21 +294,6 @@ export function Shorts({ episodeId, enabled }: { episodeId: string; enabled: boo
                     onRemove={() => update({ ...edits, items: edits.items.filter(i => i.id !== item.id) })}
                     onPreview={() => preview(item)} onApprove={ok => approve(item.id, ok)} />
             ))}
-
-            {!view?.blocker && !!view?.quotes.length && (
-                <div className="flex flex-wrap items-center gap-2">
-                    <select value={addQuote} onChange={e => setAddQuote(e.target.value)} disabled={working}
-                        className="bg-black/30 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-gray-200 max-w-md">
-                        <option value="">Add another key quote…</option>
-                        {view.quotes.map((q, i) => (
-                            <option key={i} value={i} disabled={used.has(i)}>
-                                {mmss(q.startMs)} {q.speaker}: {q.text.slice(0, 70)}{q.text.length > 70 ? "…" : ""} ({Math.round((q.endMs - q.startMs) / 1000)}s)
-                            </option>
-                        ))}
-                    </select>
-                    <button onClick={add} disabled={!addQuote || working} className={secondary}>Add</button>
-                </div>
-            )}
 
             {!!edits.items.length && (
                 <div className="border-t border-white/10 pt-4 flex flex-col gap-3">
@@ -285,31 +303,27 @@ export function Shorts({ episodeId, enabled }: { episodeId: string; enabled: boo
                         <li>The captions match what is said, names are spelled right, and nobody is cut off at the sides.</li>
                         <li>Tick &ldquo;AI imagery&rdquo; if a b-roll still shows; YouTube requires the label.</li>
                     </ul>
-                    {view?.episodeUrl ? (
-                        <>
-                            <div className="flex flex-wrap items-center gap-3">
-                                <label className="text-xs text-gray-400 flex items-center gap-2">
-                                    First one goes out
-                                    <input type="datetime-local" value={firstAt} onChange={e => setFirstAt(e.target.value)}
-                                        className="bg-black/30 border border-white/10 rounded-lg px-2 py-1 text-xs text-gray-200" />
-                                </label>
-                                <button onClick={() => start("upload")} disabled={working || starting || !waiting.length || !Number.isFinite(firstMs)} className={primary}>
-                                    {working && view.job === "upload" ? WORKING.upload : `Schedule ${waiting.length || ""} on YouTube`.replace("  ", " ")}
-                                </button>
-                            </div>
-                            {!!waiting.length && Number.isFinite(firstMs) && (
-                                <ul className="text-xs text-gray-400 flex flex-col gap-0.5">
-                                    {waiting.map((i, k) => <li key={i.id}>{when(publishSlot(firstMs, k))}: <span className="text-gray-200">{i.title || i.headline}</span></li>)}
-                                </ul>
-                            )}
-                            <p className="text-xs text-gray-500">
-                                One a day, in the order above, each Private until its time. {view.lastSlot && view.lastSlot > Date.now() ? `Shorts are already scheduled until ${when(view.lastSlot)}, so this batch follows on. ` : ""}
-                                Each links to the full episode in its description; to also show it under the Short, set &ldquo;Related video&rdquo; in YouTube Studio.
-                            </p>
-                        </>
-                    ) : (
-                        <p className="text-xs text-gray-500">Upload the episode to YouTube first; each short links to it.</p>
+                    <div className="flex flex-wrap items-center gap-3">
+                        <label className="text-xs text-gray-400 flex items-center gap-2">
+                            First one goes out
+                            <input type="datetime-local" value={firstAt} onChange={e => setFirstAt(e.target.value)}
+                                className="bg-black/30 border border-white/10 rounded-lg px-2 py-1 text-xs text-gray-200" />
+                        </label>
+                        <button onClick={() => start("upload")} disabled={working || starting || !waiting.length || !Number.isFinite(firstMs)} className={primary}>
+                            {working && view?.job === "upload" ? WORKING.upload : `Schedule ${waiting.length || ""} on YouTube`.replace("  ", " ")}
+                        </button>
+                    </div>
+                    {!!waiting.length && Number.isFinite(firstMs) && (
+                        <ul className="text-xs text-gray-400 flex flex-col gap-0.5">
+                            {waiting.map((i, k) => <li key={i.id}>{when(publishSlot(firstMs, k))}: <span className="text-gray-200">{i.title || i.headline}</span></li>)}
+                        </ul>
                     )}
+                    <p className="text-xs text-gray-500">
+                        One a day, in the order above, each Private until its time. {view?.lastSlot && view.lastSlot > Date.now() ? `Shorts are already scheduled until ${when(view.lastSlot)}, so this batch follows on. ` : ""}
+                        {view?.episodeUrl
+                            ? "Each links to the full episode in its description; to also show it under the Short, set “Related video” in YouTube Studio."
+                            : "The episode is not on YouTube yet, so each short links to the podcast playlist instead. Upload the episode first to link it directly."}
+                    </p>
                 </div>
             )}
 

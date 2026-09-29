@@ -230,7 +230,7 @@ export interface ShortItem extends ShortEdit {
 
 export interface EpisodeShorts {
     status: 'queued' | 'working' | 'ready' | 'failed';
-    job: 'suggest' | 'render' | 'upload' | null;   // what was asked for last
+    job: 'titles' | 'render' | 'upload' | 'suggest' | null;   // what was asked for last ('suggest': the first version)
     requestedAt?: unknown;
     startedAt?: unknown;
     finishedAt?: unknown;
@@ -238,7 +238,7 @@ export interface EpisodeShorts {
     aspect: ShortAspect;
     items: ShortItem[];
     version: number;                      // bumped on every edit, as with corrections
-    finalAt?: number;                     // the final cut the suggestions came from
+    finalAt?: number;                     // unused since shorts come from the key quotes
     timeZone?: string;                    // the producer's, for the times in emails
     warnings?: string[];
 }

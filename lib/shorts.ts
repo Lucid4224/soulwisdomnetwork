@@ -1,6 +1,7 @@
 // Shorts from the key quotes (spec 005 step 14, Checkpoint E; docs/specs/013-shorts.md). Shared by
 // the shorts job, the server and the Studio: the vertical layout, the limits, what makes a render
-// current, the caption timing and what is sent to YouTube.
+// current, the caption timing and what is sent to YouTube. The producer picks which key quotes
+// become shorts; Claude only writes their headlines and titles.
 
 import { z } from 'zod';
 import type { TimedWord } from './retime';
@@ -36,25 +37,42 @@ export function shortLayout(a: ShortAspect) {
 export const SHORT_MIN_MS = 5_000;
 export const SHORT_TARGET_MS = 60_000;          // shorter holds viewers better
 export const SHORT_MAX_MS = 180_000;            // YouTube counts up to three minutes as a Short
-export const SHORTS_SUGGESTED = 5;
 export const HEADLINE_MAX_CHARS = 60;           // with asterisks
 export const SHORT_TITLE_MAX = 100;
 // How far around a short the Studio shows words, so its ends can be moved.
 export const TRIM_WINDOW_MS = 15_000;
 export const DAY_MS = 24 * 60 * 60_000;
 
-// What Claude returns when suggesting shorts. Word numbers are the ones shown next to each quote.
-export const ShortSuggestionsSchema = z.object({
+// What Claude returns for the headline and title of each short picked from the key quotes.
+export const ShortTextsSchema = z.object({
     shorts: z.array(z.object({
-        quote: z.number().int().describe('The number of the quote it comes from'),
-        firstWord: z.number().int().describe('Number of the first word of the short'),
-        lastWord: z.number().int().describe('Number of the last word of the short'),
+        id: z.string().describe('The id of the short, as given'),
         headline: z.string().describe(
             'Two to six words shown large above the video, read in a second. Mark one or two key words for gold ' +
             'by wrapping them in asterisks, e.g. "Heaven *Felt* Like *Home*". No quotation marks, no emoji.'),
         title: z.string().describe('YouTube title for the Short, under 70 characters, curiosity-led and specific, no hashtags, no clickbait.'),
-    })).describe('The best moments for Shorts, best first'),
+    })),
 });
+
+// Share of a key quote's words heard at its place in the final cut. Low means the edit cut or
+// changed it, so its times are not to be trusted.
+export function quoteMatch(quoteText: string, heard: TimedWord[]) {
+    const tokens = (s: string) => s.toLowerCase().replace(/[^a-z0-9'\s]+/g, ' ').split(/\s+/).filter(Boolean);
+    const want = tokens(quoteText);
+    if (!want.length) return 1;
+    const have = new Map<string, number>();
+    for (const t of heard.flatMap(w => tokens(w.text))) have.set(t, (have.get(t) ?? 0) + 1);
+    let found = 0;
+    for (const t of want) {
+        const n = have.get(t) ?? 0;
+        if (n > 0) {
+            found++;
+            have.set(t, n - 1);
+        }
+    }
+    return found / want.length;
+}
+export const QUOTE_MATCH_LOW = 0.7;
 
 // One short as the producer edits it.
 export const ShortEditSchema = z.object({
@@ -140,12 +158,12 @@ const TITLE_CLEAN = (s: string) => s.replace(/[<>]/g, '').replace(/\s+/g, ' ').t
 
 // What goes to YouTube for one short: the spoken words, a link to the full episode, hashtags.
 export function shortMetadata(item: { title: string; speaker: string; synthetic: boolean }, spoken: string,
-    episode: { url: string; hashtags: string[]; tags: string[] }) {
+    episode: { url: string; linkText: string; hashtags: string[]; tags: string[] }) {
     const quote = spoken.length > 600 ? `${spoken.slice(0, 600).replace(/\s+\S*$/, '')}…` : spoken;
     const hashtags = [...episode.hashtags.map(h => (h.startsWith('#') ? h : `#${h}`)).slice(0, 2), '#shorts'];
     return {
         title: TITLE_CLEAN(item.title).slice(0, SHORT_TITLE_MAX),
-        description: TITLE_CLEAN(`“${quote}” — ${item.speaker}`) + `\n\nWatch the full conversation: ${episode.url}\n\n${hashtags.join(' ')}`,
+        description: TITLE_CLEAN(`“${quote}” — ${item.speaker}`) + `\n\n${episode.linkText}: ${episode.url}\n\n${hashtags.join(' ')}`,
         tags: episode.tags.slice(0, 15),
         containsSyntheticMedia: item.synthetic,
     };

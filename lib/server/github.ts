@@ -108,8 +108,8 @@ export async function startYoutube(episodeId: string) {
     });
 }
 
-// Suggests, draws or schedules the shorts of one episode (spec 005 step 14).
-export async function startShorts(episodeId: string, mode: 'suggest' | 'render' | 'upload') {
+// Writes headlines and titles for, draws or schedules the shorts of one episode (spec 005 step 14).
+export async function startShorts(episodeId: string, mode: 'titles' | 'render' | 'upload') {
     await github('/actions/workflows/podcast_shorts.yml/dispatches', {
         method: 'POST',
         body: JSON.stringify({ ref: 'main', inputs: { episode_id: episodeId, mode } }),
