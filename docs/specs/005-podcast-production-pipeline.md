@@ -48,7 +48,7 @@ Fourteen steps. The numbers in brackets map to the ten steps discussed in planni
 | 11 | **Re-transcribe the finished video.** This becomes the permanent record, and fixes the chapter times. Built in the same run: the chapter and quote times are moved onto the final cut (spec 010) | Automatic | 1 |
 | 12 | Generate 3 thumbnail options; **Checkpoint D — pick one and approve the episode** **[7]**. Built: "Make thumbnail options" on the notes page (texts from Claude, frames from the final cut, an AI background), the options drawn in the Studio, and "Approve episode" (spec 011) | Human, ~7 min | 1 |
 | 13 | Publish to YouTube with captions, chapters and thumbnail **[8]**. Built: "Upload to YouTube" on the notes page after Checkpoint D; uploads stay Private until YouTube's API audit passes (spec 012) | Automatic | 1 |
-| 14 | Cut shorts, **Checkpoint E — review**, distribute to social **[9]** | Human, ~10 min | 2 |
+| 14 | Cut shorts, **Checkpoint E — review**, distribute to social **[9]**. Built for YouTube: "Suggest shorts" on the notes page (Claude picks and trims key quotes), drawn in our own job from the final cut with no Descript credits, approved one by one, scheduled one a day (spec 013). Instagram later | Human, ~10 min | 2 |
 | 15 | Everything stored, searchable, linked to published media **[10]**; performance pulled back weekly | Automatic | 3 & 4 |
 
 **Descript is the final say (decided 23 Sept 2026).** Small editing choices are easier made by hand
@@ -124,7 +124,7 @@ Generated from the re-transcribe pass and uploaded to YouTube as a proper captio
 Three options generated per episode — one frame grab from a strong moment, one AI-generated image, one branded template with the episode title. A human picks one at Checkpoint D. Thumbnails drive more views than anything else in this pipeline, so this checkpoint stays human indefinitely.
 
 ### Social distribution
-YouTube Shorts and Instagram at Stage 2. **TikTok is deliberately excluded for now:** their posting API restricts unaudited applications to private-only posts, and lifting that requires an audit process with unpredictable lead time. We will start that application separately and add TikTok when it clears.
+YouTube Shorts and Instagram at Stage 2. YouTube Shorts built 29 Sept 2026 (spec 013): made in our own pipeline rather than Descript or a clipping service, so no credits or subscription; Instagram Reels later, from the same rendered files. **TikTok is deliberately excluded for now:** their posting API restricts unaudited applications to private-only posts, and lifting that requires an audit process with unpredictable lead time. We will start that application separately and add TikTok when it clears.
 
 ---
 
@@ -242,7 +242,7 @@ A note on scope: this is roughly double the build estimate in the executive repo
 2. **Who owns the checkpoints?** One person for all five, or split by type?
 3. **Which day of the week is backlog day?** A fixed slot makes the rhythm stick; an unscheduled one will slip.
 4. **Publish backlog episodes public or unlisted first?** Recommend unlisted for the first three, then public once we trust the output.
-5. **Brand assets for thumbnails and captions** — colours, fonts, logo treatment. Thumbnails decided 28 Sept 2026: Outfit Black (the site's heading font), white with gold for key words, the oval logo, the b-roll palette (spec 011). Captions still open.
+5. **Brand assets for thumbnails and captions** — colours, fonts, logo treatment. Thumbnails decided 28 Sept 2026: Outfit Black (the site's heading font), white with gold for key words, the oval logo, the b-roll palette (spec 011). Shorts decided 29 Sept 2026: the same type and colours, the spoken word in gold (spec 013).
 6. **Which order do the 20 backlog episodes go in?** Best-first builds an audience faster than chronological.
 
 ---

@@ -140,3 +140,46 @@ export async function normalizeLoudness(input: string, output: string) {
     ])).stderr);
     return { beforeLufs: Number(measured.input_i), afterLufs: Number(done.output_i), truePeak: Number(done.output_tp) };
 }
+
+// A short's still backdrop (docs/specs/013-shorts.md): the brand's deep violet, the logo at the
+// top and a thin gold rule above and below where the video goes.
+export function shortBackground(logo: string, output: string, l: { width: number; height: number; logoSize: number; logoTop: number; videoTop: number; videoHeight: number }) {
+    const rule = (y: number) => `drawbox=x=0:y=${y}:w=iw:h=4:color=0xf7c65b@0.85:t=fill`;
+    return run('ffmpeg', [
+        '-y', '-hide_banner', '-loglevel', 'error',
+        // #140a2e at the top to #2a1552 at the bottom.
+        '-f', 'lavfi', '-i', `color=c=black:s=${l.width}x${l.height}:d=1,format=rgb24,geq=r='20+22*Y/H':g='10+11*Y/H':b='46+36*Y/H'`,
+        '-i', logo,
+        '-filter_complex',
+        `[1:v]scale=${l.logoSize}:${l.logoSize}:flags=lanczos[logo];` +
+        `[0:v][logo]overlay=(W-w)/2:${l.logoTop},${rule(l.videoTop - 4)},${rule(l.videoTop + l.videoHeight)}`,
+        '-frames:v', '1',
+        output,
+    ]);
+}
+
+// One vertical short: the final cut from `startSeconds`, its sides trimmed to `aspect` (width
+// over height), scaled to the frame's width and placed on the backdrop at `videoTop`, with the
+// headline, speaker and captions burned in from an ASS file. `input` may be a URL.
+export function renderShort(input: string, output: string, o: {
+    startSeconds: number; durationSeconds: number; aspect: number; background: string; ass: string; fontsDir: string;
+    width: number; videoTop: number;
+}) {
+    const escape = (p: string) => p.replace(/\\/g, '/').replace(/:/g, '\\:').replace(/'/g, "\\'");
+    const fadeOut = Math.max(0, o.durationSeconds - 0.25).toFixed(3);
+    return run('ffmpeg', [
+        '-y', '-hide_banner', '-loglevel', 'error',
+        '-loop', '1', '-framerate', '30', '-i', o.background,
+        '-ss', o.startSeconds.toFixed(3), '-t', o.durationSeconds.toFixed(3), '-i', input,
+        '-filter_complex',
+        `[1:v]scale=iw*sar:ih,setsar=1,crop='min(iw,trunc(ih*${o.aspect.toFixed(6)}/2)*2)':ih,scale=${o.width}:-2:flags=lanczos,fps=30[v];` +
+        `[0:v][v]overlay=0:${o.videoTop}:shortest=1,ass=filename='${escape(o.ass)}':fontsdir='${escape(o.fontsDir)}',format=yuv420p[out];` +
+        `[1:a]afade=t=in:d=0.05,afade=t=out:st=${fadeOut}:d=0.25[a]`,
+        '-map', '[out]', '-map', '[a]',
+        '-c:v', 'libx264', '-preset', 'medium', '-crf', '18', '-profile:v', 'high',
+        '-c:a', 'aac', '-b:a', '192k', '-ar', '48000',
+        '-t', o.durationSeconds.toFixed(3),
+        '-movflags', '+faststart',
+        output,
+    ]);
+}

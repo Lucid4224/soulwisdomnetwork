@@ -1,5 +1,5 @@
 // Starts and watches the Podcast Ingest workflow (.github/workflows/podcast_ingest.yml)
-// and starts Podcast Show Notes, B-roll, Edit Package, Descript, Final Cut, Thumbnails and YouTube (podcast_notes, _broll, _package, _descript, _final, _thumbnails, _youtube.yml), with GITHUB_ACTIONS_TOKEN: a fine-grained token for this repository, Actions read/write.
+// and starts Podcast Show Notes, B-roll, Edit Package, Descript, Final Cut, Thumbnails, YouTube and Shorts (podcast_notes, _broll, _package, _descript, _final, _thumbnails, _youtube, _shorts.yml), with GITHUB_ACTIONS_TOKEN: a fine-grained token for this repository, Actions read/write.
 
 const REPO = 'masterytv/soulwisdomnetwork';
 const WORKFLOW = 'podcast_ingest.yml';
@@ -105,5 +105,13 @@ export async function startYoutube(episodeId: string) {
     await github('/actions/workflows/podcast_youtube.yml/dispatches', {
         method: 'POST',
         body: JSON.stringify({ ref: 'main', inputs: { episode_id: episodeId } }),
+    });
+}
+
+// Suggests, draws or schedules the shorts of one episode (spec 005 step 14).
+export async function startShorts(episodeId: string, mode: 'suggest' | 'render' | 'upload') {
+    await github('/actions/workflows/podcast_shorts.yml/dispatches', {
+        method: 'POST',
+        body: JSON.stringify({ ref: 'main', inputs: { episode_id: episodeId, mode } }),
     });
 }

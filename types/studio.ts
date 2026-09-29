@@ -2,10 +2,12 @@
 
 import type { BrollStyle } from '@/lib/broll';
 import type { ShowNotes, SpokenWord } from '@/lib/showNotes';
+import type { TimedWord } from '@/lib/retime';
+import type { ShortAspect, ShortEdit, ShortRenderInputs } from '@/lib/shorts';
 import type { ReviewUtterance } from '@/lib/transcript';
 import type { ThumbKind } from '@/lib/thumbnail';
 import type { YoutubeMetadata } from '@/lib/youtube';
-import type { DetectedSpeaker, EpisodeBroll, EpisodeDescript, EpisodeFinal, EpisodePackage, EpisodeNotes, EpisodeStage, EpisodeStatus, EpisodeThumbnails, EpisodeYoutube, TranscriptCorrections } from './episode';
+import type { DetectedSpeaker, EpisodeBroll, EpisodeDescript, EpisodeFinal, EpisodePackage, EpisodeNotes, EpisodeStage, EpisodeShorts, EpisodeStatus, EpisodeThumbnails, EpisodeYoutube, TranscriptCorrections } from './episode';
 
 export interface DriveVideo {
     id: string;
@@ -181,4 +183,33 @@ export interface YoutubeView {
     finalOutdated: boolean;             // the video on YouTube is an earlier final cut
     detailsOutdated: boolean;           // approved again since the last upload or update
     preview: YoutubeMetadata | null;    // exactly what is sent
+}
+
+// One short on the show notes page (docs/specs/013-shorts.md).
+export interface ShortItemView extends ShortEdit {
+    words: TimedWord[];                 // the final cut's words around it, for moving its ends
+    render: { key: string; url: string; durationMs: number; inputs: ShortRenderInputs } | null;
+    approved: { by: string; at: number } | null;    // of the render as it is now
+    publishAt: number | null;
+    youtube: { url: string; publishAt: number } | null;
+    error: string | null;
+}
+
+// Shorts and Checkpoint E on the show notes page.
+export interface ShortsView {
+    status: EpisodeShorts['status'] | null;
+    job: EpisodeShorts['job'];
+    error: string | null;
+    blocker: string | null;             // why shorts cannot be made yet
+    stale: boolean;                     // suggested from an earlier final cut
+    episodeUrl: string | null;          // the episode on YouTube, which each short links to
+    aspect: ShortAspect;
+    version: number;
+    finalAt: number;                    // the final cut now; a render from another is out of date
+    finalUrl: string | null;            // the final cut, to preview a short before drawing it
+    quotes: { text: string; speaker: string; startMs: number; endMs: number }[];
+    items: ShortItemView[];
+    lastSlot: number | null;            // the latest time any episode's short is scheduled for
+    warnings: string[];
+    finishedAt: number | null;
 }

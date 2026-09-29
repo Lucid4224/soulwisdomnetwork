@@ -1,4 +1,5 @@
 import type { BrollStyle } from '../lib/broll';
+import type { ShortAspect, ShortEdit, ShortRenderInputs } from '../lib/shorts';
 import type { ShowNotes } from '../lib/showNotes';
 import type { ThumbKind } from '../lib/thumbnail';
 
@@ -217,6 +218,31 @@ export interface EpisodeYoutube {
     warnings?: string[];
 }
 
+// One short (spec 005 step 14; docs/specs/013-shorts.md): the producer's edit, the render made
+// from it, the approval of that render at Checkpoint E, and the scheduled YouTube upload.
+export interface ShortItem extends ShortEdit {
+    render?: ShortRenderInputs & { path: string; renderedAt: number; durationMs: number } | null;
+    approved?: { by: { uid: string; name: string }; at: number; renderedAt: number } | null;
+    publishAt?: number | null;            // the slot it was scheduled for, ms
+    youtube?: { videoId: string; url: string; publishAt: number; uploadedAt: number } | null;
+    error?: string | null;                // the last upload attempt for this one failed
+}
+
+export interface EpisodeShorts {
+    status: 'queued' | 'working' | 'ready' | 'failed';
+    job: 'suggest' | 'render' | 'upload' | null;   // what was asked for last
+    requestedAt?: unknown;
+    startedAt?: unknown;
+    finishedAt?: unknown;
+    error?: string | null;
+    aspect: ShortAspect;
+    items: ShortItem[];
+    version: number;                      // bumped on every edit, as with corrections
+    finalAt?: number;                     // the final cut the suggestions came from
+    timeZone?: string;                    // the producer's, for the times in emails
+    warnings?: string[];
+}
+
 export interface Episode {
     title: string;                        // from the file name, Zoom prefix stripped
     recordedAt: string | null;            // ISO date from a Zoom file name, if present
@@ -261,6 +287,7 @@ export interface Episode {
     thumbnails?: EpisodeThumbnails;       // thumbnail options, spec 005 step 12
     approval?: EpisodeApproval;           // Checkpoint D
     youtube?: EpisodeYoutube;             // the upload, spec 005 step 13
+    shorts?: EpisodeShorts;               // shorts and Checkpoint E, spec 005 step 14
     corrections?: TranscriptCorrections;  // speaker review fixes, a layer over raw.json
     correctionsVersion?: number;          // bumped on every save; stops two people overwriting
     costs: { items: CostItem[]; totalUsd: number };
