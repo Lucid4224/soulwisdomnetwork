@@ -17,6 +17,11 @@ const DESCRIPT_LABEL = {
     queued: "Starting…", importing: "Importing into Descript…", cleaning: "Removing filler words and applying Studio Sound…",
 } as const;
 
+// "26 media minutes and 63 AI credits", from the last send.
+function cost(d: PackageView["descript"] | undefined) {
+    return [d?.mediaMinutes ? `${d.mediaMinutes} media minutes` : "", d?.aiCredits ? `${d.aiCredits} AI credits` : ""].filter(Boolean).join(" and ");
+}
+
 export function EditPackage({ episodeId, enabled, upToDate }: { episodeId: string; enabled: boolean; upToDate: boolean }) {
     const [view, setView] = useState<PackageView | null>(null);
     const [error, setError] = useState("");
@@ -58,7 +63,7 @@ export function EditPackage({ episodeId, enabled, upToDate }: { episodeId: strin
 
     async function send() {
         const again = Boolean(d?.projectUrl);
-        if (again && !confirm("This makes a second Descript project; the first one is left as it is. Continue?")) return;
+        if (again && !confirm(`Send to Descript again?\n\nThis makes a new Descript project from the current edit package. The current project is left as it is, and edits made in it do not carry over.\n\n${cost(d) ? `It uses about as much as last time: ${cost(d)}.` : "It uses the Descript plan\u2019s media minutes and AI credits again."}`)) return;
         setStarting(true);
         try {
             await studioFetch(`/api/studio/episodes/${episodeId}/descript`, { method: "POST", body: JSON.stringify({ again }) });
@@ -71,11 +76,20 @@ export function EditPackage({ episodeId, enabled, upToDate }: { episodeId: strin
     }
 
     const built = view?.status === "ready";
+    const building = working || starting;
     const stale = built && (view.builtFromVersion !== view.approvedVersion || !view.clipsStored);
     const canSend = upToDate && built && !stale && !working && !sending && !starting;
     // A project made from earlier notes, or before the package was last rebuilt, has old clips and images.
     const descriptStale = d?.status === "ready" && (d.builtFromVersion !== view?.approvedVersion
         || (view?.finishedAt != null && d.finishedAt != null && view.finishedAt > d.finishedAt));
+    // What to do to bring the changes into Descript, from where things stand.
+    const staleNext = !upToDate
+        ? "Approve the changes to the show notes, rebuild the edit package, then Send to Descript again."
+        : building
+            ? "The edit package is being rebuilt; when it is done, Send to Descript again."
+            : !built || stale
+                ? "Rebuild the edit package, then Send to Descript again."
+                : "Send to Descript again to make a new project with them.";
 
     return (
         <div className="flex flex-col gap-2">
@@ -105,7 +119,7 @@ export function EditPackage({ episodeId, enabled, upToDate }: { episodeId: strin
             )}
             {built && view.warnings.map(w => <p key={w} className="text-xs text-amber-300">{w}</p>)}
 
-            <div className="flex flex-col gap-2 border-t border-white/5 pt-3 mt-1">
+            <div id="descript" className="flex flex-col gap-2 border-t border-white/5 pt-3 mt-1 scroll-mt-24">
                 <div className="flex flex-wrap items-center gap-3">
                     <button onClick={send} disabled={!canSend} className={d?.projectUrl ? secondary : primary}>
                         {sending ? DESCRIPT_LABEL[d!.status as keyof typeof DESCRIPT_LABEL] : d?.projectUrl ? "Send to Descript again" : "Send to Descript"}
@@ -119,14 +133,23 @@ export function EditPackage({ episodeId, enabled, upToDate }: { episodeId: strin
                 <p className="text-xs text-gray-500">
                     {sending
                         ? "Descript imports and transcribes the media, then Underlord cleans it up. Allow about as long as the episode; this page updates by itself and you get an email."
-                        : !built || stale
-                            ? "Build the edit package first; Descript gets the same files."
+                        : building
+                            ? "Wait for the edit package to finish building; Descript gets the same files."
+                            : !built || stale
+                            ? `${built ? "Rebuild" : "Build"} the edit package first; Descript gets the same files.`
                             : d?.status === "ready"
                                 ? `Made ${d.finishedAt ? ago(d.finishedAt) : ""}${d.mediaMinutes != null ? ` · ${d.mediaMinutes} media minutes` : ""}${d.aiCredits ? ` · ${d.aiCredits} AI credits` : ""}. Edit it in Descript; that is the final cut.`
                                 : "Makes a Descript project: the \u201cIn this episode\u201d clips, the intro and the full episode on one timeline, filler words removed and Studio Sound on, b-roll images in the media bin. Uses the Descript plan\u2019s media minutes and AI credits."}
                 </p>
                 {descriptStale && !sending && (
-                    <p className="text-sm text-amber-300">This Descript project was made from an earlier edit package, so it has the old clips and images. Send to Descript again to use the current ones.</p>
+                    <div className="text-sm text-amber-300 flex flex-col gap-1">
+                        <p>The show notes or edit package changed after this Descript project was made, so it has the old clips and images. {staleNext}</p>
+                        <p className="text-xs text-gray-400">
+                            Each send makes a new Descript project: edits made in the current one do not carry over, and it uses
+                            {cost(d) ? ` about as much as last time (${cost(d)})` : " the plan\u2019s media minutes and AI credits again"}.
+                            The final cut, thumbnails and shorts are then made again from the new project.
+                        </p>
+                    </div>
                 )}
                 {d?.status === "ready" && d.agentResponse && <p className="text-xs text-gray-400">Underlord: {d.agentResponse}</p>}
                 {d?.status === "ready" && d.warnings.map(w => <p key={w} className="text-xs text-amber-300">{w}</p>)}
