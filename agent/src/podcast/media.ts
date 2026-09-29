@@ -81,13 +81,38 @@ export function fillFrame(input: string, output: string) {
     ]);
 }
 
+// libass over the picture, with the fonts in `fontsDir`. Paths are quoted for the filter graph.
+function assFilter(ass: string, fontsDir: string) {
+    const escape = (p: string) => p.replace(/\\/g, '/').replace(/:/g, '\\:').replace(/'/g, "\\'");
+    return `ass=filename='${escape(ass)}':fontsdir='${escape(fontsDir)}'`;
+}
+
+// A still PNG with a transparent background (the generic "In this episode" banner). libass
+// keeps the alpha of what it draws on, so `ass` is drawn on black for the colour and `matte`
+// (the same drawing all in white) gives the transparency.
+export function assStill(ass: string, matte: string, fontsDir: string, output: string, width = 1920, height = 1080) {
+    const black = `color=c=black:s=${width}x${height}:d=1`;
+    return run('ffmpeg', [
+        '-y', '-hide_banner', '-loglevel', 'error',
+        '-f', 'lavfi', '-i', black, '-f', 'lavfi', '-i', black,
+        '-filter_complex',
+        `[0:v]format=rgb24,${assFilter(ass, fontsDir)}[c];[1:v]format=rgb24,${assFilter(matte, fontsDir)},format=gray[m];` +
+        '[c][m]alphamerge,unpremultiply=inplace=1,format=rgba[out]',
+        '-map', '[out]', '-frames:v', '1',
+        output,
+    ]);
+}
+
 // One clip from the original at full quality, re-encoded so it starts exactly on time
-// (a stream copy can only cut on keyframes). `fill` crops it like fillFrame.
-export function cutClip(input: string, output: string, startSeconds: number, durationSeconds: number, fill = false) {
+// (a stream copy can only cut on keyframes). `fill` crops it like fillFrame; `burn` draws an
+// ASS file over it (the "In this episode" tag).
+export function cutClip(input: string, output: string, startSeconds: number, durationSeconds: number, fill = false,
+    burn?: { ass: string; fontsDir: string }) {
+    const filters = [...(fill ? [FILL_1080] : []), ...(burn ? [assFilter(burn.ass, burn.fontsDir)] : [])];
     return run('ffmpeg', [
         '-y', '-hide_banner', '-loglevel', 'error',
         '-ss', startSeconds.toFixed(3), '-i', input, '-t', durationSeconds.toFixed(3),
-        ...(fill ? ['-vf', FILL_1080] : []),
+        ...(filters.length ? ['-vf', filters.join(',')] : []),
         '-c:v', 'libx264', '-preset', 'medium', '-crf', '17', '-pix_fmt', 'yuv420p',
         '-c:a', 'aac', '-b:a', '192k',
         '-movflags', '+faststart',
@@ -165,7 +190,6 @@ export function renderShort(input: string, output: string, o: {
     startSeconds: number; durationSeconds: number; aspect: number; background: string; ass: string; fontsDir: string;
     width: number; videoTop: number;
 }) {
-    const escape = (p: string) => p.replace(/\\/g, '/').replace(/:/g, '\\:').replace(/'/g, "\\'");
     const fadeOut = Math.max(0, o.durationSeconds - 0.25).toFixed(3);
     return run('ffmpeg', [
         '-y', '-hide_banner', '-loglevel', 'error',
@@ -176,7 +200,7 @@ export function renderShort(input: string, output: string, o: {
         // milliseconds in; without restarting its clock at zero, the first frame of the short
         // (the still the Studio and YouTube show) would have an empty space where the video goes.
         `[1:v]setpts=PTS-STARTPTS,scale=iw*sar:ih,setsar=1,crop='min(iw,trunc(ih*${o.aspect.toFixed(6)}/2)*2)':ih,scale=${o.width}:-2:flags=lanczos,fps=30[v];` +
-        `[0:v][v]overlay=0:${o.videoTop}:shortest=1,ass=filename='${escape(o.ass)}':fontsdir='${escape(o.fontsDir)}',format=yuv420p[out];` +
+        `[0:v][v]overlay=0:${o.videoTop}:shortest=1,${assFilter(o.ass, o.fontsDir)},format=yuv420p[out];` +
         `[1:a]asetpts=PTS-STARTPTS,afade=t=in:d=0.05,afade=t=out:st=${fadeOut}:d=0.25[a]`,
         '-map', '[out]', '-map', '[a]',
         '-c:v', 'libx264', '-preset', 'medium', '-crf', '18', '-profile:v', 'high',

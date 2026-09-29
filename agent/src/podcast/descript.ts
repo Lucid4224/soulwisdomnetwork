@@ -80,6 +80,8 @@ async function main() {
     if (pkg.introPath) addMedia[introKey] = { url: await signed(pkg.introPath), language: 'en' };
     else warnings.push('The edit package has no intro; rebuild it to include one.');
     addMedia[fullKey] = { url: await signed(episodeFile), language: 'en' };
+    // The generic "In this episode" banner, to place over clips added by hand (the cut clips have it already).
+    if (pkg.bannerPath) addMedia['Titles/In this episode banner.png'] = { url: await signed(pkg.bannerPath), language: 'en' };
     for (const [i, b] of notes.broll.entries()) {
         const image = episode.broll?.images?.[i];
         if (!image) {
@@ -151,7 +153,8 @@ async function main() {
         created.project_url,
         '',
         `The "${COMPOSITION}" timeline has the ${clipKeys.length} "In this episode" clips, then ${pkg.introPath ? 'the intro, then ' : ''}the full episode.`,
-        'B-roll images are in the B-roll media folder, named with where they go. Filler words removed and Studio Sound applied:',
+        'B-roll images are in the B-roll media folder, named with where they go; the "In this episode" banner is in Titles.',
+        'Filler words removed and Studio Sound applied:',
         agentResponse ? `  ${agentResponse}` : '  (no summary from Underlord)',
         ...(warnings.length ? ['', 'Check:', ...warnings.map(w => `  - ${w}`)] : []),
     ].join('\n'));

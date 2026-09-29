@@ -2,7 +2,9 @@
 // one Drive folder, "03 For Descript/<episode>", from the approved show notes:
 //   00 the full episode (a Drive copy of the original) and the show's intro
 //      (assets/podcast/intro.mp4 in this repo)
-//   01 each "In this episode" clip, cut from the original, numbered in order
+//   00 the generic "In this episode" banner, a transparent PNG to place by hand
+//   01 each "In this episode" clip, cut from the original, numbered in order, with the
+//      "In this episode" tag and the speaker's name in the lower left
 //   02 each b-roll image, named with where it goes
 //   Notes: title, clip order, chapters, b-roll timings and key quotes
 // Runs in GitHub Actions (.github/workflows/podcast_package.yml), started from the show notes
@@ -19,8 +21,10 @@ import type { Episode } from '../../../types/episode';
 import { loadAlert } from './config';
 import { copyFile, createDrive, ensureFolder, findFile, listFolderFiles, parentOf, putFile, trashFile } from './drive';
 import { withRetry } from './errors';
-import { cutClip, fillFrame, isWidescreen, videoSize } from './media';
+import { assStill, cutClip, fillFrame, isWidescreen, videoSize } from './media';
 import { sendEmail } from './notify';
+import { FONTS_DIR } from './shortsRender';
+import { teaserAss } from './teaserBanner';
 
 // Breathing room around each clip, so no word is cut short; trim it in Descript.
 const CLIP_LEAD_MS = 300;
@@ -29,6 +33,7 @@ const SITE = 'https://soulwisdomcollective.com';
 // The show's intro, versioned in the repo; replace the file to change it for later builds.
 const INTRO_FILE = path.resolve('assets/podcast/intro.mp4');
 const INTRO_NAME = '00 Intro - Soul Wisdom Collective.mp4';
+const BANNER_NAME = '00 In this episode banner.png';
 
 function required(name: string) {
     const value = process.env[name];
@@ -166,7 +171,18 @@ async function main() {
         warnings.push('The intro (assets/podcast/intro.mp4) is missing from the repo, so it was left out.');
     }
 
-    // 01: teaser clips, cut from the original at full quality.
+    // The generic banner (the tag without a name), for clips added by hand in Descript.
+    const localBanner = path.join(workDir, 'banner.png');
+    fs.writeFileSync(path.join(workDir, 'banner.ass'), teaserAss({ durationMs: 1000 }));
+    fs.writeFileSync(path.join(workDir, 'banner-matte.ass'), teaserAss({ durationMs: 1000, matte: true }));
+    await assStill(path.join(workDir, 'banner.ass'), path.join(workDir, 'banner-matte.ass'), FONTS_DIR, localBanner);
+    await putFile(drive, folderId, BANNER_NAME, 'image/png', localBanner);
+    const bannerPath = `episodes/${episodeId}/package/banner.png`;
+    await withRetry('Storage upload', () => bucket.upload(localBanner, { destination: bannerPath, resumable: false, metadata: { contentType: 'image/png' } }));
+    keep.push(BANNER_NAME);
+    console.log('  ✅ Banner');
+
+    // 01: teaser clips, cut from the original at full quality, with the tag burned in.
     const clips: string[] = [];
     const clipPaths: string[] = [];     // the same clips in Cloud Storage, for the Descript import
     if (notes.teaserClips.length) {
@@ -175,7 +191,9 @@ async function main() {
             const end = Math.max(c.endMs, c.startMs + 1000) + CLIP_TAIL_MS;
             const name = `01 In this episode - clip ${i + 1} (${at(c.startMs)}-${at(c.endMs)}) ${safe(c.speaker)}.mp4`;
             const local = path.join(workDir, `clip-${i + 1}.mp4`);
-            await cutClip(localSource, local, start / 1000, (end - start) / 1000, fill);
+            const ass = path.join(workDir, `clip-${i + 1}.ass`);
+            fs.writeFileSync(ass, teaserAss({ speaker: c.speaker, durationMs: end - start }));
+            await cutClip(localSource, local, start / 1000, (end - start) / 1000, fill, { ass, fontsDir: FONTS_DIR });
             await putFile(drive, folderId, name, 'video/mp4', local);
             const clipPath = `episodes/${episodeId}/package/clip-${i + 1}.mp4`;
             await withRetry('Storage upload', () => bucket.upload(local, { destination: clipPath, resumable: true, metadata: { contentType: 'video/mp4' } }));
@@ -224,6 +242,7 @@ async function main() {
         'package.files': keep,
         'package.clipPaths': clipPaths,
         'package.introPath': introPath,
+        'package.bannerPath': bannerPath,
         'package.episodePath': episodePath,
         'package.sourceSize': `${size.width}x${size.height}`,
         'package.warnings': warnings,

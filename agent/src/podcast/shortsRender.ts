@@ -12,14 +12,14 @@ export const FONTS_DIR = path.resolve('agent/assets/fonts');
 export const LOGO = path.resolve('public/logo.png');
 
 // ASS colours are &HBBGGRR.
-const GOLD = '&H5BC6F7&';
-const WHITE = '&HFFFFFF&';
-const INK = '&H2E0A14&';
+export const GOLD = '&H5BC6F7&';
+export const WHITE = '&HFFFFFF&';
+export const INK = '&H2E0A14&';
 
 // Braces and backslashes start ASS override codes.
-const safe = (s: string) => s.replace(/[{}\\]/g, '').replace(/\s+/g, ' ').trim();
+export const safe = (s: string) => s.replace(/[{}\\]/g, '').replace(/\s+/g, ' ').trim();
 
-function time(ms: number) {
+export function time(ms: number) {
     const cs = Math.max(0, Math.round(ms / 10));
     const h = Math.floor(cs / 360000), m = Math.floor(cs / 6000) % 60, s = Math.floor(cs / 100) % 60;
     return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(cs % 100).padStart(2, '0')}`;
