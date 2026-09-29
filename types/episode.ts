@@ -27,6 +27,8 @@ export interface CostItem {
     item: string;         // e.g. 'transcription_raw'
     usd: number;
     at: unknown;            // Firestore Timestamp
+    aiCredits?: number;     // descript_send: the Descript plan's AI credits and media time used
+    mediaSeconds?: number;
 }
 
 export interface DetectedSpeaker {

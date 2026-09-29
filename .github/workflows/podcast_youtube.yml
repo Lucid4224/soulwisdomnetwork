@@ -3,6 +3,8 @@
 # hand from the Actions tab with the episode ID. A second run updates the same video.
 
 name: Podcast YouTube Upload
+# The episode ID in the run name ties each run to its episode on the Usage page (lib/server/usage.ts).
+run-name: "Podcast YouTube Upload · ${{ inputs.episode_id }}"
 
 on:
   workflow_dispatch:

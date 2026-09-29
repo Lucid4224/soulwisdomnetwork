@@ -3,6 +3,8 @@
 # page, or by hand from the Actions tab with the episode ID. Each run makes a new project.
 
 name: Podcast Descript
+# The episode ID in the run name ties each run to its episode on the Usage page (lib/server/usage.ts).
+run-name: "Podcast Descript · ${{ inputs.episode_id }}"
 
 on:
   workflow_dispatch:

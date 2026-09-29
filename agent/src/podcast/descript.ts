@@ -150,6 +150,11 @@ async function main() {
         'descript.notesVersion': episode.notes?.approvedVersion ?? 0,
         'descript.finishedAt': FieldValue.serverTimestamp(),
         'descript.error': null,
+        // Every send, for the Usage page: plan credits and media time, not money.
+        'costs.items': FieldValue.arrayUnion({
+            item: 'descript_send', usd: 0, at: new Date(),
+            aiCredits, mediaSeconds: mediaSeconds + (cleaned.result?.media_seconds_used ?? 0),
+        }),
         updatedAt: FieldValue.serverTimestamp(),
     });
 

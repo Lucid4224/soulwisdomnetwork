@@ -187,7 +187,10 @@ export default function PodcastStudioPage() {
                         <div className="flex items-center gap-2">
                             <button onClick={load} className={secondary}>Refresh</button>
                             {profile?.role === "admin" && (
-                                <Link href="/admin" className="text-sm text-gray-400 hover:text-white ml-2">← Admin</Link>
+                                <>
+                                    <Link href="/admin/usage" className="text-sm text-gray-400 hover:text-white ml-2">Usage</Link>
+                                    <Link href="/admin" className="text-sm text-gray-400 hover:text-white ml-2">← Admin</Link>
+                                </>
                             )}
                         </div>
                     </div>

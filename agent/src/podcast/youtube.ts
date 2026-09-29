@@ -20,6 +20,7 @@ import type { Episode } from '../../../types/episode';
 import { loadAlert } from './config';
 import { withRetry } from './errors';
 import { describeError, failureSubject, sendEmail } from './notify';
+import { postUsageReport } from './usageReport';
 import { createYoutube, type VideoResource } from './youtubeApi';
 
 // Our captions track, told apart from any added by hand in YouTube Studio.
@@ -186,6 +187,9 @@ async function main() {
         'youtube.error': null,
         updatedAt: FieldValue.serverTimestamp(),
     });
+
+    // The episode is finished: post what it took to the Usage page (first upload only).
+    if (!episode.youtube?.videoId) await postUsageReport(getFirestore(), episodeId, 'finished');
 
     await sendEmail({ alert }, `On YouTube: ${meta.title}`, [
         `"${meta.title}" is on YouTube (${privacyStatus}):`,
