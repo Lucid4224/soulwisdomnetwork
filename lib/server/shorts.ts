@@ -1,12 +1,12 @@
-// Shorts and Checkpoint E (docs/specs/013-shorts.md): ask GitHub Actions to suggest, draw or
-// schedule the shorts, keep the producer's edits, record which drawn short was approved, and show
+// Shorts and Checkpoint E (docs/specs/013-shorts.md): ask GitHub Actions to write headlines and
+// titles for, draw or schedule the shorts the producer picked from the key quotes, keep the producer's edits, record which drawn short was approved, and show
 // it all on the show notes page.
 
 import { FieldValue } from 'firebase-admin/firestore';
 import { z } from 'zod';
 import type { TimedWord } from '@/lib/retime';
 import {
-    DEFAULT_ASPECT, renderInputs, sameRender, SHORT_ASPECTS, SHORT_MAX_MS, ShortEditSchema, showsBroll, TRIM_WINDOW_MS, wordsBetween,
+    DEFAULT_ASPECT, renderInputs, sameRender, quoteMatch, SHORT_ASPECTS, SHORT_MAX_MS, ShortEditSchema, showsBroll, TRIM_WINDOW_MS, wordsBetween,
     type ShortAspect,
 } from '@/lib/shorts';
 import type { Episode, EpisodeShorts, ShortItem } from '@/types/episode';
@@ -18,11 +18,11 @@ import { HttpError } from './staff';
 // A request that has not finished by now is treated as lost and can be retried.
 const STALE_MS = 70 * 60_000;       // the workflow's own limit is 60 minutes
 const LINK_MS = 3 * 60 * 60_000;
-const MAX_ITEMS = 20;
+const MAX_ITEMS = 40;               // the notes allow up to 40 key quotes
 const MIN_LEAD_MS = 30 * 60_000;    // the first scheduled short, at the earliest
 const MAX_LEAD_MS = 180 * 24 * 60 * 60_000;
 
-type Mode = 'suggest' | 'render' | 'upload';
+type Mode = 'titles' | 'render' | 'upload';
 
 function episodeRef(id: string) {
     if (!/^[\w-]{10,}$/.test(id)) throw new HttpError(400, 'Not a valid episode ID');
@@ -60,7 +60,7 @@ const approved = (item: ShortItem, shorts: EpisodeShorts, episode: Episode) =>
 
 export async function requestShorts(id: string, body: { mode?: unknown; firstAt?: unknown; timeZone?: unknown }) {
     const mode = body.mode as Mode;
-    if (!['suggest', 'render', 'upload'].includes(mode)) throw new HttpError(400, 'Not a shorts job');
+    if (!['titles', 'render', 'upload'].includes(mode)) throw new HttpError(400, 'Not a shorts job');
     const firstAt = Number(body.firstAt);
     if (mode === 'upload' && (!Number.isFinite(firstAt) || firstAt < Date.now() + MIN_LEAD_MS || firstAt > Date.now() + MAX_LEAD_MS)) {
         throw new HttpError(400, 'Pick a time for the first short at least half an hour from now');
@@ -80,12 +80,14 @@ export async function requestShorts(id: string, body: { mode?: unknown; firstAt?
         };
         if (!shorts) Object.assign(update, { 'shorts.aspect': DEFAULT_ASPECT, 'shorts.items': [], 'shorts.version': 0 });
         const items = shorts?.items ?? [];
-        if (mode !== 'suggest' && !items.length) throw new HttpError(409, 'Suggest or add shorts first');
+        if (!items.length) throw new HttpError(409, 'Pick some key quotes for shorts first');
+        if (mode === 'titles' && !items.some(i => !i.youtube && (!i.headline.trim() || !i.title.trim()))) {
+            throw new HttpError(409, 'Every short already has a headline and a title; clear one to have it rewritten');
+        }
         if (mode === 'render' && !items.some(i => !i.youtube && !current(i, shorts!, episode))) {
             throw new HttpError(409, 'Every short is already drawn');
         }
         if (mode === 'upload') {
-            if (!episode.youtube?.url) throw new HttpError(409, 'Upload the episode to YouTube first; each short links to it');
             // One a day, in the order on the page, after any already scheduled.
             let n = 0;
             const scheduled = items.map(i => {
@@ -124,7 +126,7 @@ export async function saveShorts(id: string, body: unknown) {
         if (!episode) throw new HttpError(404, 'Episode not found');
         if (episode.final?.status !== 'ready') throw new HttpError(409, 'Get the final cut from Descript first');
         const shorts = episode.shorts;
-        if ((shorts?.version ?? 0) !== version) throw new HttpError(409, 'The shorts were changed elsewhere (or new ones were suggested). Reload the page.');
+        if ((shorts?.version ?? 0) !== version) throw new HttpError(409, 'The shorts were changed elsewhere (or Claude just wrote their titles). Reload the page.');
         const durationMs = (episode.final.durationSeconds ?? 0) * 1000;
         const quoteCount = episode.final.quotes?.length ?? 0;
         const before = new Map((shorts?.items ?? []).map(i => [i.id, i]));
@@ -246,20 +248,22 @@ export async function getShorts(id: string): Promise<ShortsView> {
             error: i.error ?? null,
         };
     }));
-    const labels: Record<Mode, string> = { suggest: 'Suggesting shorts', render: 'Drawing the shorts', upload: 'Scheduling the shorts' };
+    const labels: Record<string, string> = { titles: 'Writing the headlines and titles', render: 'Drawing the shorts', upload: 'Scheduling the shorts' };
     return {
         // A request whose run died reads as failed, so the page offers a retry.
         status: lost ? 'failed' : s?.status ?? null,
         job: s?.job ?? null,
-        error: s?.error ?? (lost ? `${s?.job ? labels[s.job] : 'The shorts job'} did not finish. Check the Podcast Shorts run in GitHub Actions, then try again.` : null),
+        error: s?.error ?? (lost ? `${(s?.job && labels[s.job]) || 'The shorts job'} did not finish. Check the Podcast Shorts run in GitHub Actions, then try again.` : null),
         blocker: finalProblem(episode),
-        stale: !!s?.finalAt && ready && s.finalAt !== finalAt(episode),
         episodeUrl: episode.youtube?.url ?? null,
         aspect: (s?.aspect ?? DEFAULT_ASPECT) as ShortAspect,
         version: s?.version ?? 0,
         finalAt: finalAt(episode),
         finalUrl,
-        quotes: quotes.map(q => ({ text: q.text, speaker: q.speaker, startMs: q.startMs, endMs: q.endMs })),
+        quotes: quotes.map(q => ({
+            text: q.text, speaker: q.speaker, startMs: q.startMs, endMs: q.endMs,
+            match: quoteMatch(q.text, wordsBetween(words, q.startMs - 2000, q.endMs + 2000)),
+        })),
         items,
         lastSlot: slot,
         warnings: s?.status === 'ready' ? s.warnings ?? [] : [],

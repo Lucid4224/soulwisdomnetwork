@@ -9,14 +9,21 @@
 Vertical YouTube Shorts from each episode's key quotes, reviewed by a person before anything is
 posted, without spending Descript credits:
 
-1. Claude suggests the best moments and trims them.
-2. The producer adjusts them.
+1. The producer ticks the key quotes to make into shorts and trims them.
+2. Claude writes a headline and title for each (or the producer does).
 3. Our own job draws them.
 4. The producer watches and approves each one (Checkpoint E).
 5. The approved ones are scheduled on YouTube, one a day.
 
 ## Decisions (29 Sept 2026)
 
+- **Shorts are picked from the key quotes**, not suggested. The first version had Claude pick five,
+  which was too few to choose from; the approved key quotes (up to 40, usually about 20) are
+  already a reviewed list of good moments, timed on the final cut. Claude only writes the
+  headlines and titles. Decided after the first run on pt1.
+- **Available once the final cut is done**, since that is what shorts are cut from. They can
+  be made and scheduled before the episode is on YouTube; until it is, each short links to the
+  podcast playlist.
 - **Made in our pipeline, not Descript** or a clipping service. No credits and no
   subscription. Shorts are cut from the final cut, so the edit's audio fixes carry over.
 - **Stacked layout.** The episode's 16:9 picture sits above large captions. Its sides are
@@ -50,25 +57,23 @@ fade in and out.
 
 On the show notes page, under **Shorts** (`components/studio/shorts.tsx`), after the final cut is ready:
 
-1. **Suggest shorts.**
-   - The page calls `POST /api/studio/episodes/[id]/shorts` with `{ mode: 'suggest' }`
-     (`requireRole`). This starts **Podcast Shorts** (`.github/workflows/podcast_shorts.yml`,
-     `agent/src/podcast/shorts.ts`).
-   - Claude (the show notes model and effort) gets the final cut's key quotes word by word, each
-     word numbered, with three seconds either side. It returns five moments, each with its first
-     and last word, a headline and a YouTube title (`ShortSuggestionsSchema`). It aims for 20 to
-     60 seconds, never under 10 or over 90.
-   - The job puts a little air before the first word and after the last, never reaching into the
-     next word (`wordBounds`). Suggestions that point at missing words, or come out under 5
-     seconds or over 3 minutes, are dropped with a warning.
-   - The **AI imagery** flag is ticked when an AI b-roll still falls inside the moment
-     (`showsBroll`).
-   - Suggesting again replaces every short that is not on YouTube yet.
+1. **Pick key quotes.** The section lists every key quote as it is timed on the final cut
+   (`final.quotes`, step 11), with speaker, length and **▶** to preview it. Ticking one makes it
+   a short covering the whole quote (at most three minutes), added at the end of the list;
+   unticking removes it. A quote whose words are mostly missing where it should be in the final
+   cut (`quoteMatch` under 0.7) is flagged: the edit probably cut it. The **AI imagery** flag is
+   ticked when an AI b-roll still falls inside the quote (`showsBroll`).
 2. **Edit.** Changes save as they go (`PATCH .../shorts`, with a version number, like the notes):
-   - Click a word to move the nearer end of a short there.
-   - Edit the headline and title.
+   - Click a word to move the nearer end of a short there. Quotes can run to two minutes; 20–60
+     seconds holds viewers best, and the page marks anything longer.
+   - **Write headlines and titles** (`POST .../shorts` with `{ mode: 'titles' }`, which starts
+     **Podcast Shorts**, `.github/workflows/podcast_shorts.yml`, `agent/src/podcast/shorts.ts`):
+     Claude (the show notes model and effort) reads the words of each short that is missing a
+     headline or a title and writes them (`ShortTextsSchema`). It fills only empty fields, so
+     clear one to have it rewritten.
+   - Or type the headline (`*marked*` words in gold) and title yourself.
    - Tick or untick AI imagery.
-   - Reorder shorts (this is the schedule order), remove them, or add any other key quote.
+   - Reorder shorts (this is the schedule order) or remove them.
    - **▶ Preview** plays that stretch of the final cut. The player shades what the crop leaves out.
 3. **Draw shorts** (`mode: 'render'`) draws every short that changed since it was last drawn:
    - The job makes the backdrop once with ffmpeg: gradient, logo and gold rules.
@@ -84,15 +89,16 @@ On the show notes page, under **Shorts** (`components/studio/shorts.tsx`), after
 4. **Checkpoint E.** Watch each drawn short and **Approve this short**. An approval belongs to that
    render: drawing it again clears it. Approving needs a title.
 5. **Schedule on YouTube** (`mode: 'upload'`, with the first time and the producer's time zone):
-   - This needs the episode on YouTube first, because each short links to it.
+   - Each short links to the episode on YouTube, or to the podcast playlist (repo variable
+     `YOUTUBE_PLAYLIST_ID`) if the episode is not up yet.
    - The server gives each approved short a slot one day after the one before, in page order.
      The page suggests the day after the last short already scheduled on any episode, at the same
      time of day; otherwise 5 pm tomorrow.
    - The job uploads each one Private with that `publishAt` (`youtubeApi.ts`, resumable). The
      details:
      - title: the short's title
-     - description: the spoken words, "Watch the full conversation" with the episode link, two of
-       the episode's hashtags and `#shorts`
+     - description: the spoken words, "Watch the full conversation" with the episode link (or "Full
+       episodes" with the playlist), two of the episode's hashtags and `#shorts`
      - tags: the episode's
      - category: Education
      - not made for kids
@@ -115,12 +121,12 @@ On the show notes page, under **Shorts** (`components/studio/shorts.tsx`), after
 - **Scheduled publishing needs uploads that are not locked Private.** An API project that has
   not passed YouTube's audit may have every upload kept Private (spec 012). Ours is not locked,
   as pt1 showed. If that changes, the shorts stay Private at their times until the audit passes.
-- **The final cut changes.** Every short needs drawing again, and the page warns that suggested
-  times may be off.
+- **The final cut changes.** Every short needs drawing again; check each one's ends, since
+  the key quotes are re-timed onto the new cut but a short's trim is not.
 
 ## Costs
 
-- Claude's suggestions: a few cents an episode (`shorts_suggest` in the episode's costs).
+- Claude's headlines and titles: a few cents an episode (`shorts_titles` in the episode's costs).
 - Drawing runs on GitHub Actions and uploading uses the API quota, so neither costs money.
 - No Descript credits.
 

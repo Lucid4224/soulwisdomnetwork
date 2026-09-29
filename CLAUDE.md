@@ -30,7 +30,7 @@ agent/src/    scout.ts — YouTube scorer, runs in GitHub Actions, NOT on App Ho
               podcast/thumbnails.ts — spec 005 step 12 (thumbnail texts, frames and AI background), GitHub Actions only;
               the Studio draws the options (components/studio/thumbnailCanvas.ts) and approves them (Checkpoint D)
               podcast/youtube.ts — spec 005 step 13 (YouTube upload via podcast/youtubeApi.ts), GitHub Actions only
-              podcast/shorts.ts — spec 005 step 14 (Shorts: suggest, draw with ffmpeg + podcast/shortsRender.ts,
+              podcast/shorts.ts — spec 005 step 14 (Shorts from picked key quotes: titles, draw with ffmpeg + podcast/shortsRender.ts,
               schedule on YouTube), GitHub Actions only; fonts for the burned-in text in agent/assets/fonts
 scripts/      make_admin.ts
 docs/specs/   numbered specs, 001-013
@@ -100,8 +100,8 @@ same API, normalizes it to −14 LUFS, saves it to `04 Final` in Drive, and move
 `docs/specs/011-thumbnails.md`), which needs `ANTHROPIC_API_KEY` and `OPENAI_API_KEY`; the producer picks one and
 approves the episode there (Checkpoint D). "Upload to YouTube" then starts `podcast_youtube.yml` (`agent/src/podcast/youtube.ts`,
 `docs/specs/012-youtube-upload.md`), which signs in as the channel owner with the `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET` and
-`YOUTUBE_REFRESH_TOKEN` repo secrets. "Suggest shorts" under Shorts starts `podcast_shorts.yml` (`agent/src/podcast/shorts.ts`,
-`docs/specs/013-shorts.md`) in one of three modes: suggest (Claude), render (ffmpeg, from the final cut; no Descript) and upload
+`YOUTUBE_REFRESH_TOKEN` repo secrets. Under Shorts the producer ticks key quotes; `podcast_shorts.yml` (`agent/src/podcast/shorts.ts`,
+`docs/specs/013-shorts.md`) runs in one of three modes: titles (Claude writes headlines and titles), render (ffmpeg, from the final cut; no Descript) and upload
 (the shorts approved at Checkpoint E, scheduled one a day, with the same YouTube secrets). The transcript Google Doc beside the video only works in a shared drive:
 service accounts have no My Drive storage and cannot create files there. Secrets: `PODCAST_SA_JSON`,
 `ASSEMBLYAI_API_KEY`, `RESEND_API_KEY`. Repo variables: `DRIVE_TO_PROCESS_FOLDER_ID`,

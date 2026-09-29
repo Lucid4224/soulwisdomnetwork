@@ -48,7 +48,7 @@ Fourteen steps. The numbers in brackets map to the ten steps discussed in planni
 | 11 | **Re-transcribe the finished video.** This becomes the permanent record, and fixes the chapter times. Built in the same run: the chapter and quote times are moved onto the final cut (spec 010) | Automatic | 1 |
 | 12 | Generate 3 thumbnail options; **Checkpoint D — pick one and approve the episode** **[7]**. Built: "Make thumbnail options" on the notes page (texts from Claude, frames from the final cut, an AI background), the options drawn in the Studio, and "Approve episode" (spec 011) | Human, ~7 min | 1 |
 | 13 | Publish to YouTube with captions, chapters and thumbnail **[8]**. Built: "Upload to YouTube" on the notes page after Checkpoint D; uploads stay Private until YouTube's API audit passes (spec 012) | Automatic | 1 |
-| 14 | Cut shorts, **Checkpoint E — review**, distribute to social **[9]**. Built for YouTube: "Suggest shorts" on the notes page (Claude picks and trims key quotes), drawn in our own job from the final cut with no Descript credits, approved one by one, scheduled one a day (spec 013). Instagram later | Human, ~10 min | 2 |
+| 14 | Cut shorts, **Checkpoint E — review**, distribute to social **[9]**. Built for YouTube: the producer ticks key quotes on the notes page and trims them, Claude writes headlines and titles, drawn in our own job from the final cut with no Descript credits, approved one by one, scheduled one a day (spec 013). Instagram later | Human, ~10 min | 2 |
 | 15 | Everything stored, searchable, linked to published media **[10]**; performance pulled back weekly | Automatic | 3 & 4 |
 
 **Descript is the final say (decided 23 Sept 2026).** Small editing choices are easier made by hand

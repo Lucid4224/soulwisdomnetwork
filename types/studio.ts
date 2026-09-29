@@ -201,13 +201,14 @@ export interface ShortsView {
     job: EpisodeShorts['job'];
     error: string | null;
     blocker: string | null;             // why shorts cannot be made yet
-    stale: boolean;                     // suggested from an earlier final cut
-    episodeUrl: string | null;          // the episode on YouTube, which each short links to
+    episodeUrl: string | null;          // the episode on YouTube, which each short links to once it is there
     aspect: ShortAspect;
     version: number;
     finalAt: number;                    // the final cut now; a render from another is out of date
     finalUrl: string | null;            // the final cut, to preview a short before drawing it
-    quotes: { text: string; speaker: string; startMs: number; endMs: number }[];
+    // The key quotes on the final cut, to pick shorts from. `match`: share of the quote's words heard
+    // there; low means the edit cut or changed it.
+    quotes: { text: string; speaker: string; startMs: number; endMs: number; match: number }[];
     items: ShortItemView[];
     lastSlot: number | null;            // the latest time any episode's short is scheduled for
     warnings: string[];

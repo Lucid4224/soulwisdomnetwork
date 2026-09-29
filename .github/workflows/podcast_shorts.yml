@@ -1,5 +1,5 @@
 # Spec 005 step 14: Shorts from the key quotes (agent/src/podcast/shorts.ts, docs/specs/013-shorts.md).
-# mode "suggest": Claude picks and trims the best moments; "render": draws the shorts that changed;
+# mode "titles": Claude writes headlines and titles for the key quotes picked; "render": draws the shorts that changed;
 # "upload": schedules the shorts approved at Checkpoint E on YouTube, one a day. Started from the
 # show notes page, or by hand from the Actions tab with the episode ID.
 
@@ -12,7 +12,7 @@ on:
         description: 'Episode ID (the Drive file ID in the Podcast Studio URL)'
         required: true
       mode:
-        description: 'suggest, render or upload'
+        description: 'titles, render or upload'
         required: true
         default: 'render'
 
@@ -54,5 +54,6 @@ jobs:
         YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
         RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
         ALERT_EMAIL: ${{ vars.ALERT_EMAIL }}
+        YOUTUBE_PLAYLIST_ID: ${{ vars.YOUTUBE_PLAYLIST_ID }}
         GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
       run: npx tsx agent/src/podcast/shorts.ts
