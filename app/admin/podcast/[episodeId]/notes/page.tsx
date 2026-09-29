@@ -14,6 +14,7 @@ import { Shorts } from "@/components/studio/shorts";
 import { Thumbnails } from "@/components/studio/thumbnails";
 import { Youtube } from "@/components/studio/youtube";
 import { ago, minutes } from "@/components/studio/format";
+import { STEPS, type StepId } from "@/components/studio/steps";
 import { useAutosave } from "@/components/studio/useAutosave";
 import { useAuth } from "@/context/AuthContext";
 import { BROLL_STYLE_IDS, BROLL_STYLES, BROLL_USD_PER_IMAGE, type BrollStyle } from "@/lib/broll";
@@ -27,17 +28,6 @@ const secondary = `${button} border-white/10 text-gray-300 hover:bg-white/10`;
 const field = "w-full bg-[#130b29] border border-white/10 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-amber-500/50";
 const small = "text-xs text-gray-500";
 
-// The steps after the notes, in order, each a link to its place on the page.
-const ACTIONS = [
-    ["notes", "Draft show notes"],
-    ["broll", "Generate b-roll images"],
-    ["package", "Build the edit package for Descript"],
-    ["descript", "Send to Descript"],
-    ["final", "Get the final cut from Descript"],
-    ["thumbnail", "Thumbnail and approval"],
-    ["youtube", "Upload to YouTube"],
-    ["shorts", "Make and approve shorts"],
-] as const;
 
 const words = (s: string) => s.trim().split(/\s+/).filter(Boolean).length;
 
@@ -100,6 +90,20 @@ export default function ShowNotesPage() {
     const autosave = useAutosave(save);
     const { reset, change, flush } = autosave;
     const broll = useBroll(episodeId, !loading && allowed);
+
+    // Where each step stands, reported by its section (components/studio/steps.ts). When one
+    // changes after the first report (a job finished, something approved), every section fetches
+    // its view again, so the next step shows as soon as it is possible.
+    const [done, setDone] = useState<Partial<Record<StepId, boolean>>>({});
+    const [revision, setRevision] = useState(0);
+    const stepKeys = useRef<Partial<Record<StepId, string>>>({});
+    const report = useCallback((step: StepId, isDone: boolean, key: string) => {
+        setDone(d => (d[step] === isDone ? d : { ...d, [step]: isDone }));
+        const before = stepKeys.current[step];
+        stepKeys.current[step] = key;
+        if (before !== undefined && before !== key) setRevision(r => r + 1);
+    }, []);
+    const next = STEPS.find(([id]) => !done[id])?.[0];
 
     const load = useCallback(async () => {
         try {
@@ -259,6 +263,21 @@ export default function ShowNotesPage() {
         return "Show notes approved.";
     });
 
+    // The notes and b-roll steps, from this page's own state.
+    const notesKey = view?.notes ? `${view.notes.status}:${view.notes.approved?.version}` : null;
+    const brollPending = notes ? notes.broll.filter((b, i) => {
+        const image = broll.image(i);
+        return image?.idea !== b.idea.trim() || image.style !== b.style;
+    }).length : null;
+    useEffect(() => {
+        if (notesKey !== null) report("notes", !!view?.notes?.approved, notesKey);
+    }, [notesKey, view, report]);
+    // Keyed on the images, not the ideas, so typing an idea does not refresh every section.
+    const brollKey = broll.view ? `${broll.view.status}:${broll.view.images.map(i => i.createdAt).join(",")}` : null;
+    useEffect(() => {
+        if (brollPending !== null && brollKey !== null && !broll.working) report("broll", !!view?.notes?.approved && brollPending === 0, brollKey);
+    }, [brollPending, brollKey, broll.working, view, report]);
+
     const copyDescription = () => {
         if (!notes) return;
         void navigator.clipboard.writeText(youtubeDescription(notes));
@@ -282,10 +301,7 @@ export default function ShowNotesPage() {
     const approved = view?.notes?.approved;
     const upToDate = status === "approved" && approved?.version === autosave.savedVersion && autosave.saveState === "saved";
     // Images are made from the approved ideas, so only offered when the page shows exactly those.
-    const brollChanged = notes ? notes.broll.filter((b, i) => {
-        const image = broll.image(i);
-        return image?.idea !== b.idea.trim() || image.style !== b.style;
-    }).length : 0;
+    const brollChanged = brollPending ?? 0;
     const brollBlocked = !upToDate || broll.working || broll.starting;
     const saveLabel = {
         saved: "Draft saved to the database", unsaved: "Unsaved changes…", saving: "Saving draft…", error: "Draft not saved",
@@ -353,8 +369,16 @@ export default function ShowNotesPage() {
                                 <nav aria-label="Steps" className="border-t border-white/5 pt-3">
                                     <h2 className="text-sm font-semibold text-gray-300 mb-1.5">Actions</h2>
                                     <ol className="flex flex-col gap-1 text-sm list-decimal pl-5 marker:text-gray-500">
-                                        {ACTIONS.map(([id, label]) => (
-                                            <li key={id}><a href={`#${id}`} className="text-amber-300 hover:underline">{label}</a></li>
+                                        {STEPS.map(([id, label]) => (
+                                            <li key={id} className={done[id] ? "marker:text-emerald-400" : ""}>
+                                                <a
+                                                    href={`#${id}`}
+                                                    className={`hover:underline ${done[id] ? "text-emerald-300/80" : id === next ? "text-amber-300 font-semibold" : "text-gray-400"}`}
+                                                    aria-current={id === next ? "step" : undefined}
+                                                >
+                                                    {done[id] ? "✓ " : ""}{label}{id === next ? " ←" : ""}
+                                                </a>
+                                            </li>
                                         ))}
                                     </ol>
                                     <p className={`${small} mt-2`}>
@@ -609,23 +633,23 @@ export default function ShowNotesPage() {
                                 </Section>
 
                                 <Section id="package" title="Edit package and Descript" hint="Built from the approved notes. Descript has the final say: the edit happens there.">
-                                    <EditPackage episodeId={episodeId} enabled={!loading && allowed} upToDate={upToDate} />
+                                    <EditPackage episodeId={episodeId} enabled={!loading && allowed} upToDate={upToDate} report={report} revision={revision} />
                                 </Section>
 
                                 <Section id="final" title="Final cut" hint="The finished edit, published from Descript, set to broadcast loudness and saved to Drive, with the chapter times moved onto it.">
-                                    <FinalCut episodeId={episodeId} enabled={!loading && allowed} />
+                                    <FinalCut episodeId={episodeId} enabled={!loading && allowed} report={report} revision={revision} />
                                 </Section>
 
                                 <Section id="thumbnail" title="Thumbnail and approval" hint="Checkpoint D. Thumbnails drive more views than anything else, so a person always picks. Then approve the episode for YouTube.">
-                                    <Thumbnails episodeId={episodeId} enabled={!loading && allowed} />
+                                    <Thumbnails episodeId={episodeId} enabled={!loading && allowed} report={report} revision={revision} />
                                 </Section>
 
                                 <Section id="youtube" title="YouTube" hint="The approved episode, with the final cut's chapters, the approved thumbnail, captions and the AI disclosure.">
-                                    <Youtube episodeId={episodeId} enabled={!loading && allowed} />
+                                    <Youtube episodeId={episodeId} enabled={!loading && allowed} report={report} revision={revision} />
                                 </Section>
 
                                 <Section id="shorts" title="Shorts" hint="Checkpoint E. Vertical shorts from the key quotes, made here from the final cut (no Descript credits), approved one by one and scheduled on YouTube one a day.">
-                                    <Shorts episodeId={episodeId} enabled={!loading && allowed} />
+                                    <Shorts episodeId={episodeId} enabled={!loading && allowed} report={report} revision={revision} />
                                 </Section>
                             </div>
                         </div>

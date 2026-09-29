@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ago } from "@/components/studio/format";
 import { mmss } from "@/lib/showNotes";
 import { studioFetch } from "@/lib/studioClient";
+import { useStep, type ReportStep } from "@/components/studio/steps";
 import type { FinalView } from "@/types/studio";
 
 const button = "text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 disabled:cursor-not-allowed";
@@ -20,7 +21,7 @@ const LABEL = {
     retiming: "Moving the chapter times onto the final cut…",
 } as const;
 
-export function FinalCut({ episodeId, enabled }: { episodeId: string; enabled: boolean }) {
+export function FinalCut({ episodeId, enabled, report, revision }: { episodeId: string; enabled: boolean; report?: ReportStep; revision?: number }) {
     const [view, setView] = useState<FinalView | null>(null);
     const [error, setError] = useState("");
     const [starting, setStarting] = useState(false);
@@ -58,6 +59,7 @@ export function FinalCut({ episodeId, enabled }: { episodeId: string; enabled: b
     }
 
     const ready = view?.status === "ready";
+    useStep({ step: "final", done: ready && !view.stale, key: view ? `${view.status}:${view.finishedAt}` : null, report, revision, enabled, load });
     return (
         <div className="flex flex-col gap-2">
             <div className="flex flex-wrap items-center gap-3">

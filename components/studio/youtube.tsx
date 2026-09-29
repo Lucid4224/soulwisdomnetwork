@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ago } from "@/components/studio/format";
 import { studioFetch } from "@/lib/studioClient";
+import { useStep, type ReportStep } from "@/components/studio/steps";
 import { YOUTUBE_CATEGORY_LABEL } from "@/lib/youtube";
 import type { YoutubeView } from "@/types/studio";
 
@@ -19,7 +20,7 @@ const LABEL = {
     processing: "Adding the thumbnail and captions…",
 } as const;
 
-export function Youtube({ episodeId, enabled }: { episodeId: string; enabled: boolean }) {
+export function Youtube({ episodeId, enabled, report, revision }: { episodeId: string; enabled: boolean; report?: ReportStep; revision?: number }) {
     const [view, setView] = useState<YoutubeView | null>(null);
     const [error, setError] = useState("");
     const [starting, setStarting] = useState(false);
@@ -39,6 +40,11 @@ export function Youtube({ episodeId, enabled }: { episodeId: string; enabled: bo
     }, [enabled, load]);
 
     const working = !!view?.status && view.status in LABEL;
+    useStep({
+        step: "youtube", done: !!view?.videoId,
+        key: view ? `${view.status}:${view.finishedAt}:${view.videoId}:${view.blocker}` : null,
+        report, revision, enabled, load,
+    });
     useEffect(() => {
         if (!working) return;
         const timer = setInterval(load, 15000);

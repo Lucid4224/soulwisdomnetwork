@@ -11,6 +11,7 @@ import { BROLL_STYLE_IDS, BROLL_STYLES, type BrollStyle } from "@/lib/broll";
 import { auth } from "@/lib/firebase/config";
 import { mmss } from "@/lib/showNotes";
 import { studioFetch } from "@/lib/studioClient";
+import { useStep, type ReportStep } from "@/components/studio/steps";
 import { THUMB_HEIGHT, THUMB_KINDS, THUMB_LABELS, THUMB_MAX_BYTES, THUMB_WIDTH, type ThumbKind } from "@/lib/thumbnail";
 import type { ThumbnailsView } from "@/types/studio";
 
@@ -31,7 +32,7 @@ async function fetchImage(url: string) {
 
 type Loaded = { bitmap: ImageBitmap; src: string };
 
-export function Thumbnails({ episodeId, enabled }: { episodeId: string; enabled: boolean }) {
+export function Thumbnails({ episodeId, enabled, report, revision }: { episodeId: string; enabled: boolean; report?: ReportStep; revision?: number }) {
     const [view, setView] = useState<ThumbnailsView | null>(null);
     const [error, setError] = useState("");
     const [starting, setStarting] = useState(false);
@@ -73,6 +74,11 @@ export function Thumbnails({ episodeId, enabled }: { episodeId: string; enabled:
     }, [enabled, load]);
 
     const working = view?.status === "queued" || view?.status === "working";
+    useStep({
+        step: "thumbnail", done: !!view?.approval && !view.approval.stale,
+        key: view ? `${view.status}:${view.finishedAt}:${view.approval?.at}:${view.approval?.stale}` : null,
+        report, revision, enabled, load,
+    });
     // When a run finishes, take the new texts and frames.
     const wasWorking = useRef(false);
     useEffect(() => {
