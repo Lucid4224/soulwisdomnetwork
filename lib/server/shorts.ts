@@ -238,7 +238,7 @@ export async function getShorts(id: string): Promise<ShortsView> {
             render: i.render ? {
                 key: String(i.render.renderedAt), url: await signed(i.render.path), durationMs: i.render.durationMs,
                 inputs: {
-                    startMs: i.render.startMs, endMs: i.render.endMs, headline: i.render.headline, speaker: i.render.speaker,
+                    version: i.render.version, startMs: i.render.startMs, endMs: i.render.endMs, headline: i.render.headline, speaker: i.render.speaker,
                     aspect: i.render.aspect, finalAt: i.render.finalAt,
                 },
             } : null,

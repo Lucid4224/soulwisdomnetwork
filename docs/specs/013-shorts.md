@@ -85,7 +85,8 @@ On the show notes page, under **Shorts** (`components/studio/shorts.tsx`), after
    - The output is H.264 at 30 fps, AAC at 48 kHz, stored at `episodes/{id}/shorts/{short}-{time}.mp4`.
    - It takes about a minute a short, then sends an email.
    - A render records exactly what it was drawn from: the ends, headline, speaker, crop and
-     final cut. Any change to one of those means it needs drawing again.
+     final cut, and the drawing version (`RENDER_VERSION`). Any change to one of those means it
+     needs drawing again; bumping the version redraws every short after a fix to the drawing.
 4. **Checkpoint E.** Watch each drawn short and **Approve this short**. An approval belongs to that
    render: drawing it again clears it. Approving needs a title.
 5. **Schedule on YouTube** (`mode: 'upload'`, with the first time and the producer's time zone):
