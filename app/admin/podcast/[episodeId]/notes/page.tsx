@@ -600,7 +600,7 @@ export default function ShowNotesPage() {
                                     <Youtube episodeId={episodeId} enabled={!loading && allowed} />
                                 </Section>
 
-                                <Section title="Shorts" hint="Checkpoint E. Vertical shorts from the key quotes, drawn here from the final cut (no Descript credits), approved one by one and scheduled on YouTube one a day.">
+                                <Section title="Shorts" hint="Checkpoint E. Vertical shorts from the key quotes, made here from the final cut (no Descript credits), approved one by one and scheduled on YouTube one a day.">
                                     <Shorts episodeId={episodeId} enabled={!loading && allowed} />
                                 </Section>
                             </div>
