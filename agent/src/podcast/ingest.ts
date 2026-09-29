@@ -20,6 +20,7 @@ import { PermanentError, withRetry } from './errors';
 import { makeAudio, makeProxy, probeDuration } from './media';
 import { episodeTitle, recordedAt } from './naming';
 import { sendEmail, sendFailureAlert, type Failure } from './notify';
+import { postUsageReport } from './usageReport';
 import { readableTranscript, speakerSummary } from './readable';
 import { createAssemblyAI, hasFailed, submitTranscription, summariseSpeakers, waitForTranscript } from './transcribe';
 
@@ -90,7 +91,11 @@ async function publishReview(ref: DocumentReference, episode: Episode, speakers:
         ].join('\n');
         const sent = await sendEmail(config, `Ready for speaker review: ${episode.title}`, body,
             [{ filename: `${episode.title} - transcript.txt`, content: text }]);
-        if (sent) await touch(ref, { 'review.notifiedAt': FieldValue.serverTimestamp() });
+        if (sent) {
+            await touch(ref, { 'review.notifiedAt': FieldValue.serverTimestamp() });
+            // The episode has started: post what it should take to the Usage page.
+            await postUsageReport(db, ref.id, 'started');
+        }
     }
 }
 

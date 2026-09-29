@@ -4,6 +4,8 @@
 # notes page, or by hand from the Actions tab with the episode ID.
 
 name: Podcast Edit Package
+# The episode ID in the run name ties each run to its episode on the Usage page (lib/server/usage.ts).
+run-name: "Podcast Edit Package · ${{ inputs.episode_id }}"
 
 on:
   workflow_dispatch:

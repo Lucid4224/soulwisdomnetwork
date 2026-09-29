@@ -4,6 +4,8 @@
 # by hand from the Actions tab with the episode ID.
 
 name: Podcast Thumbnails
+# The episode ID in the run name ties each run to its episode on the Usage page (lib/server/usage.ts).
+run-name: "Podcast Thumbnails · ${{ inputs.episode_id }}"
 
 on:
   workflow_dispatch:

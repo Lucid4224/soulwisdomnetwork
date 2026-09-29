@@ -115,3 +115,32 @@ export async function startShorts(episodeId: string, mode: 'titles' | 'render' |
         body: JSON.stringify({ ref: 'main', inputs: { episode_id: episodeId, mode } }),
     });
 }
+
+export interface PodcastRun {
+    workflow: string;           // e.g. "Podcast Final Cut"
+    title: string;              // the run name; ends with " · <episode ID>" since 30 Sept 2026
+    startedAt: number;
+    minutes: number;
+    ok: boolean;
+}
+
+// Every finished run since `since` (up to 500), for the Usage page.
+export async function podcastRuns(since: Date): Promise<PodcastRun[]> {
+    const out: PodcastRun[] = [];
+    const created = since.toISOString().slice(0, 10);
+    for (let page = 1; page <= 5; page++) {
+        const res = await github(`/actions/runs?per_page=100&page=${page}&status=completed&created=%3E%3D${created}`);
+        const data = await res.json() as { workflow_runs: Array<Record<string, unknown>> };
+        for (const r of data.workflow_runs) {
+            const start = Date.parse((r.run_started_at ?? r.created_at) as string);
+            const end = Date.parse(r.updated_at as string);
+            if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
+            out.push({
+                workflow: r.name as string, title: (r.display_title as string) ?? '',
+                startedAt: start, minutes: Math.max(0, (end - start) / 60_000), ok: r.conclusion === 'success',
+            });
+        }
+        if (data.workflow_runs.length < 100) break;
+    }
+    return out;
+}

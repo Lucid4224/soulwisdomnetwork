@@ -3,6 +3,8 @@
 # page in the Podcast Studio, or by hand from the Actions tab with the episode ID.
 
 name: Podcast B-roll
+# The episode ID in the run name ties each run to its episode on the Usage page (lib/server/usage.ts).
+run-name: "Podcast B-roll · ${{ inputs.episode_id }}"
 
 on:
   workflow_dispatch:

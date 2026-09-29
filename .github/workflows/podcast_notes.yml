@@ -3,6 +3,8 @@
 # tab with the episode ID (the Drive file ID shown in the Studio URL).
 
 name: Podcast Show Notes
+# The episode ID in the run name ties each run to its episode on the Usage page (lib/server/usage.ts).
+run-name: "Podcast Show Notes · ${{ inputs.episode_id }}"
 
 on:
   workflow_dispatch:

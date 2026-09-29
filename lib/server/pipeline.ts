@@ -68,6 +68,8 @@ function summarise(id: string, e: Episode): EpisodeSummary {
         updatedAt,
         notesStatus: e.notes?.status ?? null,
         stepErrors: stepErrors(e),
+        finished: e.finished ? { by: e.finished.by.name, at: millis(e.finished.at) ?? 0 } : null,
+        youtubeUrl: e.youtube?.url ?? null,
         stuck: inProgress && updatedAt !== null && Date.now() - updatedAt > STUCK_MS,
     };
 }

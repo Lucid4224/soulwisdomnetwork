@@ -68,9 +68,14 @@ export default function AdminPage() {
                 <div className="max-w-6xl mx-auto">
                     <div className="flex items-center justify-between mb-8">
                         <h1 className="text-3xl font-bold text-amber-400">Admin Console</h1>
-                        <Link href="/admin/podcast" className="text-sm px-4 py-2 rounded-lg border border-amber-500/30 text-amber-300 hover:bg-amber-500/10 transition-colors">
-                            Podcast Studio →
-                        </Link>
+                        <div className="flex gap-2">
+                            <Link href="/admin/usage" className="text-sm px-4 py-2 rounded-lg border border-white/10 text-gray-300 hover:bg-white/10 transition-colors">
+                                Usage
+                            </Link>
+                            <Link href="/admin/podcast" className="text-sm px-4 py-2 rounded-lg border border-amber-500/30 text-amber-300 hover:bg-amber-500/10 transition-colors">
+                                Podcast Studio →
+                            </Link>
+                        </div>
                     </div>
 
                     <div className="bg-[#1E1035]/50 border border-white/5 rounded-2xl overflow-hidden">

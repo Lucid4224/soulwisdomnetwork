@@ -33,7 +33,7 @@ agent/src/    scout.ts — YouTube scorer, runs in GitHub Actions, NOT on App Ho
               podcast/shorts.ts — spec 005 step 14 (Shorts from picked key quotes: titles, draw with ffmpeg + podcast/shortsRender.ts,
               schedule on YouTube), GitHub Actions only; fonts for the burned-in text in agent/assets/fonts
 scripts/      make_admin.ts
-docs/specs/   numbered specs, 001-013
+docs/specs/   numbered specs, 001-014
 types/
 ```
 
@@ -118,7 +118,9 @@ firebase deploy --only firestore:rules,firestore:indexes --project soulwisdomnet
 
 Collections: `users`, `posts`, `comments`, `conversations`, `messages`, `feed_items`,
 `channels`, `episodes` (podcast pipeline, Admin SDK only; shape in `types/episode.ts`),
-`studio` (Podcast Studio settings such as the backlog order, Admin SDK only).
+`studio` (Podcast Studio settings such as the backlog order, Admin SDK only), `usage_reports`
+(what each episode cost and took, posted by the podcast jobs; the admin Usage page `/admin/usage`,
+`docs/specs/014-usage.md`, Admin SDK only).
 
 Two rules are load-bearing and easy to break:
 

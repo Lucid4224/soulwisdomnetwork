@@ -71,5 +71,11 @@ service cloud.firestore {
     match /episodes/{episodeId} {
       allow read, write: if false;
     }
+
+    // Usage reports (docs/specs/014-usage.md), written by the podcast jobs and read by the
+    // Usage page through the server. Unmatched paths are denied anyway; this says so.
+    match /usage_reports/{reportId} {
+      allow read, write: if false;
+    }
   }
 }
