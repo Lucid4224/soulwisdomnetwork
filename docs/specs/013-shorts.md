@@ -135,3 +135,15 @@ On the show notes page, under **Shorts** (`components/studio/shorts.tsx`), after
 
 - Instagram Reels from the same files (decided: later).
 - A Shorts playlist, and pulling views back weekly (spec 005 step 15).
+- **Pick the cover frame with a slider** (asked for 29 Sept 2026). The still of each short is
+  its first frame, which sometimes catches the speaker mid-blink. Wanted: a slider under each
+  drawn short in the Studio to scrub through it and pick the frame to use as its cover.
+  - Studio: a range input that seeks the rendered short's `<video>` (step 1/30 s) and saves
+    `coverMs` on the short (an edit, not a render input, so it needs no redraw).
+  - Job, upload mode: grab that frame from the render with ffmpeg (as `grabFrame` does for
+    thumbnails, at 1080x1920) and send it with `thumbnails.set` after the upload.
+  - Check first: whether YouTube accepts a custom thumbnail for a Short through the API. If
+    it refuses, fall back to making the chosen frame the first frame the video shows (hold
+    it for a fraction of a second at the start), which is what the Studio and many players
+    show as the still. Until then, the cover can be chosen by hand in the YouTube app
+    (edit the Short → Thumbnail).
