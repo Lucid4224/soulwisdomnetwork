@@ -10,6 +10,7 @@ import { canvasJpeg, drawThumbnail, type ThumbImages } from "@/components/studio
 import { BROLL_STYLE_IDS, BROLL_STYLES, type BrollStyle } from "@/lib/broll";
 import { auth } from "@/lib/firebase/config";
 import { mmss } from "@/lib/showNotes";
+import { ErrorNote } from "@/components/studio/ErrorNote";
 import { studioFetch } from "@/lib/studioClient";
 import { useStep, type ReportStep } from "@/components/studio/steps";
 import { THUMB_HEIGHT, THUMB_KINDS, THUMB_LABELS, THUMB_MAX_BYTES, THUMB_WIDTH, type ThumbKind } from "@/lib/thumbnail";
@@ -75,7 +76,7 @@ export function Thumbnails({ episodeId, enabled, report, revision }: { episodeId
 
     const working = view?.status === "queued" || view?.status === "working";
     useStep({
-        step: "thumbnail", done: !!view?.approval && !view.approval.stale,
+        step: "thumbnail", failed: view?.status === "failed", done: !!view?.approval && !view.approval.stale,
         key: view ? `${view.status}:${view.finishedAt}:${view.approval?.at}:${view.approval?.stale}` : null,
         report, revision, enabled, load,
     });
@@ -208,6 +209,8 @@ export function Thumbnails({ episodeId, enabled, report, revision }: { episodeId
                             : "Makes three options: a frame from the episode, an AI image and the brand template, all with a short text. About $0.20."}
             </p>
             {view?.stale && <p className="text-sm text-amber-300">These options came from an earlier final cut. Make new options to match.</p>}
+            {view?.status === "failed" && <ErrorNote title="Making thumbnails failed" message={view.error} />}
+            {view?.status === "ready" && <ErrorNote tone="warning" title="The AI image is missing" message={view.error} />}
 
             {ready && view && (
                 <>
@@ -300,8 +303,7 @@ export function Thumbnails({ episodeId, enabled, report, revision }: { episodeId
                 <p className="text-xs text-gray-500">Approving saves the chosen thumbnail as a JPEG and clears the episode for the YouTube upload (spec 005 step 13).</p>
             </div>
 
-            {view?.status === "failed" && view.error && <p className="text-sm text-red-300">{view.error}</p>}
-            {error && <p className="text-sm text-red-300">{error}</p>}
+            <ErrorNote message={error} />
         </div>
     );
 }

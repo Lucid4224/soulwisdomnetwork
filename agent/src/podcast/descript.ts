@@ -13,7 +13,7 @@ import { mmss } from '../../../lib/showNotes';
 import type { Episode } from '../../../types/episode';
 import { loadAlert } from './config';
 import { createDescript } from './descriptApi';
-import { sendEmail } from './notify';
+import { describeError, failureSubject, sendEmail } from './notify';
 
 const FOLDER = 'Soul Wisdom Podcast';
 const COMPOSITION = 'Episode';
@@ -172,7 +172,7 @@ main().catch(async error => {
         'descript.status': 'failed', 'descript.error': message, 'descript.finishedAt': FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
     }).catch(() => {});
-    await sendEmail({ alert }, `Descript import failed: ${episodeId}`,
-        `The Descript project could not be made.\n\nError: ${message}\n\nTry again from the show notes page.${runUrl ? `\n\nRun log: ${runUrl}` : ''}`);
+    await sendEmail({ alert }, failureSubject(`Descript import failed: ${episodeId}`, message),
+        `The Descript project could not be made.\n\n${describeError(message)}\n\nTry again from the show notes page.${runUrl ? `\n\nRun log: ${runUrl}` : ''}`);
     process.exit(1);
 });

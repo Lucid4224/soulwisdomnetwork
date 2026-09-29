@@ -11,6 +11,8 @@ import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import { BROLL_MODEL, BROLL_QUALITY, BROLL_SIZE, BROLL_USD_PER_IMAGE, brollPrompt, type BrollStyle } from '../../../lib/broll';
 import type { BrollImage, Episode } from '../../../types/episode';
+import { loadAlert } from './config';
+import { describeError, failureSubject, sendEmail } from './notify';
 
 // Images at once; each takes up to a minute or two.
 const PARALLEL = 3;
@@ -30,6 +32,11 @@ initializeApp({
     storageBucket: process.env.PODCAST_STORAGE_BUCKET || 'soulwisdomnetwork.firebasestorage.app',
 });
 const ref = getFirestore().collection('episodes').doc(episodeId);
+const alert = loadAlert();
+const runUrl = process.env.GITHUB_RUN_URL || '';
+
+const failureEmail = (message: string, what: string) => sendEmail({ alert }, failureSubject(`B-roll images failed: ${episodeId}`, message),
+    `${what}\n\n${describeError(message)}\n\nTry again from the show notes page.${runUrl ? `\n\nRun log: ${runUrl}` : ''}`);
 
 async function main() {
     const episode = (await ref.get()).data() as Episode | undefined;
@@ -103,6 +110,7 @@ async function main() {
     });
     if (failures.length) {
         console.error(`${failures.length} image(s) failed`);
+        await failureEmail(failures.join('\n'), `${failures.length} of ${todo.length} b-roll image(s) could not be made.`);
         process.exit(1);
     }
 }
@@ -114,5 +122,6 @@ main().catch(async error => {
         'broll.status': 'failed', 'broll.error': message, 'broll.finishedAt': FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
     }).catch(() => {});
+    await failureEmail(message, 'The b-roll images could not be made.');
     process.exit(1);
 });

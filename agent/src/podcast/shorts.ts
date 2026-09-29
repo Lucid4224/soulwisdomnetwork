@@ -29,7 +29,7 @@ import { loadAlert } from './config';
 import { withRetry } from './errors';
 import { renderShort, shortBackground } from './media';
 import { NOTES_EFFORT, NOTES_MODEL } from './notesDraft';
-import { sendEmail } from './notify';
+import { describeError, failureSubject, sendEmail } from './notify';
 import { FONTS_DIR, LOGO, shortAss } from './shortsRender';
 import { createYoutube, YoutubeError } from './youtubeApi';
 
@@ -333,7 +333,7 @@ main().catch(async error => {
         updatedAt: FieldValue.serverTimestamp(),
     }).catch(() => {});
     const what = { titles: 'Writing the headlines and titles', render: 'Making the shorts', upload: 'Scheduling the shorts' }[mode] ?? 'The shorts job';
-    await sendEmail({ alert }, `Shorts failed: ${episodeId}`,
-        `${what} did not finish.\n\nError: ${message}\n\nTry again from the show notes page: ${notesPage}${runUrl ? `\n\nRun log: ${runUrl}` : ''}`);
+    await sendEmail({ alert }, failureSubject(`Shorts failed: ${episodeId}`, message),
+        `${what} did not finish.\n\n${describeError(message)}\n\nTry again from the show notes page: ${notesPage}${runUrl ? `\n\nRun log: ${runUrl}` : ''}`);
     process.exit(1);
 });

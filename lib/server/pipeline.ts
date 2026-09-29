@@ -38,6 +38,19 @@ function ordered(videos: DriveVideo[], order: string[]) {
         || (a.addedAt ?? '').localeCompare(b.addedAt ?? ''));
 }
 
+// The steps after speaker review, and where each keeps its last run.
+const STEP_JOBS = [
+    ['Show notes', 'notes'], ['B-roll images', 'broll'], ['Edit package', 'package'], ['Descript', 'descript'],
+    ['Final cut', 'final'], ['Thumbnails', 'thumbnails'], ['YouTube', 'youtube'], ['Shorts', 'shorts'],
+] as const;
+
+function stepErrors(e: Episode) {
+    return STEP_JOBS.flatMap(([step, field]) => {
+        const job = e[field] as { status?: string; error?: string | null } | undefined;
+        return job?.status === 'failed' ? [{ step, message: job.error || 'No reason given' }] : [];
+    });
+}
+
 function summarise(id: string, e: Episode): EpisodeSummary {
     const updatedAt = millis(e.updatedAt);
     const inProgress = e.status === 'ingesting' || e.status === 'transcribing';
@@ -54,6 +67,7 @@ function summarise(id: string, e: Episode): EpisodeSummary {
         createdAt: millis(e.createdAt),
         updatedAt,
         notesStatus: e.notes?.status ?? null,
+        stepErrors: stepErrors(e),
         stuck: inProgress && updatedAt !== null && Date.now() - updatedAt > STUCK_MS,
     };
 }

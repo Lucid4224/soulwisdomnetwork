@@ -22,7 +22,7 @@ import { loadAlert } from './config';
 import { copyFile, createDrive, ensureFolder, findFile, listFolderFiles, parentOf, putFile, trashFile } from './drive';
 import { withRetry } from './errors';
 import { assStill, cutClip, fillFrame, isWidescreen, videoSize } from './media';
-import { sendEmail } from './notify';
+import { describeError, failureSubject, sendEmail } from './notify';
 import { FONTS_DIR } from './shortsRender';
 import { teaserAss } from './teaserBanner';
 
@@ -269,7 +269,7 @@ main().catch(async error => {
         'package.status': 'failed', 'package.error': message, 'package.finishedAt': FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
     }).catch(() => {});
-    await sendEmail({ alert }, `Edit package failed: ${episodeId}`,
-        `The edit package could not be built.\n\nError: ${message}\n\nTry again from the show notes page.${runUrl ? `\n\nRun log: ${runUrl}` : ''}`);
+    await sendEmail({ alert }, failureSubject(`Edit package failed: ${episodeId}`, message),
+        `The edit package could not be built.\n\n${describeError(message)}\n\nTry again from the show notes page.${runUrl ? `\n\nRun log: ${runUrl}` : ''}`);
     process.exit(1);
 });

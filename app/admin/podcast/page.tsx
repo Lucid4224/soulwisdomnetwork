@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import AuthGuard from "@/components/auth/AuthGuard";
 import SetupCheck from "@/components/studio/SetupCheck";
+import { ErrorNote } from "@/components/studio/ErrorNote";
 import { ago, megabytes, minutes, STAGE_LABEL, usd } from "@/components/studio/format";
 import { useAuth } from "@/context/AuthContext";
 import { studioFetch } from "@/lib/studioClient";
@@ -185,21 +186,13 @@ export default function PodcastStudioPage() {
                         </div>
                         <div className="flex items-center gap-2">
                             <button onClick={load} className={secondary}>Refresh</button>
-                            <button
-                                onClick={() => processNow()}
-                                disabled={busy !== null || running || !data?.toProcess.length}
-                                className={primary}
-                                title={data?.toProcess.length ? "" : "Nothing in To Process"}
-                            >
-                                {busy === "process" ? "Starting…" : running ? "Processing…" : "Process now"}
-                            </button>
                             {profile?.role === "admin" && (
                                 <Link href="/admin" className="text-sm text-gray-400 hover:text-white ml-2">← Admin</Link>
                             )}
                         </div>
                     </div>
 
-                    {error && <p className="text-red-400 text-sm">{error}</p>}
+                    <ErrorNote message={error} />
                     {notice && (
                         <p className={`text-sm rounded-lg px-4 py-2 ${notice.startsWith("⚠️") ? "bg-red-900/20 text-red-300" : "bg-green-900/20 text-green-300"}`}>
                             {notice}
@@ -243,7 +236,15 @@ export default function PodcastStudioPage() {
                             </ol>
                         </Column>
 
-                        <Column title="To Process" count={data?.toProcess.length ?? 0} hint="Waiting in 01 To Process. Press Process now, or it starts within 3 hours.">
+                        <Column title="To Process" count={data?.toProcess.length ?? 0} hint="Waiting in 01 To Process. Nothing starts on its own: press Process now when you are ready to work on them.">
+                            <button
+                                onClick={() => processNow()}
+                                disabled={busy !== null || running || !data?.toProcess.length}
+                                className={`${primary} self-start`}
+                                title={data?.toProcess.length ? "" : "Nothing in To Process"}
+                            >
+                                {busy === "process" ? "Starting…" : running ? "Processing…" : "Process now"}
+                            </button>
                             {data && !data.toProcess.length && <Empty>Nothing waiting.</Empty>}
                             {data?.toProcess.map(v => (
                                 <div key={v.id} className={card}>
@@ -282,6 +283,9 @@ export default function PodcastStudioPage() {
                                     {e.notesStatus && (
                                         <p className={`text-xs mt-2 ${NOTES_LABEL[e.notesStatus].tone}`}>Show notes: {NOTES_LABEL[e.notesStatus].text}</p>
                                     )}
+                                    {(e.stepErrors ?? []).map(s => (
+                                        <ErrorNote key={s.step} title={`${s.step} failed`} message={s.message} className="mt-2" />
+                                    ))}
                                     <div className="flex flex-wrap gap-2 mt-2">
                                         <Link href={`/admin/podcast/${e.id}/notes`} className={e.notesStatus === "ready" ? primary : secondary}>Show notes</Link>
                                         <Link href={`/admin/podcast/${e.id}`} className={secondary}>Open review</Link>
@@ -295,9 +299,11 @@ export default function PodcastStudioPage() {
                             {!failed.length && <Empty>No failures.</Empty>}
                             {failed.map(e => (
                                 <EpisodeCard key={e.id} e={e}>
-                                    <p className="text-xs text-red-300 mt-2 break-words">
-                                        {STAGE_LABEL[e.error?.stage ?? ""] ?? e.error?.stage}: {e.error?.message}
-                                    </p>
+                                    <ErrorNote
+                                        title={`${STAGE_LABEL[e.error?.stage ?? ""] ?? e.error?.stage ?? "Processing"} failed`}
+                                        message={e.error?.message ?? "No reason given"}
+                                        className="mt-2"
+                                    />
                                     <button onClick={() => processNow(e.id)} disabled={busy !== null || running} className={`${secondary} mt-2`}>
                                         {busy === `retry:${e.id}` ? "Starting…" : "Retry"}
                                     </button>

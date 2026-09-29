@@ -23,7 +23,7 @@ import { createDescript, DescriptError } from './descriptApi';
 import { createDrive, ensureFolder, parentOf, putFile } from './drive';
 import { withRetry } from './errors';
 import { makeAudio, normalizeLoudness, probeDuration } from './media';
-import { sendEmail } from './notify';
+import { describeError, failureSubject, sendEmail } from './notify';
 import { createAssemblyAI, transcribeWords } from './transcribe';
 
 // AssemblyAI transcription without speaker labels, per audio hour.
@@ -177,7 +177,7 @@ main().catch(async error => {
         'final.status': 'failed', 'final.error': message, 'final.finishedAt': FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
     }).catch(() => {});
-    await sendEmail({ alert }, `Final cut failed: ${episodeId}`,
-        `The final cut could not be made.\n\nError: ${message}\n\nTry again from the show notes page.${runUrl ? `\n\nRun log: ${runUrl}` : ''}`);
+    await sendEmail({ alert }, failureSubject(`Final cut failed: ${episodeId}`, message),
+        `The final cut could not be made.\n\n${describeError(message)}\n\nTry again from the show notes page.${runUrl ? `\n\nRun log: ${runUrl}` : ''}`);
     process.exit(1);
 });

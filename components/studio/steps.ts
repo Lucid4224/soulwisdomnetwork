@@ -17,14 +17,16 @@ export const STEPS = [
 ] as const;
 
 export type StepId = (typeof STEPS)[number][0];
-export type ReportStep = (step: StepId, done: boolean, key: string) => void;
+export type ReportStep = (step: StepId, done: boolean, key: string, failed?: boolean) => void;
 
 // Tells the page about a step, and loads the section's view again when another step changes.
-export function useStep(o: { step: StepId; done: boolean; key: string | null; report?: ReportStep; revision?: number; enabled: boolean; load: () => unknown }) {
-    const { step, done, key, report, revision = 0, enabled, load } = o;
+export function useStep(o: {
+    step: StepId; done: boolean; failed?: boolean; key: string | null; report?: ReportStep; revision?: number; enabled: boolean; load: () => unknown;
+}) {
+    const { step, done, failed = false, key, report, revision = 0, enabled, load } = o;
     useEffect(() => {
-        if (key !== null) report?.(step, done, key);
-    }, [step, done, key, report]);
+        if (key !== null) report?.(step, done, key, failed);
+    }, [step, done, failed, key, report]);
     useEffect(() => {
         if (enabled && revision) load();
         // Only a new revision reloads; `load` changing is handled by the section's own effect.
