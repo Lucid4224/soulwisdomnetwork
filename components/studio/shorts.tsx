@@ -1,0 +1,420 @@
+"use client";
+
+// Shorts and Checkpoint E on the show notes page (docs/specs/013-shorts.md). Claude suggests the
+// moments; the producer moves their ends by clicking words, edits the headline and title,
+// previews the cut, has them drawn, watches and approves each one, and schedules the approved ones
+// on YouTube one a day. Edits save as they go.
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ago } from "@/components/studio/format";
+import { useAutosave } from "@/components/studio/useAutosave";
+import { mmss } from "@/lib/showNotes";
+import {
+    DAY_MS, DEFAULT_ASPECT, HEADLINE_MAX_CHARS, publishSlot, renderInputs, sameRender, SHORT_ASPECTS, SHORT_MAX_MS, SHORT_MIN_MS,
+    SHORT_TARGET_MS, SHORT_TITLE_MAX, sideCrop, wordBounds, type ShortAspect, type ShortEdit,
+} from "@/lib/shorts";
+import { studioFetch } from "@/lib/studioClient";
+import type { ShortItemView, ShortsView } from "@/types/studio";
+
+const button = "text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 disabled:cursor-not-allowed";
+const primary = `${button} border-amber-500/40 text-amber-300 hover:bg-amber-500/10`;
+const secondary = `${button} border-white/10 text-gray-300 hover:bg-white/10`;
+const approveButton = "text-xs px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed";
+const input = "bg-black/30 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white w-full";
+
+const WORKING = { suggest: "Suggesting shorts…", render: "Drawing the shorts…", upload: "Scheduling on YouTube…" } as const;
+
+type Edits = { aspect: ShortAspect; items: ShortEdit[] };
+
+const pick = (i: ShortEdit): ShortEdit => ({
+    id: i.id, quoteIndex: i.quoteIndex, speaker: i.speaker, startMs: i.startMs, endMs: i.endMs,
+    headline: i.headline, title: i.title, synthetic: i.synthetic,
+});
+
+// <input type="datetime-local"> works in the browser's own time zone.
+function localInput(ms: number) {
+    const d = new Date(ms);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+const when = (ms: number) => new Date(ms).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+
+// The day after the last short already scheduled (any episode), at the same time; or tomorrow at 5 pm.
+function defaultFirstSlot(lastSlot: number | null) {
+    if (lastSlot && lastSlot + DAY_MS > Date.now() + DAY_MS / 2) return lastSlot + DAY_MS;
+    const d = new Date(Date.now() + DAY_MS);
+    if (lastSlot) {
+        const t = new Date(lastSlot);
+        d.setHours(t.getHours(), t.getMinutes(), 0, 0);
+    } else {
+        d.setHours(17, 0, 0, 0);
+    }
+    return d.getTime();
+}
+
+export function Shorts({ episodeId, enabled }: { episodeId: string; enabled: boolean }) {
+    const [view, setView] = useState<ShortsView | null>(null);
+    const [edits, setEdits] = useState<Edits>({ aspect: DEFAULT_ASPECT, items: [] });
+    const [error, setError] = useState("");
+    const [starting, setStarting] = useState(false);
+    const [firstAt, setFirstAt] = useState("");
+    const [addQuote, setAddQuote] = useState("");
+    // Signed links change on every load; keep the first one per render so a playing video is not reset.
+    const [urls, setUrls] = useState<Record<string, string>>({});
+    const [finalUrl, setFinalUrl] = useState<string | null>(null);
+    const [previewing, setPreviewing] = useState<string | null>(null);
+    const player = useRef<HTMLVideoElement | null>(null);
+    const stopAt = useRef<number | null>(null);
+    const base = `/api/studio/episodes/${episodeId}/shorts`;
+
+    const save = useCallback(async (value: Edits, version: number) => {
+        const res = await studioFetch<{ version: number }>(base, {
+            method: "PATCH", body: JSON.stringify({ version, aspect: value.aspect, items: value.items.map(pick) }),
+        });
+        return res.version;
+    }, [base]);
+    const { saveState, saveError, change, flush, reset } = useAutosave<Edits>(save);
+    const saveStateRef = useRef(saveState);
+    useEffect(() => { saveStateRef.current = saveState; }, [saveState]);
+
+    const load = useCallback(async (force = false) => {
+        try {
+            const next = await studioFetch<ShortsView>(base);
+            setView(next);
+            setError("");
+            // Unsaved edits on this page win over what the server has, until they are saved.
+            if (force || saveStateRef.current === "saved") {
+                setEdits({ aspect: next.aspect, items: next.items.map(pick) });
+                reset(next.version);
+            }
+            setFinalUrl(url => url ?? next.finalUrl);
+            setUrls(prev => {
+                const out = { ...prev };
+                for (const i of next.items) if (i.render && !out[i.render.key]) out[i.render.key] = i.render.url;
+                return out;
+            });
+            setFirstAt(value => value || localInput(defaultFirstSlot(next.lastSlot)));
+        } catch (e) {
+            setError((e as Error).message);
+        }
+    }, [base, reset]);
+
+    useEffect(() => {
+        if (enabled) load(true);
+    }, [enabled, load]);
+
+    const working = view?.status === "queued" || view?.status === "working";
+    const wasWorking = useRef(false);
+    useEffect(() => {
+        if (!working) {
+            // The job just finished: take its results (new suggestions, renders, uploads).
+            if (wasWorking.current) load();
+            wasWorking.current = false;
+            return;
+        }
+        wasWorking.current = true;
+        const timer = setInterval(() => load(), 10000);
+        return () => clearInterval(timer);
+    }, [working, load]);
+
+    function update(next: Edits) {
+        setEdits(next);
+        change(next);
+    }
+    const setItem = (id: string, patch: Partial<ShortEdit>) =>
+        update({ ...edits, items: edits.items.map(i => (i.id === id ? { ...i, ...patch } : i)) });
+
+    function move(id: string, by: number) {
+        const items = [...edits.items];
+        const at = items.findIndex(i => i.id === id);
+        const to = at + by;
+        if (at < 0 || to < 0 || to >= items.length) return;
+        [items[at], items[to]] = [items[to], items[at]];
+        update({ ...edits, items });
+    }
+
+    async function add() {
+        const index = Number(addQuote);
+        const q = view?.quotes[index];
+        if (!q) return;
+        const item: ShortEdit = {
+            id: crypto.randomUUID().slice(0, 8), quoteIndex: index, speaker: q.speaker,
+            startMs: q.startMs, endMs: Math.min(q.endMs, q.startMs + SHORT_MAX_MS), headline: "", title: "", synthetic: false,
+        };
+        update({ ...edits, items: [...edits.items, item] });
+        setAddQuote("");
+        // Saved at once, so its words for trimming come back.
+        if (await flush()) await load(true);
+    }
+
+    async function start(mode: "suggest" | "render" | "upload") {
+        if (mode === "suggest" && edits.items.some(i => !view?.items.find(v => v.id === i.id)?.youtube)
+            && !confirm("Suggesting again replaces the shorts here that are not on YouTube yet. Go ahead?")) return;
+        setStarting(true);
+        try {
+            if (!(await flush())) throw new Error("Your changes could not be saved; fix that first");
+            const body = mode === "upload"
+                ? { mode, firstAt: new Date(firstAt).getTime(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone }
+                : { mode };
+            await studioFetch(base, { method: "POST", body: JSON.stringify(body) });
+            await load();
+        } catch (e) {
+            setError((e as Error).message);
+        } finally {
+            setStarting(false);
+        }
+    }
+
+    async function approve(id: string, approved: boolean) {
+        try {
+            await studioFetch(base, { method: "POST", body: JSON.stringify({ approve: id, approved }) });
+            await load();
+        } catch (e) {
+            setError((e as Error).message);
+        }
+    }
+
+    // Plays a short's stretch of the final cut, before it is drawn.
+    function preview(item: ShortEdit) {
+        const video = player.current;
+        if (!video) return;
+        setPreviewing(item.id);
+        stopAt.current = item.endMs / 1000;
+        video.currentTime = item.startMs / 1000;
+        void video.play();
+    }
+    function onTime() {
+        const video = player.current;
+        if (video && stopAt.current !== null && video.currentTime >= stopAt.current) {
+            video.pause();
+            stopAt.current = null;
+        }
+    }
+
+    const byId = new Map((view?.items ?? []).map(i => [i.id, i]));
+    // Drawn from the short exactly as it is on this page, and from the current final cut.
+    const drawn = (i: ShortEdit) => {
+        const r = byId.get(i.id)?.render;
+        return !!r && !!view && sameRender(r.inputs, renderInputs(i, edits.aspect, view.finalAt));
+    };
+    const toDraw = edits.items.filter(i => !byId.get(i.id)?.youtube && !drawn(i)).length;
+    const waiting = edits.items.filter(i => drawn(i) && byId.get(i.id)?.approved && !byId.get(i.id)?.youtube);
+    const firstMs = firstAt ? new Date(firstAt).getTime() : NaN;
+    const used = new Set(edits.items.map(i => i.quoteIndex));
+    const crop = `${sideCrop(edits.aspect) * 100}%`;
+
+    return (
+        <div className="flex flex-col gap-4">
+            {view?.blocker ? (
+                <p className="text-xs text-gray-500">{view.blocker}</p>
+            ) : (
+                <div className="flex flex-wrap items-center gap-3">
+                    <button onClick={() => start("suggest")} disabled={working || starting || !view} className={edits.items.length ? secondary : primary}>
+                        {working && view?.job === "suggest" ? WORKING.suggest : edits.items.length ? "Suggest again" : "Suggest shorts"}
+                    </button>
+                    <button onClick={() => start("render")} disabled={working || starting || !toDraw} className={primary}>
+                        {working && view?.job === "render" ? WORKING.render : `Draw ${toDraw || ""} short${toDraw === 1 ? "" : "s"}`.replace("  ", " ")}
+                    </button>
+                    {view?.finishedAt && !working && <span className="text-xs text-gray-500">Last job {ago(view.finishedAt)}</span>}
+                    <span className="text-xs text-gray-500">
+                        {saveState === "saving" ? "Saving…" : saveState === "unsaved" ? "Unsaved" : saveState === "error" ? "" : edits.items.length ? "Saved" : ""}
+                    </span>
+                </div>
+            )}
+            <p className="text-xs text-gray-500">
+                {working
+                    ? view?.job === "render" ? "About a minute a short. This page updates by itself and you get an email." : "This page updates by itself."
+                    : "Claude picks the best key quotes and trims them to 20-60 seconds. Click a word to move the nearer end of a short there, preview it, then draw it: 1080x1920, the episode above large captions with the spoken word in gold."}
+            </p>
+            {view?.stale && <p className="text-sm text-amber-300">These were suggested from an earlier final cut, so their times may be off. Suggest again, or check each one.</p>}
+            {saveError && <p className="text-sm text-red-300">{saveError}</p>}
+            {view?.warnings.map(w => <p key={w} className="text-xs text-amber-300">{w}</p>)}
+
+            {!view?.blocker && finalUrl && (
+                <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 items-start">
+                    <div className="relative">
+                        <video ref={player} src={finalUrl} controls preload="metadata" onTimeUpdate={onTime} onPause={() => setPreviewing(null)}
+                            className="w-full rounded-xl bg-black aspect-video" />
+                        {/* What the crop leaves out. */}
+                        <div className="pointer-events-none absolute inset-y-0 left-0 bg-black/60 border-r border-amber-400/70 rounded-l-xl" style={{ width: crop }} />
+                        <div className="pointer-events-none absolute inset-y-0 right-0 bg-black/60 border-l border-amber-400/70 rounded-r-xl" style={{ width: crop }} />
+                    </div>
+                    <div className="flex flex-col gap-2 text-xs text-gray-400 md:w-56">
+                        <p className="text-sm text-gray-300">Crop</p>
+                        <div className="flex gap-2">
+                            {SHORT_ASPECTS.map(a => (
+                                <button key={a} onClick={() => update({ ...edits, aspect: a })} disabled={working}
+                                    className={edits.aspect === a ? primary : secondary}>{a}</button>
+                            ))}
+                        </div>
+                        <p>The shaded sides are left out. 13:9 makes people larger; check nobody is cut at the edge.</p>
+                        {previewing && <p className="text-amber-300">Previewing a short on the final cut</p>}
+                    </div>
+                </div>
+            )}
+
+            {edits.items.map((item, n) => (
+                <ShortCard key={item.id} n={n} item={item} view={byId.get(item.id)} url={urls[byId.get(item.id)?.render?.key ?? ""]}
+                    drawnAsIs={drawn(item)} saved={saveState === "saved"} working={working} count={edits.items.length}
+                    onChange={patch => setItem(item.id, patch)} onMove={by => move(item.id, by)}
+                    onRemove={() => update({ ...edits, items: edits.items.filter(i => i.id !== item.id) })}
+                    onPreview={() => preview(item)} onApprove={ok => approve(item.id, ok)} />
+            ))}
+
+            {!view?.blocker && !!view?.quotes.length && (
+                <div className="flex flex-wrap items-center gap-2">
+                    <select value={addQuote} onChange={e => setAddQuote(e.target.value)} disabled={working}
+                        className="bg-black/30 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-gray-200 max-w-md">
+                        <option value="">Add another key quote…</option>
+                        {view.quotes.map((q, i) => (
+                            <option key={i} value={i} disabled={used.has(i)}>
+                                {mmss(q.startMs)} {q.speaker}: {q.text.slice(0, 70)}{q.text.length > 70 ? "…" : ""} ({Math.round((q.endMs - q.startMs) / 1000)}s)
+                            </option>
+                        ))}
+                    </select>
+                    <button onClick={add} disabled={!addQuote || working} className={secondary}>Add</button>
+                </div>
+            )}
+
+            {!!edits.items.length && (
+                <div className="border-t border-white/10 pt-4 flex flex-col gap-3">
+                    <p className="text-sm text-gray-200 font-medium">Checkpoint E: approve each short, then schedule them</p>
+                    <ul className="text-xs text-gray-400 list-disc pl-5 flex flex-col gap-0.5">
+                        <li>Watch it through with sound: it starts on a hook and ends on a complete thought, not mid-word.</li>
+                        <li>The captions match what is said, names are spelled right, and nobody is cut off at the sides.</li>
+                        <li>Tick &ldquo;AI imagery&rdquo; if a b-roll still shows; YouTube requires the label.</li>
+                    </ul>
+                    {view?.episodeUrl ? (
+                        <>
+                            <div className="flex flex-wrap items-center gap-3">
+                                <label className="text-xs text-gray-400 flex items-center gap-2">
+                                    First one goes out
+                                    <input type="datetime-local" value={firstAt} onChange={e => setFirstAt(e.target.value)}
+                                        className="bg-black/30 border border-white/10 rounded-lg px-2 py-1 text-xs text-gray-200" />
+                                </label>
+                                <button onClick={() => start("upload")} disabled={working || starting || !waiting.length || !Number.isFinite(firstMs)} className={primary}>
+                                    {working && view.job === "upload" ? WORKING.upload : `Schedule ${waiting.length || ""} on YouTube`.replace("  ", " ")}
+                                </button>
+                            </div>
+                            {!!waiting.length && Number.isFinite(firstMs) && (
+                                <ul className="text-xs text-gray-400 flex flex-col gap-0.5">
+                                    {waiting.map((i, k) => <li key={i.id}>{when(publishSlot(firstMs, k))}: <span className="text-gray-200">{i.title || i.headline}</span></li>)}
+                                </ul>
+                            )}
+                            <p className="text-xs text-gray-500">
+                                One a day, in the order above, each Private until its time. {view.lastSlot && view.lastSlot > Date.now() ? `Shorts are already scheduled until ${when(view.lastSlot)}, so this batch follows on. ` : ""}
+                                Each links to the full episode in its description; to also show it under the Short, set &ldquo;Related video&rdquo; in YouTube Studio.
+                            </p>
+                        </>
+                    ) : (
+                        <p className="text-xs text-gray-500">Upload the episode to YouTube first; each short links to it.</p>
+                    )}
+                </div>
+            )}
+
+            {view?.status === "failed" && view.error && <p className="text-sm text-red-300">{view.error}</p>}
+            {error && <p className="text-sm text-red-300">{error}</p>}
+        </div>
+    );
+}
+
+function ShortCard({ n, item, view, url, drawnAsIs, saved, working, count, onChange, onMove, onRemove, onPreview, onApprove }: {
+    n: number; item: ShortEdit; view: ShortItemView | undefined; url: string | undefined; drawnAsIs: boolean; saved: boolean; working: boolean; count: number;
+    onChange: (patch: Partial<ShortEdit>) => void; onMove: (by: number) => void; onRemove: () => void;
+    onPreview: () => void; onApprove: (approved: boolean) => void;
+}) {
+    const duration = item.endMs - item.startMs;
+    const words = view?.words ?? [];
+    const locked = !!view?.youtube;
+
+    // Moves the nearer end of the short to the clicked word.
+    function clickWord(k: number) {
+        const w = words[k];
+        const { startMs, endMs } = wordBounds(words, k, k);
+        const toStart = w.start <= item.startMs || (w.start < item.endMs && w.start - item.startMs < item.endMs - w.start);
+        if (toStart && startMs < item.endMs) onChange({ startMs });
+        else if (!toStart && endMs > item.startMs) onChange({ endMs });
+    }
+
+    return (
+        <div className="grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-4 bg-black/20 border border-white/5 rounded-xl p-3">
+            <div className="flex flex-col gap-1.5">
+                {view?.render && url ? (
+                    <video key={view.render.key} src={url} controls preload="metadata" playsInline
+                        className={`w-full aspect-[9/16] rounded-lg bg-black ${drawnAsIs ? "" : "opacity-50"}`} />
+                ) : (
+                    <div className="w-full aspect-[9/16] rounded-lg bg-black/40 border border-dashed border-white/10 flex items-center justify-center text-xs text-gray-500 text-center p-3">
+                        Not drawn yet
+                    </div>
+                )}
+                {view?.render && !drawnAsIs && !locked && <p className="text-[11px] text-amber-300">Changed since it was drawn; draw it again.</p>}
+            </div>
+            <div className="flex flex-col gap-2 min-w-0">
+                <div className="flex flex-wrap items-center gap-2 text-xs text-gray-400">
+                    <span className="text-gray-200 font-medium">#{n + 1}</span>
+                    <span>{item.speaker}</span>
+                    <span>{mmss(item.startMs)}–{mmss(item.endMs)}</span>
+                    <span className={duration > SHORT_TARGET_MS || duration < SHORT_MIN_MS ? "text-amber-300" : "text-gray-300"}>
+                        {Math.round(duration / 1000)}s{duration > SHORT_TARGET_MS ? " (over a minute: fine, but shorter holds viewers)" : duration < SHORT_MIN_MS ? " (too short)" : ""}
+                    </span>
+                    <span className="grow" />
+                    <button onClick={onPreview} className={secondary}>▶ Preview</button>
+                    {!locked && (
+                        <>
+                            <button onClick={() => onMove(-1)} disabled={n === 0 || working} className={secondary} title="Earlier in the schedule">↑</button>
+                            <button onClick={() => onMove(1)} disabled={n === count - 1 || working} className={secondary} title="Later in the schedule">↓</button>
+                            <button onClick={onRemove} disabled={working} className={secondary}>Remove</button>
+                        </>
+                    )}
+                </div>
+                <label className="text-xs text-gray-400 flex flex-col gap-1">
+                    <span>Headline on the short <span className="text-gray-500">(*asterisks* make words gold)</span></span>
+                    <input value={item.headline} maxLength={HEADLINE_MAX_CHARS} disabled={locked}
+                        onChange={e => onChange({ headline: e.target.value })} className={input} />
+                </label>
+                <label className="text-xs text-gray-400 flex flex-col gap-1">
+                    <span>YouTube title <span className="text-gray-500">({item.title.length}/{SHORT_TITLE_MAX})</span></span>
+                    <input value={item.title} maxLength={SHORT_TITLE_MAX} disabled={locked}
+                        onChange={e => onChange({ title: e.target.value.replace(/[<>]/g, "") })} className={input} />
+                </label>
+                <label className="text-xs text-gray-400 flex items-center gap-2">
+                    <input type="checkbox" checked={item.synthetic} disabled={locked} onChange={e => onChange({ synthetic: e.target.checked })} />
+                    Shows AI imagery (YouTube&rsquo;s &ldquo;altered or synthetic content&rdquo;)
+                </label>
+                {!locked && !!words.length && (
+                    <div className="text-sm leading-relaxed max-h-44 overflow-y-auto bg-black/30 border border-white/5 rounded-lg p-2">
+                        {words.map((w, k) => {
+                            const inside = w.start >= item.startMs - 50 && w.start < item.endMs;
+                            return (
+                                <span key={k}>
+                                    <button onClick={() => clickWord(k)} disabled={working}
+                                        className={`rounded px-0.5 hover:bg-amber-500/30 ${inside ? "text-gray-100 bg-amber-500/10" : "text-gray-600"}`}>
+                                        {w.text}
+                                    </button>{" "}
+                                </span>
+                            );
+                        })}
+                    </div>
+                )}
+                <div className="flex flex-wrap items-center gap-3 text-xs">
+                    {view?.youtube ? (
+                        <p className="text-emerald-300">
+                            Scheduled for {when(view.youtube.publishAt)} · <a href={view.youtube.url} target="_blank" rel="noreferrer" className="text-amber-300 hover:underline">On YouTube ↗</a>
+                        </p>
+                    ) : view?.approved && drawnAsIs ? (
+                        <>
+                            <p className="text-emerald-300">Approved by {view.approved.by}, {ago(view.approved.at)}</p>
+                            <button onClick={() => onApprove(false)} disabled={working} className={secondary}>Withdraw approval</button>
+                        </>
+                    ) : drawnAsIs ? (
+                        <button onClick={() => onApprove(true)} disabled={working || !saved || !item.title.trim()} className={approveButton}>
+                            {item.title.trim() ? "Approve this short" : "Add a title to approve"}
+                        </button>
+                    ) : null}
+                    {view?.error && !view.youtube && <p className="text-red-300">{view.error}</p>}
+                </div>
+            </div>
+        </div>
+    );
+}

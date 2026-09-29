@@ -10,6 +10,7 @@ import AuthGuard from "@/components/auth/AuthGuard";
 import { BrollImageView, useBroll } from "@/components/studio/broll";
 import { EditPackage } from "@/components/studio/editPackage";
 import { FinalCut } from "@/components/studio/finalCut";
+import { Shorts } from "@/components/studio/shorts";
 import { Thumbnails } from "@/components/studio/thumbnails";
 import { Youtube } from "@/components/studio/youtube";
 import { ago, minutes } from "@/components/studio/format";
@@ -597,6 +598,10 @@ export default function ShowNotesPage() {
 
                                 <Section title="YouTube" hint="The approved episode, with the final cut's chapters, the approved thumbnail, captions and the AI disclosure.">
                                     <Youtube episodeId={episodeId} enabled={!loading && allowed} />
+                                </Section>
+
+                                <Section title="Shorts" hint="Checkpoint E. Vertical shorts from the key quotes, drawn here from the final cut (no Descript credits), approved one by one and scheduled on YouTube one a day.">
+                                    <Shorts episodeId={episodeId} enabled={!loading && allowed} />
                                 </Section>
                             </div>
                         </div>
