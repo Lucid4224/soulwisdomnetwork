@@ -31,6 +31,8 @@ export interface EpisodeSummary {
     stuck: boolean;
     // Later steps whose last run failed (b-roll, edit package, Descript, ...), for the Studio home page.
     stepErrors: { step: string; message: string }[];
+    finished: { by: string; at: number } | null;     // marked Finished in the Studio
+    youtubeUrl: string | null;
     notesStatus: EpisodeNotes['status'] | null;   // show notes, once the transcript is accepted                // in progress and unchanged for 24 hours (spec 005 section 5)
 }
 

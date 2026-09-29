@@ -53,6 +53,10 @@ and the jobs.
   elapsed time. These are scaled per minute of episode from the latest finished report of
   every other episode.
 - **Finished.** Posted by the YouTube job after the first upload, with the full analysis.
+- **Finished** on an accepted episode in the Podcast Studio (it asks first) moves the
+  episode from Accepted to a **Finished** column (`episodes/{id}.finished`,
+  `POST /api/studio/episodes/[id]/finished`) and posts a report as well. **Back to Accepted**
+  on the Finished card undoes it; the report stays.
 - **Post analysis** on the page adds a report by hand, with GitHub run times. Use it for
   episodes finished before reports existed (pt1 and pt2), or to take stock part way.
 

@@ -111,6 +111,20 @@ export default function PodcastStudioPage() {
         return `Moved "${queued.name}" to To Process. Press "Process now" to start it.`;
     });
 
+    const markFinished = (e: EpisodeSummary, isFinished: boolean) => {
+        const question = isFinished
+            ? `Mark "${e.title}" as finished?\n\nIt moves from Accepted to Finished, and its cost and time are posted on the Usage page. You can move it back from the Finished column.`
+            : `Move "${e.title}" back to Accepted?`;
+        if (confirm(question)) void setFinished(e, isFinished);
+    };
+
+    const setFinished = (e: EpisodeSummary, isFinished: boolean) => act(`finished:${e.id}`, async () => {
+        await studioFetch(`/api/studio/episodes/${e.id}/finished`, { method: "POST", body: JSON.stringify({ finished: isFinished }) });
+        return isFinished
+            ? `"${e.title}" moved to Finished. Its cost and time are posted on the Usage page. Pressed by mistake? Use "Back to Accepted" on it under Finished.`
+            : `"${e.title}" moved back to Accepted.`;
+    });
+
     const processNow = (retryFileId?: string) => act(retryFileId ? `retry:${retryFileId}` : "process", async () => {
         await studioFetch("/api/studio/ingest", {
             method: "POST",
@@ -159,7 +173,8 @@ export default function PodcastStudioPage() {
         (data?.episodes ?? []).filter(e => ([] as string[]).concat(status).includes(e.status));
     const processing = by(["ingesting", "transcribing"]);
     const review = by("awaiting_speaker_review");
-    const accepted = by("speakers_confirmed");
+    const accepted = by("speakers_confirmed").filter(e => !e.finished);
+    const finished = by("speakers_confirmed").filter(e => e.finished).sort((a, b) => b.finished!.at - a.finished!.at);
     const failed = by("failed");
     const lastRun = data?.runs[0];
 
@@ -293,6 +308,14 @@ export default function PodcastStudioPage() {
                                         <Link href={`/admin/podcast/${e.id}/notes`} className={e.notesStatus === "ready" ? primary : secondary}>Show notes</Link>
                                         <Link href={`/admin/podcast/${e.id}`} className={secondary}>Open review</Link>
                                         {e.docUrl && <a href={e.docUrl} target="_blank" rel="noreferrer" className={secondary}>Transcript Doc</a>}
+                                        <button
+                                            onClick={() => markFinished(e, true)}
+                                            disabled={busy !== null}
+                                            className={`${secondary} ml-auto`}
+                                            title="Move it to Finished, when it is on YouTube and its shorts are done"
+                                        >
+                                            {busy === `finished:${e.id}` ? "Moving…" : "Finished ✓"}
+                                        </button>
                                     </div>
                                 </EpisodeCard>
                             ))}
@@ -310,6 +333,22 @@ export default function PodcastStudioPage() {
                                     <button onClick={() => processNow(e.id)} disabled={busy !== null || running} className={`${secondary} mt-2`}>
                                         {busy === `retry:${e.id}` ? "Starting…" : "Retry"}
                                     </button>
+                                </EpisodeCard>
+                            ))}
+                        </Column>
+
+                        <Column title="Finished" count={finished.length} hint="Done: on YouTube, shorts scheduled. Press Finished on an accepted episode to move it here.">
+                            {!finished.length && <Empty>None yet.</Empty>}
+                            {finished.map(e => (
+                                <EpisodeCard key={e.id} e={e}>
+                                    <p className="text-xs text-emerald-300 mt-2">✓ Finished {ago(e.finished!.at)} by {e.finished!.by}</p>
+                                    <div className="flex flex-wrap gap-2 mt-2">
+                                        <Link href={`/admin/podcast/${e.id}/notes`} className={secondary}>Show notes</Link>
+                                        {e.youtubeUrl && <a href={e.youtubeUrl} target="_blank" rel="noreferrer" className={secondary}>On YouTube ↗</a>}
+                                        <button onClick={() => markFinished(e, false)} disabled={busy !== null} className={`${secondary} ml-auto`}>
+                                            {busy === `finished:${e.id}` ? "Moving…" : "Back to Accepted"}
+                                        </button>
+                                    </div>
                                 </EpisodeCard>
                             ))}
                         </Column>

@@ -294,6 +294,8 @@ export interface Episode {
     corrections?: TranscriptCorrections;  // speaker review fixes, a layer over raw.json
     correctionsVersion?: number;          // bumped on every save; stops two people overwriting
     costs: { items: CostItem[]; totalUsd: number };
+    // Marked Finished in the Studio: off the Accepted column and into Finished. Null when moved back.
+    finished?: { by: { uid: string; name: string }; at: unknown } | null;
     error: EpisodeError | null;
     createdAt: unknown;
     updatedAt: unknown;
