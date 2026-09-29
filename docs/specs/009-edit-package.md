@@ -20,7 +20,8 @@ API (part 2). The folder also works on its own: download it and drag it into Des
 |---|---|
 | `00 Full episode - <title>.mp4` | A Drive copy of the original recording (server-side), or its 1920x1080 fill when the recording is not 16:9 (below) |
 | `00 Intro - Soul Wisdom Collective.mp4` | The show's 3-second intro, from `assets/podcast/intro.mp4` in the repo |
-| `01 In this episode - clip N (m.ss-m.ss) <speaker>.mp4` | Each approved teaser clip, cut from the original at full quality, in order, with 0.3 s before and 0.6 s after so no word is clipped |
+| `00 In this episode banner.png` | The generic "In this episode" tag, a transparent 1920x1080 PNG, for clips added by hand in Descript (below) |
+| `01 In this episode - clip N (m.ss-m.ss) <speaker>.mp4` | Each approved teaser clip, cut from the original at full quality, in order, with 0.3 s before and 0.6 s after so no word is clipped, and the "In this episode" tag burned in (below) |
 | `02 B-roll N at m.ss for Ns.png` | Each b-roll image, named with where it goes and for how long |
 | `Notes - <title>.txt` | Chosen title; the clip order with words and files; chapters; b-roll timings, styles and reasons; key quotes |
 
@@ -58,6 +59,20 @@ The fill (`episodes/{id}/package/episode-1080p.mp4`, H.264 CRF 18, audio copied)
 once and reused by rebuilds; it adds roughly a third of the episode's length to the first
 build. `media.ts`: `videoSize`, `isWidescreen`, `fillFrame`, `cutClip(…, fill)`.
 
+## The "In this episode" tag (decided 29 Sept 2026)
+
+So viewers know the opening clips are moments from the conversation to come, every teaser clip
+carries a lower-third in the lower left for its whole length: gold **IN THIS EPISODE** in Outfit
+Black over the brand violet (slightly see-through), a gold rule on its left, and the clip's
+speaker in white underneath. It is burned in when the clip is cut (`teaserBanner.ts` writes an
+ASS file, `media.ts cutClip` draws it with libass and the fonts in `agent/assets/fonts`, as the
+shorts do), so it is in Descript with no extra step and no credits. To change the wording or
+move it, change `teaserBanner.ts` and rebuild; it cannot be edited in Descript.
+
+The package also has the tag without a name as a transparent PNG (`00 In this episode banner.png`,
+also in the Descript project's `Titles/` folder), for clips added by hand in Descript or for a
+project made before the tag existed: drop it on a layer over those clips and stretch it to fit.
+
 ## The intro
 
 The show's intro is `assets/podcast/intro.mp4` in this repo (added 24 Sept 2026: 3 s,
@@ -70,7 +85,7 @@ the new one. A package built without it (the file missing) says so in its warnin
 On `episodes/{id}` (`types/episode.ts`, `EpisodePackage`): `package.status` (`queued`,
 `building`, `ready`, `failed`), `requestedAt`, `startedAt`, `finishedAt`, `error`,
 `folderId`, `folderUrl`, `notesVersion` (the approved notes version it was built from),
-`files`, `warnings`, `clipPaths`, `introPath`, `episodePath` (the fill, or null),
+`files`, `warnings`, `clipPaths`, `introPath`, `bannerPath` (the generic banner), `episodePath` (the fill, or null),
 `sourceSize`.
 
 ## Setup
@@ -92,7 +107,8 @@ reference at https://docs.descriptapi.com, open beta).
    Media come from Cloud Storage as signed links valid 36 hours: the teaser clips (the package
    job also saves them to `episodes/{id}/package/`), the original recording, and the b-roll
    images, and the intro (the package job also saves it to `episodes/{id}/package/intro.mp4`).
-   Media folders in the project: `In this episode/`, `Intro/`, `Full episode/`, `B-roll/`.
+   Media folders in the project: `In this episode/`, `Intro/`, `Full episode/`, `B-roll/`, `Titles/`
+   (the generic banner).
 2. **Timeline**: one composition, **Episode** (1920x1080): the "In this episode" clips in
    order, then the intro, then the full episode (order decided 24 Sept 2026: the hook first,
    then the brand). The API places clips one after another only, so b-roll is not

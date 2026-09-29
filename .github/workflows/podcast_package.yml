@@ -1,5 +1,5 @@
 # Spec 005 step 8, part 1: build the edit package for one episode (agent/src/podcast/package.ts,
-# docs/specs/009-edit-package.md): the full episode, the "In this episode" clips, the b-roll
+# docs/specs/009-edit-package.md): the full episode, the "In this episode" clips (tag burned in), the b-roll
 # images and a notes file, in "03 For Descript/<episode>" on Drive. Started from the show
 # notes page, or by hand from the Actions tab with the episode ID.
 

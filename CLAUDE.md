@@ -92,7 +92,7 @@ to `ALERT_EMAIL`. Accepting the transcript in the Studio starts `podcast_notes.y
 images" on that page starts `podcast_broll.yml` (`agent/src/podcast/broll.ts`,
 `docs/specs/008-broll-images.md`), which uses `OPENAI_API_KEY`. "Build edit package" starts
 `podcast_package.yml` (`agent/src/podcast/package.ts`, `docs/specs/009-edit-package.md`), which puts
-the episode, teaser clips, b-roll and notes in `03 For Descript/<episode>`; "Send to Descript" then
+the episode, teaser clips (with the "In this episode" tag burned in by `podcast/teaserBanner.ts`), b-roll and notes in `03 For Descript/<episode>`; "Send to Descript" then
 starts `podcast_descript.yml` (`agent/src/podcast/descript.ts`), which makes the Descript project through
 Descript's API with the `DESCRIPT_API_TOKEN` repo secret. Descript is the final edit (spec 005 step 9). "Get the final cut from Descript" starts
 `podcast_final.yml` (`agent/src/podcast/final.ts`, `docs/specs/010-final-cut.md`), which publishes the edit through the
