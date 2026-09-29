@@ -27,6 +27,18 @@ const secondary = `${button} border-white/10 text-gray-300 hover:bg-white/10`;
 const field = "w-full bg-[#130b29] border border-white/10 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-amber-500/50";
 const small = "text-xs text-gray-500";
 
+// The steps after the notes, in order, each a link to its place on the page.
+const ACTIONS = [
+    ["notes", "Draft show notes"],
+    ["broll", "Generate b-roll images"],
+    ["package", "Build the edit package for Descript"],
+    ["descript", "Send to Descript"],
+    ["final", "Get the final cut from Descript"],
+    ["thumbnail", "Thumbnail and approval"],
+    ["youtube", "Upload to YouTube"],
+    ["shorts", "Make and approve shorts"],
+] as const;
+
 const words = (s: string) => s.trim().split(/\s+/).filter(Boolean).length;
 
 function parseTime(text: string): number | null {
@@ -53,9 +65,9 @@ function TimeInput({ ms, onChange }: { ms: number; onChange: (ms: number) => voi
     );
 }
 
-function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
+function Section({ id, title, hint, children }: { id?: string; title: string; hint?: string; children: React.ReactNode }) {
     return (
-        <section className="bg-[#1E1035]/40 border border-white/5 rounded-2xl p-4 flex flex-col gap-3">
+        <section id={id} className="bg-[#1E1035]/40 border border-white/5 rounded-2xl p-4 flex flex-col gap-3 scroll-mt-24">
             <header>
                 <h2 className="font-semibold">{title}</h2>
                 {hint && <p className={small}>{hint}</p>}
@@ -338,10 +350,22 @@ export default function ShowNotesPage() {
                                 <button onClick={() => draft(true)} disabled={busy || drafting} className={`${secondary} self-start`}>
                                     Draft again with Claude
                                 </button>
+                                <nav aria-label="Steps" className="border-t border-white/5 pt-3">
+                                    <h2 className="text-sm font-semibold text-gray-300 mb-1.5">Actions</h2>
+                                    <ol className="flex flex-col gap-1 text-sm list-decimal pl-5 marker:text-gray-500">
+                                        {ACTIONS.map(([id, label]) => (
+                                            <li key={id}><a href={`#${id}`} className="text-amber-300 hover:underline">{label}</a></li>
+                                        ))}
+                                    </ol>
+                                    <p className={`${small} mt-2`}>
+                                        To change the notes later (say, more &ldquo;In this episode&rdquo; clips after sending to Descript):
+                                        edit them, approve the changes, rebuild the edit package, then send to Descript again.
+                                    </p>
+                                </nav>
                             </div>
 
                             <div className="flex flex-col gap-4 min-w-0">
-                                <Section title="Title" hint="Pick one; edit any of them.">
+                                <Section id="notes" title="Title" hint="Pick one; edit any of them.">
                                     {notes.titles.map((t, i) => (
                                         <div key={i} className="flex items-center gap-2">
                                             <input
@@ -506,7 +530,7 @@ export default function ShowNotesPage() {
                                     ))}
                                 </Section>
 
-                                <Section title="B-roll" hint="Still images with a slow pan and zoom (spec 005, option A), made by AI from the approved ideas. They go to Descript with the episode.">
+                                <Section id="broll" title="B-roll" hint="Still images with a slow pan and zoom (spec 005, option A), made by AI from the approved ideas. They go to Descript with the episode.">
                                     {notes.broll.map((b, i) => (
                                         <div key={`${i}-${b.startMs}`} className="flex flex-col gap-1.5 border-l-2 border-sky-500/30 pl-3">
                                             <div className="flex items-center gap-2 text-xs">
@@ -584,23 +608,23 @@ export default function ShowNotesPage() {
                                     )}
                                 </Section>
 
-                                <Section title="Edit package and Descript" hint="Built from the approved notes. Descript has the final say: the edit happens there.">
+                                <Section id="package" title="Edit package and Descript" hint="Built from the approved notes. Descript has the final say: the edit happens there.">
                                     <EditPackage episodeId={episodeId} enabled={!loading && allowed} upToDate={upToDate} />
                                 </Section>
 
-                                <Section title="Final cut" hint="The finished edit, published from Descript, set to broadcast loudness and saved to Drive, with the chapter times moved onto it.">
+                                <Section id="final" title="Final cut" hint="The finished edit, published from Descript, set to broadcast loudness and saved to Drive, with the chapter times moved onto it.">
                                     <FinalCut episodeId={episodeId} enabled={!loading && allowed} />
                                 </Section>
 
-                                <Section title="Thumbnail and approval" hint="Checkpoint D. Thumbnails drive more views than anything else, so a person always picks. Then approve the episode for YouTube.">
+                                <Section id="thumbnail" title="Thumbnail and approval" hint="Checkpoint D. Thumbnails drive more views than anything else, so a person always picks. Then approve the episode for YouTube.">
                                     <Thumbnails episodeId={episodeId} enabled={!loading && allowed} />
                                 </Section>
 
-                                <Section title="YouTube" hint="The approved episode, with the final cut's chapters, the approved thumbnail, captions and the AI disclosure.">
+                                <Section id="youtube" title="YouTube" hint="The approved episode, with the final cut's chapters, the approved thumbnail, captions and the AI disclosure.">
                                     <Youtube episodeId={episodeId} enabled={!loading && allowed} />
                                 </Section>
 
-                                <Section title="Shorts" hint="Checkpoint E. Vertical shorts from the key quotes, made here from the final cut (no Descript credits), approved one by one and scheduled on YouTube one a day.">
+                                <Section id="shorts" title="Shorts" hint="Checkpoint E. Vertical shorts from the key quotes, made here from the final cut (no Descript credits), approved one by one and scheduled on YouTube one a day.">
                                     <Shorts episodeId={episodeId} enabled={!loading && allowed} />
                                 </Section>
                             </div>

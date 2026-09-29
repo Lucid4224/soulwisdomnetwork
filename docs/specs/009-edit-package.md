@@ -104,13 +104,28 @@ reference at https://docs.descriptapi.com, open beta).
    Underlord's summary, media minutes and AI credits used, and warnings; an email goes to
    `ALERT_EMAIL`.
 
-Each send makes a **new** project; sending again asks first. Imports and edits use the
+Each send makes a **new** project; sending again asks first, and says what the last send used. Imports and edits use the
 Descript plan's media minutes and AI credits. A send that has not finished within about four
 hours counts as failed.
 
 On `episodes/{id}` (`EpisodeDescript`): `descript.status` (`queued`, `importing`, `cleaning`,
 `ready`, `failed`), `projectId`, `projectUrl`, `compositionId`, `importJobId`, `agentJobId`,
 `agentResponse`, `warnings`, `mediaSecondsUsed`, `aiCreditsUsed`, `notesVersion`, times, `error`.
+
+### Changing the notes after sending (decided 29 Sept 2026)
+
+For example, more "In this episode" clips once the project is open in Descript: edit the notes,
+**Approve changes**, **Rebuild edit package**, then **Send to Descript again**. That makes a new
+project, kept deliberately simple: the old project is left as it is, edits made in it do not
+carry over, and the send uses the media minutes and AI credits again. The final cut, thumbnails
+and shorts then come from the new project. The page says which of those steps is next whenever
+the project is older than the notes or the package.
+
+Considered and not chosen: importing only the new clips into the existing project (Descript's
+import takes a `project_id`, but cannot rearrange an existing timeline, so the clips would have
+to be placed by hand or by Underlord).
+
+The show notes page lists every step under the video (**Actions**), each a link to its section.
 
 **Setup:** the GitHub secret **`DESCRIPT_API_TOKEN`** (Descript → Settings → API tokens, tied
 to the shared Descript drive). The workflow must be on `main` before the website can start it.
