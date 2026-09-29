@@ -35,8 +35,10 @@ Actions:
   (`studio/backlog.order`: Drive file IDs). New backlog files not in the list go last.
 - **Queue next**: moves the top backlog video into `01 To Process`. Any backlog video can
   also be queued directly.
-- **Process now**: starts the ingest workflow with `skip_wait`, shows it running, and
-  updates when it finishes.
+- **Process now** (at the top of the To Process column): starts the ingest workflow with
+  `skip_wait`, shows it running, and updates when it finishes. It is the only way ingest
+  starts, apart from running the workflow by hand: the three-hourly schedule was removed on
+  29 Sept 2026, so a video is brought in only when someone is ready to work on it.
 - **Retry** on a failed episode (runs the workflow with `retry_file_id`).
 - Links: open in Drive, open transcript Doc, resend the review email.
 - Cost per episode and for the month.

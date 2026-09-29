@@ -301,6 +301,7 @@ export function Thumbnails({ episodeId, enabled, report, revision }: { episodeId
             </div>
 
             {view?.status === "failed" && view.error && <p className="text-sm text-red-300">{view.error}</p>}
+            {view?.status === "ready" && view.error && <p className="text-sm text-amber-300">{view.error}</p>}
             {error && <p className="text-sm text-red-300">{error}</p>}
         </div>
     );

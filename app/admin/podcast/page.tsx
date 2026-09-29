@@ -185,14 +185,6 @@ export default function PodcastStudioPage() {
                         </div>
                         <div className="flex items-center gap-2">
                             <button onClick={load} className={secondary}>Refresh</button>
-                            <button
-                                onClick={() => processNow()}
-                                disabled={busy !== null || running || !data?.toProcess.length}
-                                className={primary}
-                                title={data?.toProcess.length ? "" : "Nothing in To Process"}
-                            >
-                                {busy === "process" ? "Starting…" : running ? "Processing…" : "Process now"}
-                            </button>
                             {profile?.role === "admin" && (
                                 <Link href="/admin" className="text-sm text-gray-400 hover:text-white ml-2">← Admin</Link>
                             )}
@@ -243,7 +235,15 @@ export default function PodcastStudioPage() {
                             </ol>
                         </Column>
 
-                        <Column title="To Process" count={data?.toProcess.length ?? 0} hint="Waiting in 01 To Process. Press Process now, or it starts within 3 hours.">
+                        <Column title="To Process" count={data?.toProcess.length ?? 0} hint="Waiting in 01 To Process. Nothing starts on its own: press Process now when you are ready to work on them.">
+                            <button
+                                onClick={() => processNow()}
+                                disabled={busy !== null || running || !data?.toProcess.length}
+                                className={`${primary} self-start`}
+                                title={data?.toProcess.length ? "" : "Nothing in To Process"}
+                            >
+                                {busy === "process" ? "Starting…" : running ? "Processing…" : "Process now"}
+                            </button>
                             {data && !data.toProcess.length && <Empty>Nothing waiting.</Empty>}
                             {data?.toProcess.map(v => (
                                 <div key={v.id} className={card}>

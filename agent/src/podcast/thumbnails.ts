@@ -167,8 +167,20 @@ async function main() {
     const hooks = await withRetry('Claude', () => draftHooks(episode), 3);
     console.log(`  ✅ Texts: ${hooks.hooks.join(' | ')}`);
     const frames = await grabFrames(episode, stamp);
-    const image = await makeImage(hooks.image.idea, hooks.image.style, stamp);
-    const usd = Math.round((hooks.usd + image.usd) * 100) / 100;
+    // Without the AI background the frame and brand options still work, so a failed image (the
+    // OpenAI account out of credits, say) is a note on the page rather than a failed run.
+    let image: Awaited<ReturnType<typeof makeImage>> | null = null;
+    let imageError: string | null = null;
+    try {
+        image = await makeImage(hooks.image.idea, hooks.image.style, stamp);
+    } catch (error) {
+        const message = (error as Error).message;
+        const hint = /no credits|quota|billing/i.test(message) ? ' The OpenAI account is out of credits; add some at platform.openai.com (Settings → Billing).' : '';
+        imageError = `The AI image could not be made (${message}).${hint} The frame and brand options are ready. ` +
+            `To try again, write an idea under "AI image" and press "New AI image"; the suggested one was: ${hooks.image.idea}`;
+        console.log(`  ⚠️ ${imageError}`);
+    }
+    const usd = Math.round((hooks.usd + (image?.usd ?? 0)) * 100) / 100;
 
     // A fresh set replaces the producer's earlier picks, which pointed at the old frames.
     await ref.update({
@@ -177,6 +189,7 @@ async function main() {
         'thumbnails.frames': frames,
         'thumbnails.image': image,
         'thumbnails.imageRequest': null,
+        'thumbnails.error': imageError,
         'thumbnails.finalAt': (final.finishedAt as Timestamp | undefined)?.toMillis?.() ?? 0,
         'thumbnails.text': hooks.hooks[0],
         'thumbnails.frame': 0,
@@ -184,7 +197,7 @@ async function main() {
         'thumbnails.finishedAt': FieldValue.serverTimestamp(),
         'costs.items': FieldValue.arrayUnion(
             { item: 'thumbnail_text', usd: hooks.usd, at: new Date() },
-            { item: 'thumbnail_image', usd: image.usd, at: new Date() }),
+            ...(image ? [{ item: 'thumbnail_image', usd: image.usd, at: new Date() }] : [])),
         'costs.totalUsd': FieldValue.increment(usd),
         updatedAt: FieldValue.serverTimestamp(),
     });
@@ -195,6 +208,7 @@ async function main() {
         '',
         'Suggested texts:',
         ...hooks.hooks.map(h => `  ${h.replace(/\*/g, '')}`),
+        ...(imageError ? ['', `Check: ${imageError}`] : []),
     ].join('\n'));
 }
 
