@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ago } from "@/components/studio/format";
 import { studioFetch } from "@/lib/studioClient";
+import { useStep, type ReportStep } from "@/components/studio/steps";
 import type { PackageView } from "@/types/studio";
 
 const button = "text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 disabled:cursor-not-allowed";
@@ -22,7 +23,9 @@ function cost(d: PackageView["descript"] | undefined) {
     return [d?.mediaMinutes ? `${d.mediaMinutes} media minutes` : "", d?.aiCredits ? `${d.aiCredits} AI credits` : ""].filter(Boolean).join(" and ");
 }
 
-export function EditPackage({ episodeId, enabled, upToDate }: { episodeId: string; enabled: boolean; upToDate: boolean }) {
+export function EditPackage({ episodeId, enabled, upToDate, report, revision }: {
+    episodeId: string; enabled: boolean; upToDate: boolean; report?: ReportStep; revision?: number;
+}) {
     const [view, setView] = useState<PackageView | null>(null);
     const [error, setError] = useState("");
     const [starting, setStarting] = useState(false);
@@ -82,6 +85,9 @@ export function EditPackage({ episodeId, enabled, upToDate }: { episodeId: strin
     // A project made from earlier notes, or before the package was last rebuilt, has old clips and images.
     const descriptStale = d?.status === "ready" && (d.builtFromVersion !== view?.approvedVersion
         || (view?.finishedAt != null && d.finishedAt != null && view.finishedAt > d.finishedAt));
+    useStep({ step: "package", done: built && !stale, key: view ? `${view.status}:${view.finishedAt}:${stale}` : null, report, revision, enabled, load });
+    // Reported only; the line above already reloads this section.
+    useStep({ step: "descript", done: d?.status === "ready" && !descriptStale, key: d ? `${d.status}:${d.finishedAt}:${descriptStale}` : null, report, enabled: false, load });
     // What to do to bring the changes into Descript, from where things stand.
     const staleNext = !upToDate
         ? "Approve the changes to the show notes, rebuild the edit package, then Send to Descript again."
@@ -139,7 +145,7 @@ export function EditPackage({ episodeId, enabled, upToDate }: { episodeId: strin
                             ? `${built ? "Rebuild" : "Build"} the edit package first; Descript gets the same files.`
                             : d?.status === "ready"
                                 ? `Made ${d.finishedAt ? ago(d.finishedAt) : ""}${d.mediaMinutes != null ? ` · ${d.mediaMinutes} media minutes` : ""}${d.aiCredits ? ` · ${d.aiCredits} AI credits` : ""}. Edit it in Descript; that is the final cut.`
-                                : "Makes a Descript project: the \u201cIn this episode\u201d clips, the intro and the full episode on one timeline, filler words removed and Studio Sound on, b-roll images in the media bin. Uses the Descript plan\u2019s media minutes and AI credits."}
+                                : "Makes a Descript project: the \u201cIn this episode\u201d clips, the intro, the full episode and the intro again as the outro on one timeline, filler words removed and Studio Sound on, b-roll images in the media bin. Uses the Descript plan\u2019s media minutes and AI credits."}
                 </p>
                 {descriptStale && !sending && (
                     <div className="text-sm text-amber-300 flex flex-col gap-1">

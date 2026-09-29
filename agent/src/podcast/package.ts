@@ -1,7 +1,7 @@
 // Spec 005 step 8, part 1: the edit package. Gathers everything for the Descript edit into
 // one Drive folder, "03 For Descript/<episode>", from the approved show notes:
 //   00 the full episode (a Drive copy of the original) and the show's intro
-//      (assets/podcast/intro.mp4 in this repo)
+//      (assets/podcast/intro.mp4 in this repo), which also closes the episode as the outro
 //   00 the generic "In this episode" banner, a transparent PNG to place by hand
 //   01 each "In this episode" clip, cut from the original, numbered in order, with the
 //      "In this episode" tag and the speaker's name in the lower left
@@ -70,7 +70,7 @@ function notesText(episode: Episode, notes: ShowNotes, clips: string[], broll: s
         '',
         'Times below are in the full, unedited episode. They shift once filler words and cuts are made.',
         '',
-        'TIMELINE: the "In this episode" clips, then the intro, then the full episode.',
+        'TIMELINE: the "In this episode" clips, then the intro, then the full episode, then the intro again as the outro.',
         '',
         'IN THIS EPISODE (cold open, in order)',
         ...(notes.teaserClips.length ? notes.teaserClips.map((c, i) =>

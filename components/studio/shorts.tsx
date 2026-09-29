@@ -14,6 +14,7 @@ import {
     SHORT_TARGET_MS, SHORT_TITLE_MAX, sideCrop, wordBounds, type ShortAspect, type ShortEdit,
 } from "@/lib/shorts";
 import { studioFetch } from "@/lib/studioClient";
+import { useStep, type ReportStep } from "@/components/studio/steps";
 import type { ShortItemView, ShortsView } from "@/types/studio";
 
 const button = "text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 disabled:cursor-not-allowed";
@@ -53,7 +54,7 @@ function defaultFirstSlot(lastSlot: number | null) {
     return d.getTime();
 }
 
-export function Shorts({ episodeId, enabled }: { episodeId: string; enabled: boolean }) {
+export function Shorts({ episodeId, enabled, report, revision }: { episodeId: string; enabled: boolean; report?: ReportStep; revision?: number }) {
     const [view, setView] = useState<ShortsView | null>(null);
     const [edits, setEdits] = useState<Edits>({ aspect: DEFAULT_ASPECT, items: [] });
     const [error, setError] = useState("");
@@ -104,6 +105,12 @@ export function Shorts({ episodeId, enabled }: { episodeId: string; enabled: boo
     }, [enabled, load]);
 
     const working = view?.status === "queued" || view?.status === "working";
+    const scheduled = view?.items.filter(i => i.youtube).length ?? 0;
+    useStep({
+        step: "shorts", done: scheduled > 0,
+        key: view ? `${view.status}:${view.finishedAt}:${view.blocker}:${scheduled}` : null,
+        report, revision, enabled, load,
+    });
     const wasWorking = useRef(false);
     useEffect(() => {
         if (!working) {

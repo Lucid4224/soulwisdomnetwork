@@ -19,7 +19,7 @@ API (part 2). The folder also works on its own: download it and drag it into Des
 | File | What |
 |---|---|
 | `00 Full episode - <title>.mp4` | A Drive copy of the original recording (server-side), or its 1920x1080 fill when the recording is not 16:9 (below) |
-| `00 Intro - Soul Wisdom Collective.mp4` | The show's 3-second intro, from `assets/podcast/intro.mp4` in the repo |
+| `00 Intro - Soul Wisdom Collective.mp4` | The show's 3-second intro, from `assets/podcast/intro.mp4` in the repo; it closes the episode too, as the outro |
 | `00 In this episode banner.png` | The generic "In this episode" tag, a transparent 1920x1080 PNG, for clips added by hand in Descript (below) |
 | `01 In this episode - clip N (m.ss-m.ss) <speaker>.mp4` | Each approved teaser clip, cut from the original at full quality, in order, with 0.3 s before and 0.6 s after so no word is clipped, and the "In this episode" tag burned in (below) |
 | `02 B-roll N at m.ss for Ns.png` | Each b-roll image, named with where it goes and for how long |
@@ -111,8 +111,9 @@ reference at https://docs.descriptapi.com, open beta).
    (the generic banner).
 2. **Timeline**: one composition, **Episode** (1920x1080): the "In this episode" clips in
    order, then the intro, then the full episode (order decided 24 Sept 2026: the hook first,
-   then the brand). The API places clips one after another only, so b-roll is not
-   placed; its file names say where each image goes.
+   then the brand), then the intro again as the **outro** (added 29 Sept 2026; imported a second
+   time as `Intro/Soul Wisdom Collective outro.mp4`, so it is a clip of its own). The API places
+   clips one after another only, so b-roll is not placed; its file names say where each image goes.
 3. **Clean-up** (`POST /jobs/agent`): Underlord is asked to remove filler words and apply
    Studio Sound on that composition, and nothing else. If it cannot, the project still counts
    as made and the page says what to do by hand.
@@ -150,4 +151,4 @@ to the shared Descript drive). The workflow must be on `main` before the website
 
 - Step 10: publish the finished composition through the API (`POST /jobs/publish` returns a
   download link) and normalise loudness, instead of downloading by hand.
-- An outro, once there is one, after the episode on the timeline.
+- A dedicated outro (a subscribe call, the next episode), once there is one, in place of the intro at the end.
