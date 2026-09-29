@@ -56,6 +56,23 @@ function TimeInput({ ms, onChange }: { ms: number; onChange: (ms: number) => voi
     );
 }
 
+// Shown where a step needs the approved notes and the page has changes not yet approved.
+function NeedsApproval({ what, approved, busy, onApprove }: { what: string; approved: boolean; busy: boolean; onApprove: () => void }) {
+    return (
+        <div role="status" className="rounded-lg border-2 border-amber-500/70 bg-amber-950/50 px-4 py-3 flex flex-wrap items-center gap-3">
+            <p className="text-sm font-bold text-amber-200 flex-1 min-w-[14rem]">
+                ⚠️ {approved ? `Approve your recent changes in order to ${what}.` : `Approve the show notes in order to ${what}.`}
+                <span className="block text-xs font-normal text-amber-100/80 mt-0.5">
+                    The next steps use the approved notes, so edits count once they are approved.
+                </span>
+            </p>
+            <button onClick={onApprove} disabled={busy} className="text-sm px-4 py-2 rounded-lg bg-amber-500 text-black font-semibold hover:bg-amber-400 disabled:opacity-40">
+                {approved ? "Approve changes" : "Approve show notes"}
+            </button>
+        </div>
+    );
+}
+
 function Section({ id, title, hint, children }: { id?: string; title: string; hint?: string; children: React.ReactNode }) {
     return (
         <section id={id} className="bg-[#1E1035]/40 border border-white/5 rounded-2xl p-4 flex flex-col gap-3 scroll-mt-24">
@@ -597,7 +614,7 @@ export default function ShowNotesPage() {
                                                     onClick={() => broll.generate(i)}
                                                     disabled={brollBlocked}
                                                     className={`${secondary} self-start`}
-                                                    title={upToDate ? "Make a new image for this idea" : "Approve the show notes first"}
+                                                    title={upToDate ? "Make a new image for this idea" : "Approve your recent changes first"}
                                                 >
                                                     Regenerate this image
                                                 </button>
@@ -624,18 +641,24 @@ export default function ShowNotesPage() {
                                             {broll.working
                                                 ? "About a minute per image; this page updates by itself."
                                                 : !upToDate
-                                                    ? "Approve the show notes first; images are made from the approved ideas."
+                                                    ? ""
                                                     : brollChanged
                                                         ? `About $${(brollChanged * BROLL_USD_PER_IMAGE).toFixed(2)} with OpenAI's image model. Ideas that already have an image are left alone.`
                                                         : ""}
                                         </span>
                                     </div>
+                                    {!upToDate && !broll.working && (
+                                        <NeedsApproval what="generate images" approved={!!approved} busy={busy || drafting} onApprove={approve} />
+                                    )}
                                     {(broll.error || broll.view?.error) && (
                                         <ErrorNote title={broll.error ? undefined : "Some b-roll images failed"} message={broll.error || broll.view?.error} />
                                     )}
                                 </Section>
 
                                 <Section id="package" title="Edit package and Descript" hint="Built from the approved notes. Descript has the final say: the edit happens there.">
+                                    {!upToDate && (
+                                        <NeedsApproval what="build the edit package" approved={!!approved} busy={busy || drafting} onApprove={approve} />
+                                    )}
                                     <EditPackage episodeId={episodeId} enabled={!loading && allowed} upToDate={upToDate} report={report} revision={revision} />
                                 </Section>
 
