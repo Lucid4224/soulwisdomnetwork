@@ -46,7 +46,7 @@ export const DAY_MS = 24 * 60 * 60_000;
 // What Claude returns for the headline and title of each short picked from the key quotes.
 export const ShortTextsSchema = z.object({
     shorts: z.array(z.object({
-        id: z.string().describe('The id of the short, as given'),
+        short: z.number().int().describe('The number of the short, as given'),
         headline: z.string().describe(
             'Two to six words shown large above the video, read in a second. Mark one or two key words for gold ' +
             'by wrapping them in asterisks, e.g. "Heaven *Felt* Like *Home*". No quotation marks, no emoji.'),
@@ -88,7 +88,12 @@ export const ShortEditSchema = z.object({
 export type ShortEdit = z.infer<typeof ShortEditSchema>;
 
 // What a render was made from. A render is current while all of this still matches.
+// Bumped when the drawing itself changes, so every short drawn before is drawn again.
+// 2: the video no longer missing from the first frame (29 Sept 2026).
+export const RENDER_VERSION = 2;
+
 export interface ShortRenderInputs {
+    version?: number;                   // RENDER_VERSION it was drawn with; none means 1
     startMs: number;
     endMs: number;
     headline: string;
@@ -98,11 +103,11 @@ export interface ShortRenderInputs {
 }
 
 export function renderInputs(item: ShortEdit, aspect: ShortAspect, finalAt: number): ShortRenderInputs {
-    return { startMs: item.startMs, endMs: item.endMs, headline: item.headline.trim(), speaker: item.speaker, aspect, finalAt };
+    return { version: RENDER_VERSION, startMs: item.startMs, endMs: item.endMs, headline: item.headline.trim(), speaker: item.speaker, aspect, finalAt };
 }
 
 export function sameRender(a: ShortRenderInputs | null | undefined, b: ShortRenderInputs) {
-    return !!a && a.startMs === b.startMs && a.endMs === b.endMs && a.headline === b.headline &&
+    return !!a && (a.version ?? 1) === (b.version ?? 1) && a.startMs === b.startMs && a.endMs === b.endMs && a.headline === b.headline &&
         a.speaker === b.speaker && a.aspect === b.aspect && a.finalAt === b.finalAt;
 }
 

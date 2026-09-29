@@ -85,44 +85,55 @@ const SYSTEM = 'You pick moments from the Soul Wisdom Collective podcast for You
     'Never state as fact what a guest offered as belief or experience.';
 
 // Headlines and titles for the shorts that lack one or the other; the producer picked the moments.
+// Shorts are numbered for Claude (random ids are easy to copy wrong); any it leaves out are asked
+// for once more.
 async function writeTexts(episode: Episode, words: TimedWord[]) {
     const todo = (episode.shorts?.items ?? []).filter(i => !i.youtube && (!i.headline.trim() || !i.title.trim()));
     if (!todo.length) throw new Error('Every short already has a headline and a title; clear one to have it rewritten');
     const notes = episode.notes!.approved!;
-    const listing = todo.map(i => `Short ${i.id} (${i.speaker}, ${Math.round((i.endMs - i.startMs) / 1000)}s):\n` +
-        wordsBetween(words, i.startMs, i.endMs).map(w => w.text).join(' ')).join('\n\n');
     const client = new Anthropic({ apiKey: required('ANTHROPIC_API_KEY') });
-    const response = await client.beta.messages.stream({
-        model: NOTES_MODEL,
-        max_tokens: 16000,
-        betas: ['server-side-fallback-2026-07-01'],
-        fallbacks: 'default',
-        thinking: { type: 'adaptive' },
-        output_config: { effort: NOTES_EFFORT, format: betaZodOutputFormat(ShortTextsSchema) },
-        system: SYSTEM,
-        messages: [{
-            role: 'user',
-            content: `Episode: ${notes.titles[notes.chosenTitle] ?? episode.title}\n\nSummary:\n${notes.summary}\n\n` +
-                `These Shorts were cut from the episode; each is shown with the words heard in it.\n\n${listing}\n\n` +
-                'Write a headline and a YouTube title for each, using its id. Each should make someone stop scrolling and ' +
-                'fit what is actually said in that Short.',
-        }],
-    }).finalMessage();
-    if (response.stop_reason === 'refusal') throw new Error('Claude declined to write the headlines and titles');
-    if (!response.parsed_output) throw new Error('Claude returned headlines and titles in an unexpected shape');
-    const { input_tokens, output_tokens } = response.usage;
-    const usd = Math.round((input_tokens * TEXTS_USD_PER_MTOK.input + output_tokens * TEXTS_USD_PER_MTOK.output) / 1e4) / 100;
     const texts = new Map<string, { headline: string; title: string }>();
-    for (const t of response.parsed_output.shorts) {
-        if (!todo.some(i => i.id === t.id)) continue;
-        texts.set(t.id, {
-            headline: t.headline.replace(/\s+/g, ' ').trim().slice(0, HEADLINE_MAX_CHARS),
-            title: t.title.replace(/[<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, SHORT_TITLE_MAX),
-        });
-        console.log(`  ✅ ${t.id}: ${t.headline} | ${t.title}`);
+    let usd = 0;
+    for (let round = 1; round <= 2; round++) {
+        const batch = todo.filter(i => !texts.has(i.id));
+        if (!batch.length) break;
+        const listing = batch.map((i, n) => `Short ${n + 1} (${i.speaker}, ${Math.round((i.endMs - i.startMs) / 1000)}s):\n` +
+            wordsBetween(words, i.startMs, i.endMs).map(w => w.text).join(' ')).join('\n\n');
+        const response = await client.beta.messages.stream({
+            model: NOTES_MODEL,
+            max_tokens: 32000,
+            betas: ['server-side-fallback-2026-07-01'],
+            fallbacks: 'default',
+            thinking: { type: 'adaptive' },
+            output_config: { effort: NOTES_EFFORT, format: betaZodOutputFormat(ShortTextsSchema) },
+            system: SYSTEM,
+            messages: [{
+                role: 'user',
+                content: `Episode: ${notes.titles[notes.chosenTitle] ?? episode.title}\n\nSummary:\n${notes.summary}\n\n` +
+                    `These ${batch.length} Shorts were cut from the episode; each is shown with the words heard in it.\n\n${listing}\n\n` +
+                    `Write a headline and a YouTube title for every one of the ${batch.length}, numbered as above. Each should make ` +
+                    'someone stop scrolling and fit what is actually said in that Short.',
+            }],
+        }).finalMessage();
+        if (response.stop_reason === 'refusal') throw new Error('Claude declined to write the headlines and titles');
+        if (!response.parsed_output) throw new Error('Claude returned headlines and titles in an unexpected shape');
+        const { input_tokens, output_tokens } = response.usage;
+        usd += (input_tokens * TEXTS_USD_PER_MTOK.input + output_tokens * TEXTS_USD_PER_MTOK.output) / 1e6;
+        for (const t of response.parsed_output.shorts) {
+            const item = batch[t.short - 1];
+            const headline = t.headline.replace(/\s+/g, ' ').trim().slice(0, HEADLINE_MAX_CHARS);
+            const title = t.title.replace(/[<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, SHORT_TITLE_MAX);
+            if (!item || !headline || !title) continue;
+            texts.set(item.id, { headline, title });
+            console.log(`  ✅ ${headline} | ${title}`);
+        }
+        console.log(`  Round ${round}: ${texts.size} of ${todo.length} done`);
     }
-    const missing = todo.filter(i => !texts.has(i.id)).length;
-    return { texts, usd, warnings: missing ? [`Claude left out ${missing} short${missing === 1 ? '' : 's'}; press the button again for ${missing === 1 ? 'it' : 'them'}.`] : [] };
+    const missing = todo.length - texts.size;
+    return {
+        texts, usd: Math.round(usd * 100) / 100,
+        warnings: missing ? [`Claude left out ${missing} short${missing === 1 ? '' : 's'}; press the button again for ${missing === 1 ? 'it' : 'them'}.`] : [],
+    };
 }
 
 async function render(episode: Episode, words: TimedWord[]) {

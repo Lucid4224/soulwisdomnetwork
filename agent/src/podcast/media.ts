@@ -172,9 +172,12 @@ export function renderShort(input: string, output: string, o: {
         '-loop', '1', '-framerate', '30', '-i', o.background,
         '-ss', o.startSeconds.toFixed(3), '-t', o.durationSeconds.toFixed(3), '-i', input,
         '-filter_complex',
-        `[1:v]scale=iw*sar:ih,setsar=1,crop='min(iw,trunc(ih*${o.aspect.toFixed(6)}/2)*2)':ih,scale=${o.width}:-2:flags=lanczos,fps=30[v];` +
+        // A short rarely starts exactly on a frame, so the first frame after the seek comes a few
+        // milliseconds in; without restarting its clock at zero, the first frame of the short
+        // (the still the Studio and YouTube show) would have an empty space where the video goes.
+        `[1:v]setpts=PTS-STARTPTS,scale=iw*sar:ih,setsar=1,crop='min(iw,trunc(ih*${o.aspect.toFixed(6)}/2)*2)':ih,scale=${o.width}:-2:flags=lanczos,fps=30[v];` +
         `[0:v][v]overlay=0:${o.videoTop}:shortest=1,ass=filename='${escape(o.ass)}':fontsdir='${escape(o.fontsDir)}',format=yuv420p[out];` +
-        `[1:a]afade=t=in:d=0.05,afade=t=out:st=${fadeOut}:d=0.25[a]`,
+        `[1:a]asetpts=PTS-STARTPTS,afade=t=in:d=0.05,afade=t=out:st=${fadeOut}:d=0.25[a]`,
         '-map', '[out]', '-map', '[a]',
         '-c:v', 'libx264', '-preset', 'medium', '-crf', '18', '-profile:v', 'high',
         '-c:a', 'aac', '-b:a', '192k', '-ar', '48000',
