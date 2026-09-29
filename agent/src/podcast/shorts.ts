@@ -141,7 +141,7 @@ async function render(episode: Episode, words: TimedWord[]) {
     const finalAt = finalAtOf(episode);
     const aspect: ShortAspect = shorts.aspect ?? DEFAULT_ASPECT;
     const todo = shorts.items.filter(i => !i.youtube && !sameRender(i.render, renderInputs(i, aspect, finalAt)));
-    if (!todo.length) throw new Error('Every short is already drawn; change one first');
+    if (!todo.length) throw new Error('Every short is already made; change one first');
     const l = shortLayout(aspect);
     const background = path.join(workDir, 'background.png');
     await shortBackground(LOGO, background, {
@@ -155,7 +155,7 @@ async function render(episode: Episode, words: TimedWord[]) {
         const inputs = renderInputs(item, aspect, finalAt);
         const durationMs = inputs.endMs - inputs.startMs;
         if (durationMs < SHORT_MIN_MS || durationMs > SHORT_MAX_MS) {
-            warnings.push(`"${item.title}" is ${Math.round(durationMs / 1000)}s long; a Short must be 5 seconds to 3 minutes, so it was not drawn.`);
+            warnings.push(`"${item.title}" is ${Math.round(durationMs / 1000)}s long; a Short must be 5 seconds to 3 minutes, so it was not made.`);
             continue;
         }
         const ass = path.join(workDir, `${item.id}.ass`);
@@ -177,7 +177,7 @@ async function render(episode: Episode, words: TimedWord[]) {
         done++;
         console.log(`  ✅ ${item.title} (${Math.round(durationMs / 1000)}s)`);
     }
-    if (!done) throw new Error(warnings[0] ?? 'No short could be drawn');
+    if (!done) throw new Error(warnings[0] ?? 'No short could be made');
     return { done, warnings };
 }
 
@@ -304,11 +304,11 @@ async function main() {
     }
 
     if (mode === 'render') {
-        console.log(`🎞️  Drawing shorts for ${episode.title}`);
+        console.log(`🎞️  Making shorts for ${episode.title}`);
         const { done: count, warnings } = await render(episode, words);
         await ref.update({ ...done, 'shorts.warnings': warnings });
         await sendEmail({ alert }, `Shorts ready to review: ${episode.title}`, [
-            `${count} short${count === 1 ? ' is' : 's are'} drawn for "${episode.title}". Watch and approve them (Checkpoint E):`,
+            `${count} short${count === 1 ? ' is' : 's are'} made for "${episode.title}". Watch and approve them (Checkpoint E):`,
             notesPage,
             ...(warnings.length ? ['', 'Check:', ...warnings.map(w => `  - ${w}`)] : []),
         ].join('\n'));
@@ -332,7 +332,7 @@ main().catch(async error => {
         'shorts.status': 'failed', 'shorts.error': message, 'shorts.finishedAt': FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
     }).catch(() => {});
-    const what = { titles: 'Writing the headlines and titles', render: 'Drawing the shorts', upload: 'Scheduling the shorts' }[mode] ?? 'The shorts job';
+    const what = { titles: 'Writing the headlines and titles', render: 'Making the shorts', upload: 'Scheduling the shorts' }[mode] ?? 'The shorts job';
     await sendEmail({ alert }, `Shorts failed: ${episodeId}`,
         `${what} did not finish.\n\nError: ${message}\n\nTry again from the show notes page: ${notesPage}${runUrl ? `\n\nRun log: ${runUrl}` : ''}`);
     process.exit(1);

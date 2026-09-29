@@ -22,7 +22,7 @@ const secondary = `${button} border-white/10 text-gray-300 hover:bg-white/10`;
 const approveButton = "text-xs px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed";
 const input = "bg-black/30 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white w-full";
 
-const WORKING: Record<string, string> = { titles: "Writing headlines and titles…", render: "Drawing the shorts…", upload: "Scheduling on YouTube…" };
+const WORKING: Record<string, string> = { titles: "Writing headlines and titles…", render: "Making the shorts…", upload: "Scheduling on YouTube…" };
 
 type Edits = { aspect: ShortAspect; items: ShortEdit[] };
 
@@ -139,7 +139,7 @@ export function Shorts({ episodeId, enabled }: { episodeId: string; enabled: boo
         if (existing) {
             const v = byId.get(existing.id);
             if (v?.youtube) return;
-            if ((v?.render || existing.headline || existing.title) && !confirm("Remove this short, with its trim, texts and drawing?")) return;
+            if ((v?.render || existing.headline || existing.title) && !confirm("Remove this short, with its trim, texts and video?")) return;
             update({ ...edits, items: edits.items.filter(i => i.id !== existing.id) });
             return;
         }
@@ -220,7 +220,7 @@ export function Shorts({ episodeId, enabled }: { episodeId: string; enabled: boo
                         {working && view?.job === "titles" ? WORKING.titles : `Write headlines and titles${needTexts ? ` (${needTexts})` : ""}`}
                     </button>
                     <button onClick={() => start("render")} disabled={working || starting || !toDraw} className={primary}>
-                        {working && view?.job === "render" ? WORKING.render : `Draw ${toDraw || ""} short${toDraw === 1 ? "" : "s"}`.replace("  ", " ")}
+                        {working && view?.job === "render" ? WORKING.render : `Make ${toDraw || ""} short${toDraw === 1 ? "" : "s"}`.replace("  ", " ")}
                     </button>
                     {view?.finishedAt && !working && <span className="text-xs text-gray-500">Last job {ago(view.finishedAt)}</span>}
                     <span className="text-xs text-gray-500">
@@ -231,7 +231,7 @@ export function Shorts({ episodeId, enabled }: { episodeId: string; enabled: boo
             <p className="text-xs text-gray-500">
                 {working
                     ? view?.job === "render" ? "About a minute a short. This page updates by itself and you get an email." : "This page updates by itself."
-                    : "Tick the key quotes to make into shorts. Click a word to move the nearer end of a short there (20-60 seconds holds viewers best), preview it, then draw it: 1080x1920, the episode above large captions with the spoken word in gold."}
+                    : "Tick the key quotes to make into shorts. Click a word to move the nearer end of a short there (20-60 seconds holds viewers best), preview it, then make it: 1080x1920, the episode above large captions with the spoken word in gold."}
             </p>
             {saveError && <p className="text-sm text-red-300">{saveError}</p>}
             {view?.warnings.map(w => <p key={w} className="text-xs text-amber-300">{w}</p>)}
@@ -359,10 +359,10 @@ function ShortCard({ n, item, view, url, drawnAsIs, saved, working, count, onCha
                         className={`w-full aspect-[9/16] rounded-lg bg-black ${drawnAsIs ? "" : "opacity-50"}`} />
                 ) : (
                     <div className="w-full aspect-[9/16] rounded-lg bg-black/40 border border-dashed border-white/10 flex items-center justify-center text-xs text-gray-500 text-center p-3">
-                        Not drawn yet
+                        Not made yet
                     </div>
                 )}
-                {view?.render && !drawnAsIs && !locked && <p className="text-[11px] text-amber-300">Changed since it was drawn; draw it again.</p>}
+                {view?.render && !drawnAsIs && !locked && <p className="text-[11px] text-amber-300">Changed since it was made; make it again.</p>}
             </div>
             <div className="flex flex-col gap-2 min-w-0">
                 <div className="flex flex-wrap items-center gap-2 text-xs text-gray-400">

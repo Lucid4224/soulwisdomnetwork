@@ -75,7 +75,7 @@ On the show notes page, under **Shorts** (`components/studio/shorts.tsx`), after
    - Tick or untick AI imagery.
    - Reorder shorts (this is the schedule order) or remove them.
    - **▶ Preview** plays that stretch of the final cut. The player shades what the crop leaves out.
-3. **Draw shorts** (`mode: 'render'`) draws every short that changed since it was last drawn:
+3. **Make shorts** (`mode: 'render'`) makes every short that changed since it was last made:
    - The job makes the backdrop once with ffmpeg: gradient, logo and gold rules.
    - It writes an ASS subtitle file per short (`shortsRender.ts`) for the headline, the speaker
      and the captions.

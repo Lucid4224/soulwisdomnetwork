@@ -85,7 +85,7 @@ export async function requestShorts(id: string, body: { mode?: unknown; firstAt?
             throw new HttpError(409, 'Every short already has a headline and a title; clear one to have it rewritten');
         }
         if (mode === 'render' && !items.some(i => !i.youtube && !current(i, shorts!, episode))) {
-            throw new HttpError(409, 'Every short is already drawn');
+            throw new HttpError(409, 'Every short is already made');
         }
         if (mode === 'upload') {
             // One a day, in the order on the page, after any already scheduled.
@@ -173,7 +173,7 @@ export async function approveShort(id: string, body: { item?: unknown; approved?
         const item = shorts?.items.find(i => i.id === body.item);
         if (!episode || !shorts || !item) throw new HttpError(404, 'No such short');
         if (item.youtube) throw new HttpError(409, 'This short is already on YouTube');
-        if (body.approved && !current(item, shorts, episode)) throw new HttpError(409, 'Draw this short again first; it changed since it was drawn');
+        if (body.approved && !current(item, shorts, episode)) throw new HttpError(409, 'Make this short again first; it changed since it was made');
         if (body.approved && !item.title.trim()) throw new HttpError(409, 'Give the short a YouTube title first');
         const approval = body.approved ? { by, at: Date.now(), renderedAt: item.render!.renderedAt } : null;
         tx.update(ref, {
@@ -248,7 +248,7 @@ export async function getShorts(id: string): Promise<ShortsView> {
             error: i.error ?? null,
         };
     }));
-    const labels: Record<string, string> = { titles: 'Writing the headlines and titles', render: 'Drawing the shorts', upload: 'Scheduling the shorts' };
+    const labels: Record<string, string> = { titles: 'Writing the headlines and titles', render: 'Making the shorts', upload: 'Scheduling the shorts' };
     return {
         // A request whose run died reads as failed, so the page offers a retry.
         status: lost ? 'failed' : s?.status ?? null,
