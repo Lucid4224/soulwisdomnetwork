@@ -7,7 +7,9 @@
 ## Goal
 
 Turn the b-roll ideas approved at Checkpoint B into still images, ready to place in Descript
-with a slow pan and zoom (spec 005 section 3, option A).
+with a slow pan and zoom (spec 005 section 3, option A). The edit package builds the movement
+in: each image also goes to Descript as a clip with a slow zoom or pan (spec 009,
+`kenBurns` in `agent/src/podcast/media.ts`).
 
 ## Decisions (23 Sept 2026)
 

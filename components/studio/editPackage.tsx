@@ -127,7 +127,7 @@ export function EditPackage({ episodeId, enabled, upToDate, report, revision }: 
                         ? "Approve the show notes first; the package is built from the approved notes."
                         : built
                             ? `Built ${view.finishedAt ? ago(view.finishedAt) : ""}. ${!view.clipsStored ? "Built before Descript could use it; rebuild once." : stale ? "The notes have been approved again since; rebuild to match." : "Rebuilding replaces the files in place."}`
-                            : "The full episode, each “In this episode” clip (tagged “In this episode” with the speaker’s name), the b-roll images and a notes file, in one Drive folder for Descript."}
+                            : "The full episode, each “In this episode” clip (tagged “In this episode” with the speaker’s name), each b-roll image as a clip with a slow zoom or pan (and the still), and a notes file, in one Drive folder for Descript."}
             </p>
             {built && view.files.length > 0 && (
                 <ul className="text-xs text-gray-400 list-disc pl-5">
@@ -157,7 +157,7 @@ export function EditPackage({ episodeId, enabled, upToDate, report, revision }: 
                             ? `${built ? "Rebuild" : "Build"} the edit package first; Descript gets the same files.`
                             : d?.status === "ready"
                                 ? `Made ${d.finishedAt ? ago(d.finishedAt) : ""}${d.mediaMinutes != null ? ` · ${d.mediaMinutes} media minutes` : ""}${d.aiCredits ? ` · ${d.aiCredits} AI credits` : ""}. Edit it in Descript; that is the final cut.`
-                                : "Makes a Descript project: the \u201cIn this episode\u201d clips, the intro, the full episode and the intro again as the outro on one timeline, filler words removed and Studio Sound on, b-roll images in the media bin. Uses the Descript plan\u2019s media minutes and AI credits."}
+                                : "Makes a Descript project: the \u201cIn this episode\u201d clips, the intro, the full episode and the intro again as the outro on one timeline, filler words removed and Studio Sound on, b-roll clips with the movement built in in the media bin. Uses the Descript plan\u2019s media minutes and AI credits."}
                 </p>
                 {descriptStale && !sending && (
                     <div className="text-sm text-amber-300 flex flex-col gap-1">

@@ -1,6 +1,6 @@
 // Spec 005 step 8, part 2: make the Descript project from the edit package, through
 // Descript's API (https://docs.descriptapi.com). One composition, "Episode": the
-// "In this episode" clips in order, then the intro, then the full episode, then the intro again as the outro. B-roll images go in as media for
+// "In this episode" clips in order, then the intro, then the full episode, then the intro again as the outro. B-roll clips (a slow zoom or pan built in) and stills go in as media for
 // the producer to place. Then Underlord removes filler words and applies Studio Sound.
 // Runs in GitHub Actions (.github/workflows/podcast_descript.yml), started from the show
 // notes page. Each run makes a new project. docs/specs/009-edit-package.md
@@ -87,15 +87,22 @@ async function main() {
     addMedia[fullKey] = { url: await signed(episodeFile), language: 'en' };
     // The generic "In this episode" banner, to place over clips added by hand (the cut clips have it already).
     if (pkg.bannerPath) addMedia['Titles/In this episode banner.png'] = { url: await signed(pkg.bannerPath), language: 'en' };
+    // B-roll: the clip with the slow zoom or pan built in, ready for the timeline, and the still
+    // beside it. Packages built before the clips existed send the still alone, as before.
     for (const [i, b] of notes.broll.entries()) {
         const image = episode.broll?.images?.[i];
         if (!image) {
             warnings.push(`B-roll ${i + 1} had no image, so it was not sent.`);
             continue;
         }
-        addMedia[`B-roll/${String(i + 1).padStart(2, '0')} at ${mmss(b.startMs).replace(/:/g, '.')} for ${b.durationSeconds}s.png`] = {
-            url: await signed(image.path), language: 'en',
-        };
+        const name = `${String(i + 1).padStart(2, '0')} at ${mmss(b.startMs).replace(/:/g, '.')} for ${b.durationSeconds}s`;
+        const clip = pkg.brollClipPaths?.[i];
+        if (clip) {
+            addMedia[`B-roll/${name}.mp4`] = { url: await signed(clip), language: 'en' };
+            addMedia[`B-roll stills/${name}.png`] = { url: await signed(image.path), language: 'en' };
+        } else {
+            addMedia[`B-roll/${name}.png`] = { url: await signed(image.path), language: 'en' };
+        }
     }
 
     const created = await descript<{ job_id: string; project_id: string; project_url: string }>('POST', '/jobs/import/project_media', {
@@ -163,7 +170,7 @@ async function main() {
         created.project_url,
         '',
         `The "${COMPOSITION}" timeline has the ${clipKeys.length} "In this episode" clips, then ${pkg.introPath ? 'the intro, then the full episode, then the intro again as the outro' : 'the full episode'}.`,
-        'B-roll images are in the B-roll media folder, named with where they go; the "In this episode" banner is in Titles.',
+        'B-roll is in the B-roll media folder, named with where it goes: each clip has a slow zoom or pan built in (the stills are in "B-roll stills"). The "In this episode" banner is in Titles.',
         'Filler words removed and Studio Sound applied:',
         agentResponse ? `  ${agentResponse}` : '  (no summary from Underlord)',
         ...(warnings.length ? ['', 'Check:', ...warnings.map(w => `  - ${w}`)] : []),
