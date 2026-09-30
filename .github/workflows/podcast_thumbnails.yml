@@ -23,6 +23,10 @@ concurrency:
   group: podcast-thumbnails-${{ inputs.episode_id }}
   cancel-in-progress: false
 
+# The jobs use their own keys; the GitHub token only needs to read this repository.
+permissions:
+  contents: read
+
 jobs:
   thumbnails:
     runs-on: ubuntu-latest
@@ -31,6 +35,8 @@ jobs:
     steps:
     - name: Checkout Code
       uses: actions/checkout@v7
+      with:
+        persist-credentials: false
 
     - name: Setup Node.js
       uses: actions/setup-node@v7

@@ -15,6 +15,10 @@ on:
         required: true
         default: 'claude-opus-5:high,claude-opus-5-5:medium,claude-opus-5-5:high'
 
+# The jobs use their own keys; the GitHub token only needs to read this repository.
+permissions:
+  contents: read
+
 jobs:
   compare:
     runs-on: ubuntu-latest
@@ -23,6 +27,8 @@ jobs:
     steps:
     - name: Checkout Code
       uses: actions/checkout@v7
+      with:
+        persist-credentials: false
 
     - name: Setup Node.js
       uses: actions/setup-node@v7
@@ -42,11 +48,3 @@ jobs:
         RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
         ALERT_EMAIL: ${{ vars.ALERT_EMAIL }}
       run: npx tsx agent/src/podcast/compareNotes.ts
-
-    - name: Keep the Comparison Page
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: show-notes-comparison
-        path: show-notes-comparison.html
-        if-no-files-found: ignore

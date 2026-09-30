@@ -15,6 +15,10 @@ on:
         description: 'Type "yes" to confirm you want to run the disabled harvest'
         required: true
 
+# The jobs use their own keys; the GitHub token only needs to read this repository.
+permissions:
+  contents: read
+
 jobs:
   harvest:
     runs-on: ubuntu-latest
@@ -22,10 +26,12 @@ jobs:
 
     steps:
     - name: Checkout Code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v7
+      with:
+        persist-credentials: false
 
     - name: Setup Node.js
-      uses: actions/setup-node@v3
+      uses: actions/setup-node@v7
       with:
         node-version: '24'
         cache: 'npm'

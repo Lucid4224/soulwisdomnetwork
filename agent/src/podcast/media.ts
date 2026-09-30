@@ -5,6 +5,10 @@ function run(cmd: string, args: string[]): Promise<string> {
     return runWithLog(cmd, args).then(r => r.stdout);
 }
 
+// Signed links (the final cut read straight from Storage) grant access through their query
+// string; ffmpeg repeats the input URL in its errors, which end up in logs, emails and the Studio.
+const redactUrls = (text: string) => text.replace(/(https?:\/\/[^\s?]+)\?\S+/g, '$1?…');
+
 // Also returns the end of stderr, where ffmpeg's filters print their reports.
 function runWithLog(cmd: string, args: string[]): Promise<{ stdout: string; stderr: string }> {
     return new Promise((resolve, reject) => {
@@ -17,7 +21,7 @@ function runWithLog(cmd: string, args: string[]): Promise<{ stdout: string; stde
         child.on('close', code => {
             if (code === 0) resolve({ stdout, stderr });
             // ffmpeg failing on a file is bad input, not a network blip.
-            else reject(new PermanentError(`${cmd} exited with ${code}: ${stderr.split('\n').slice(-5).join(' ').trim()}`));
+            else reject(new PermanentError(`${cmd} exited with ${code}: ${redactUrls(stderr.split('\n').slice(-5).join(' ').trim())}`));
         });
     });
 }

@@ -109,11 +109,11 @@ service accounts have no My Drive storage and cannot create files there. Secrets
 
 ### Firestore
 
-`firestore.rules` and `firestore.indexes.json` are the source of truth. Nothing deploys
-them automatically:
+`firestore.rules`, `firestore.indexes.json` and `storage.rules` (deny all: the browser never
+touches Storage) are the source of truth. Nothing deploys them automatically:
 
 ```bash
-firebase deploy --only firestore:rules,firestore:indexes --project soulwisdomnetwork
+firebase deploy --only firestore:rules,firestore:indexes,storage --project soulwisdomnetwork
 ```
 
 Collections: `users`, `posts`, `comments`, `conversations`, `messages`, `feed_items`,
@@ -124,9 +124,12 @@ Collections: `users`, `posts`, `comments`, `conversations`, `messages`, `feed_it
 
 Two rules are load-bearing and easy to break:
 
-- **`posts` update** allows any signed-in user to change *only* `commentCount` and
-  `likesCount`. The like and comment buttons write to posts they do not own. Tightening
-  this to author-only breaks both buttons.
+- **`posts` update** allows any signed-in user to raise *only* `commentCount` or
+  `likesCount`, by exactly one (`increment(1)`). The like and comment buttons write to posts
+  they do not own. Tightening this to author-only breaks both buttons.
+- **`conversations`** are for exactly two people, with the ID `<uid>_<uid>` sorted
+  (`lib/firebase/messaging.ts`); a conversation that does not exist yet must stay readable,
+  or starting a new one fails.
 - **`messages` read** checks conversation membership via a `get()` on the parent
   conversation, not a field on the message.
 

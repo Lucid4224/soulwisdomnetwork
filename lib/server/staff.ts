@@ -19,7 +19,7 @@ export async function requireRole(request: Request, allowed: UserRole[]) {
 
     let uid: string;
     try {
-        uid = (await adminAuth().verifyIdToken(token)).uid;
+        uid = (await adminAuth().verifyIdToken(token, true)).uid;   // true: refuse revoked tokens
     } catch {
         throw new HttpError(401, 'Sign-in expired, please sign in again');
     }

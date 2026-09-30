@@ -41,11 +41,12 @@ export interface Attachment {
     content: string;      // plain text; base64-encoded on the way out
 }
 
-// Sends through Resend. Returns false (and logs the message) when email is not configured.
+// Sends through Resend. Returns false when email is not configured. Run logs are public (the
+// repository is), so they get the subject only: never the address or the body.
 export async function sendEmail(config: Pick<Config, 'alert'>, subject: string, text: string, attachments: Attachment[] = []) {
     const { resendApiKey, to, from } = config.alert;
     if (!resendApiKey || !to) {
-        console.warn(`⚠️ RESEND_API_KEY or ALERT_EMAIL not set; not emailing "${subject}".\n${text}`);
+        console.warn(`⚠️ RESEND_API_KEY or ALERT_EMAIL not set; not emailing "${subject}".`);
         return false;
     }
 
@@ -67,6 +68,6 @@ export async function sendEmail(config: Pick<Config, 'alert'>, subject: string, 
         console.error(`❌ Email "${subject}" failed: ${res.status} ${await res.text()}`);
         return false;
     }
-    console.log(`📧 Emailed "${subject}" to ${to}`);
+    console.log(`📧 Emailed "${subject}"`);
     return true;
 }

@@ -5,7 +5,7 @@
 // NOTES_RUNS lists model:effort pairs, e.g. "claude-opus-5:high,claude-opus-5-5:medium".
 
 import Anthropic from '@anthropic-ai/sdk';
-import { appendFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync } from 'node:fs';
 import { cert, initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
@@ -110,7 +110,6 @@ async function main() {
     if (!columns.some(c => c.draft)) throw new Error(`Every run failed. ${failures.join('; ')}`);
 
     const html = report(episode, columns);
-    writeFileSync('show-notes-comparison.html', html);   // also kept as the run's artifact
     const summary = [
         `## Show notes comparison: ${episode.title}`, '',
         '| Run | Answered by | Time | In | Out | Cost | Quotes | Clips | Unverified |', '|---|---|---|---|---|---|---|---|---|',
@@ -119,9 +118,8 @@ async function main() {
         ...failures.map(f => `\nFailed: ${f}`),
     ].join('\n');
     if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary + '\n');
+    // Only the numbers go in the run log, which is public: the notes themselves go by email.
     console.log(summary);
-    // Everything, for reading from the run log.
-    console.log('NOTES_COMPARISON_JSON ' + JSON.stringify(columns.map(c => ({ label: c.label, draft: c.draft && { ...c.draft, notes: undefined }, notes: c.notes }))));
 
     await sendEmail({ alert: loadAlert() }, `Show notes comparison: ${episode.title}`,
         `${summary}\n\nThe attached page puts the runs side by side. Nothing on the episode was changed.`,
