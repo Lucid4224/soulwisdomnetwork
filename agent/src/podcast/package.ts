@@ -21,7 +21,7 @@ import type { Episode } from '../../../types/episode';
 import { loadAlert } from './config';
 import { copyFile, createDrive, ensureFolder, findFile, listFolderFiles, parentOf, putFile, trashFile } from './drive';
 import { withRetry } from './errors';
-import { assStill, BROLL_MOTIONS, cutClip, fillFrame, isWidescreen, kenBurns, videoSize } from './media';
+import { assStill, BROLL_MOTIONS, cutClip, fillFrame, isWidescreen, kenBurns, stillForVideo, videoSize } from './media';
 import { describeError, failureSubject, sendEmail } from './notify';
 import { FONTS_DIR } from './shortsRender';
 import { teaserAss } from './teaserBanner';
@@ -205,11 +205,12 @@ async function main() {
     }
 
     // 02: b-roll, named with where it goes: each image as a clip with a slow zoom or pan built in
-    // (alternating, so they do not all move the same way), and the still for animating by hand.
-    // Stale or missing images are reported.
+    // (alternating, so they do not all move the same way), and the still, cropped to the video's
+    // 1920x1080 so it fills the frame, for animating by hand. Stale or missing images are reported.
     const broll: string[] = [];
     const brollClips: string[] = [];
     const brollClipPaths: (string | null)[] = notes.broll.map(() => null);   // in Cloud Storage, for the Descript import
+    const brollStillPaths: (string | null)[] = notes.broll.map(() => null);
     for (const [i, b] of notes.broll.entries()) {
         const image = episode.broll?.images?.[i];
         if (!image) {
@@ -220,9 +221,14 @@ async function main() {
             warnings.push(`B-roll ${i + 1}'s image was made for an older idea or style; regenerate it and rebuild.`);
         }
         const name = `02 B-roll ${i + 1} at ${at(b.startMs)} for ${b.durationSeconds}s.png`;
-        const local = path.join(workDir, `broll-${i + 1}.png`);
+        const local = path.join(workDir, `broll-${i + 1}-original.png`);
         await withRetry('Storage download', () => bucket.file(image.path).download({ destination: local }));
-        await putFile(drive, folderId, name, 'image/png', local);
+        const localStill = path.join(workDir, `broll-${i + 1}.png`);
+        await stillForVideo(local, localStill);
+        await putFile(drive, folderId, name, 'image/png', localStill);
+        const stillPath = `episodes/${episodeId}/package/broll-${i + 1}.png`;
+        await withRetry('Storage upload', () => bucket.upload(localStill, { destination: stillPath, resumable: false, metadata: { contentType: 'image/png' } }));
+        brollStillPaths[i] = stillPath;
         broll[i] = name;
         keep.push(name);
 
@@ -257,6 +263,7 @@ async function main() {
         'package.files': keep,
         'package.clipPaths': clipPaths,
         'package.brollClipPaths': brollClipPaths,
+        'package.brollStillPaths': brollStillPaths,
         'package.introPath': introPath,
         'package.bannerPath': bannerPath,
         'package.episodePath': episodePath,

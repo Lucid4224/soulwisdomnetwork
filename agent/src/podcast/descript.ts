@@ -99,7 +99,8 @@ async function main() {
         const clip = pkg.brollClipPaths?.[i];
         if (clip) {
             addMedia[`B-roll/${name}.mp4`] = { url: await signed(clip), language: 'en' };
-            addMedia[`B-roll stills/${name}.png`] = { url: await signed(image.path), language: 'en' };
+            // The 1920x1080 still, so it fills the frame; the 3:2 original from older packages.
+            addMedia[`B-roll stills/${name}.png`] = { url: await signed(pkg.brollStillPaths?.[i] ?? image.path), language: 'en' };
         } else {
             addMedia[`B-roll/${name}.png`] = { url: await signed(image.path), language: 'en' };
         }
