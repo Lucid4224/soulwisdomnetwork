@@ -8,12 +8,10 @@ import { ago } from "@/components/studio/format";
 import { mmss } from "@/lib/showNotes";
 import { ErrorNote } from "@/components/studio/ErrorNote";
 import { studioFetch } from "@/lib/studioClient";
-import { useStep, type ReportStep } from "@/components/studio/steps";
+import { failure, useStep, type ReportStep } from "@/components/studio/steps";
+import { primary, secondary } from "@/components/studio/ui";
 import type { FinalView } from "@/types/studio";
 
-const button = "text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 disabled:cursor-not-allowed";
-const primary = `${button} border-amber-500/40 text-amber-300 hover:bg-amber-500/10`;
-const secondary = `${button} border-white/10 text-gray-300 hover:bg-white/10`;
 
 const LABEL = {
     queued: "Starting…",
@@ -60,9 +58,17 @@ export function FinalCut({ episodeId, enabled, report, revision }: { episodeId: 
     }
 
     const ready = view?.status === "ready";
-    useStep({ step: "final", failed: view?.status === "failed", done: ready && !view.stale, key: view ? `${view.status}:${view.finishedAt}` : null, report, revision, enabled, load });
+    useStep({
+        step: "final", failed: view?.status === "failed", done: ready && !view.stale, working,
+        summary: working ? LABEL[view!.status as keyof typeof LABEL] : view?.status === "failed" ? failure("Getting the final cut", view.error)
+            : ready ? [view.stale ? "Out of date: get it again" : `Made ${ago(view.finishedAt)}`, view.durationSeconds ? mmss(view.durationSeconds * 1000) : "", view.loudness ? `${view.loudness.afterLufs} LUFS` : ""].filter(Boolean).join(" · ")
+                : view?.canStart ? "Ready when the Descript edit is finished" : "Waiting for the Descript project",
+        link: view?.driveUrl ? { label: "Final cut", href: view.driveUrl } : null,
+        key: view ? `${view.status}:${view.finishedAt}` : null, report, revision, enabled, load,
+    });
     return (
         <div className="flex flex-col gap-2">
+            {view?.status === "failed" && <ErrorNote title="Getting the final cut failed" message={view.error} />}
             <div className="flex flex-wrap items-center gap-3">
                 <button onClick={start} disabled={!view?.canStart || working || starting} className={ready ? secondary : primary}>
                     {working ? LABEL[view!.status as keyof typeof LABEL] : ready ? "Get the final cut again" : "Get the final cut from Descript"}
@@ -78,7 +84,7 @@ export function FinalCut({ episodeId, enabled, report, revision }: { episodeId: 
                     </a>
                 )}
             </div>
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-gray-400">
                 {working
                     ? "Descript renders the “Episode” timeline, then it is downloaded, set to broadcast loudness and transcribed to move the chapter times. Allow about as long as the episode; this page updates by itself and you get an email."
                     : !view?.canStart
@@ -104,7 +110,6 @@ export function FinalCut({ episodeId, enabled, report, revision }: { episodeId: 
                 </div>
             )}
             {ready && view.warnings.map(w => <p key={w} className="text-xs text-amber-300">{w}</p>)}
-            {view?.status === "failed" && <ErrorNote title="Getting the final cut failed" message={view.error} />}
             <ErrorNote message={error} />
         </div>
     );

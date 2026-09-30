@@ -15,13 +15,10 @@ import {
 } from "@/lib/shorts";
 import { ErrorNote } from "@/components/studio/ErrorNote";
 import { studioFetch } from "@/lib/studioClient";
-import { useStep, type ReportStep } from "@/components/studio/steps";
+import { failure, useStep, type ReportStep } from "@/components/studio/steps";
+import { approveButton, chosen, primary, secondary } from "@/components/studio/ui";
 import type { ShortItemView, ShortsView } from "@/types/studio";
 
-const button = "text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 disabled:cursor-not-allowed";
-const primary = `${button} border-amber-500/40 text-amber-300 hover:bg-amber-500/10`;
-const secondary = `${button} border-white/10 text-gray-300 hover:bg-white/10`;
-const approveButton = "text-xs px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed";
 const input = "bg-black/30 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white w-full";
 
 const WORKING: Record<string, string> = { titles: "Writing headlines and titles…", render: "Making the shorts…", upload: "Scheduling on YouTube…" };
@@ -107,8 +104,13 @@ export function Shorts({ episodeId, enabled, report, revision }: { episodeId: st
 
     const working = view?.status === "queued" || view?.status === "working";
     const scheduled = view?.items.filter(i => i.youtube).length ?? 0;
+    const approvedCount = view?.items.filter(i => i.approved && !i.youtube).length ?? 0;
     useStep({
-        step: "shorts", failed: view?.status === "failed", done: scheduled > 0,
+        step: "shorts", failed: view?.status === "failed", done: scheduled > 0, working,
+        summary: working ? WORKING[view?.job ?? ""] ?? "Working…" : view?.status === "failed" ? failure("The shorts job", view.error)
+            : view?.blocker ? "Waiting for the final cut"
+                : view?.items.length ? [`${view.items.length} short${view.items.length === 1 ? "" : "s"}`, approvedCount ? `${approvedCount} approved` : "", scheduled ? `${scheduled} scheduled` : ""].filter(Boolean).join(" · ")
+                    : "No shorts yet: tick key quotes to start",
         key: view ? `${view.status}:${view.finishedAt}:${view.blocker}:${scheduled}` : null,
         report, revision, enabled, load,
     });
@@ -221,7 +223,7 @@ export function Shorts({ episodeId, enabled, report, revision }: { episodeId: st
         <div className="flex flex-col gap-4">
             {view?.status === "failed" && <ErrorNote title="The shorts job failed" message={view.error} />}
             {view?.blocker ? (
-                <p className="text-xs text-gray-500">{view.blocker}</p>
+                <p className="text-xs text-gray-400">{view.blocker}</p>
             ) : (
                 <div className="flex flex-wrap items-center gap-3">
                     <button onClick={() => start("titles")} disabled={working || starting || !needTexts} className={secondary}
@@ -231,13 +233,13 @@ export function Shorts({ episodeId, enabled, report, revision }: { episodeId: st
                     <button onClick={() => start("render")} disabled={working || starting || !toDraw} className={primary}>
                         {working && view?.job === "render" ? WORKING.render : `Make ${toDraw || ""} short${toDraw === 1 ? "" : "s"}`.replace("  ", " ")}
                     </button>
-                    {view?.finishedAt && !working && <span className="text-xs text-gray-500">Last job {ago(view.finishedAt)}</span>}
-                    <span className="text-xs text-gray-500">
+                    {view?.finishedAt && !working && <span className="text-xs text-gray-400">Last job {ago(view.finishedAt)}</span>}
+                    <span className="text-xs text-gray-400">
                         {saveState === "saving" ? "Saving…" : saveState === "unsaved" ? "Unsaved" : saveState === "error" ? "" : edits.items.length ? "Saved" : ""}
                     </span>
                 </div>
             )}
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-gray-400">
                 {working
                     ? view?.job === "render" ? "About a minute a short. This page updates by itself and you get an email." : "This page updates by itself."
                     : "Tick the key quotes to make into shorts. Click a word to move the nearer end of a short there (20-60 seconds holds viewers best), preview it, then make it: 1080x1920, the episode above large captions with the spoken word in gold."}
@@ -259,7 +261,7 @@ export function Shorts({ episodeId, enabled, report, revision }: { episodeId: st
                         <div className="flex gap-2">
                             {SHORT_ASPECTS.map(a => (
                                 <button key={a} onClick={() => update({ ...edits, aspect: a })} disabled={working}
-                                    className={edits.aspect === a ? primary : secondary}>{a}</button>
+                                    className={edits.aspect === a ? chosen : secondary}>{a}</button>
                             ))}
                         </div>
                         <p>The shaded sides are left out. 13:9 makes people larger; check nobody is cut at the edge.</p>
@@ -271,7 +273,7 @@ export function Shorts({ episodeId, enabled, report, revision }: { episodeId: st
             {!view?.blocker && !!view?.quotes.length && (
                 <div className="flex flex-col gap-2">
                     <p className="text-sm text-gray-300">
-                        Key quotes <span className="text-xs text-gray-500">({used.size} of {view.quotes.length} ticked as shorts; they are scheduled in the order below)</span>
+                        Key quotes <span className="text-xs text-gray-400">({used.size} of {view.quotes.length} ticked as shorts; they are scheduled in the order below)</span>
                     </p>
                     <ul className="flex flex-col gap-1 max-h-96 overflow-y-auto pr-1">
                         {view.quotes.map((q, i) => {
@@ -306,7 +308,7 @@ export function Shorts({ episodeId, enabled, report, revision }: { episodeId: st
 
             {!!edits.items.length && (
                 <div className="border-t border-white/10 pt-4 flex flex-col gap-3">
-                    <p className="text-sm text-gray-200 font-medium">Checkpoint E: approve each short, then schedule them</p>
+                    <h4 className="text-sm text-gray-100 font-semibold">Checkpoint E: approve each short, then schedule them</h4>
                     <ul className="text-xs text-gray-400 list-disc pl-5 flex flex-col gap-0.5">
                         <li>Watch it through with sound: it starts on a hook and ends on a complete thought, not mid-word.</li>
                         <li>The captions match what is said, names are spelled right, and nobody is cut off at the sides.</li>
@@ -327,7 +329,7 @@ export function Shorts({ episodeId, enabled, report, revision }: { episodeId: st
                             {waiting.map((i, k) => <li key={i.id}>{when(publishSlot(firstMs, k))}: <span className="text-gray-200">{i.title || i.headline}</span></li>)}
                         </ul>
                     )}
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-gray-400">
                         One a day, in the order above, each Private until its time. {view?.lastSlot && view.lastSlot > Date.now() ? `Shorts are already scheduled until ${when(view.lastSlot)}, so this batch follows on. ` : ""}
                         {view?.episodeUrl
                             ? "Each links to the full episode in its description; to also show it under the Short, set “Related video” in YouTube Studio."
@@ -366,7 +368,7 @@ function ShortCard({ n, item, view, url, drawnAsIs, saved, working, count, onCha
                     <video key={view.render.key} src={url} controls preload="metadata" playsInline
                         className={`w-full aspect-[9/16] rounded-lg bg-black ${drawnAsIs ? "" : "opacity-50"}`} />
                 ) : (
-                    <div className="w-full aspect-[9/16] rounded-lg bg-black/40 border border-dashed border-white/10 flex items-center justify-center text-xs text-gray-500 text-center p-3">
+                    <div className="w-full aspect-[9/16] rounded-lg bg-black/40 border border-dashed border-white/10 flex items-center justify-center text-xs text-gray-400 text-center p-3">
                         Not made yet
                     </div>
                 )}

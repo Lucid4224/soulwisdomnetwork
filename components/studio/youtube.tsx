@@ -7,13 +7,11 @@ import { useCallback, useEffect, useState } from "react";
 import { ago } from "@/components/studio/format";
 import { ErrorNote } from "@/components/studio/ErrorNote";
 import { studioFetch } from "@/lib/studioClient";
-import { useStep, type ReportStep } from "@/components/studio/steps";
+import { failure, useStep, type ReportStep } from "@/components/studio/steps";
+import { primary, secondary } from "@/components/studio/ui";
 import { YOUTUBE_CATEGORY_LABEL } from "@/lib/youtube";
 import type { YoutubeView } from "@/types/studio";
 
-const button = "text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 disabled:cursor-not-allowed";
-const primary = `${button} border-amber-500/40 text-amber-300 hover:bg-amber-500/10`;
-const secondary = `${button} border-white/10 text-gray-300 hover:bg-white/10`;
 
 const LABEL = {
     queued: "Starting…",
@@ -41,8 +39,12 @@ export function Youtube({ episodeId, enabled, report, revision }: { episodeId: s
     }, [enabled, load]);
 
     const working = !!view?.status && view.status in LABEL;
+    const privacy = view?.privacyStatus ? `${view.privacyStatus[0].toUpperCase()}${view.privacyStatus.slice(1)}` : "";
     useStep({
-        step: "youtube", failed: view?.status === "failed", done: !!view?.videoId,
+        step: "youtube", failed: view?.status === "failed", done: !!view?.videoId, working,
+        summary: working ? LABEL[view!.status as keyof typeof LABEL] : view?.status === "failed" ? failure("The YouTube upload", view.error)
+            : view?.videoId ? `${privacy || "On"} on YouTube${view.detailsOutdated || view.finalOutdated ? " (needs an update)" : ""}` : view && !view.blocker ? "Ready to upload" : "",
+        link: view?.url ? { label: "YouTube", href: view.url } : null,
         key: view ? `${view.status}:${view.finishedAt}:${view.videoId}:${view.blocker}` : null,
         report, revision, enabled, load,
     });
@@ -78,6 +80,7 @@ export function Youtube({ episodeId, enabled, report, revision }: { episodeId: s
     const p = view?.preview;
     return (
         <div className="flex flex-col gap-3">
+            {view?.status === "failed" && <ErrorNote title="The YouTube upload failed" message={view.error} />}
             <div className="flex flex-wrap items-center gap-3">
                 <button onClick={start} disabled={!!view?.blocker || working || starting} className={uploaded ? secondary : primary}>
                     {working ? LABEL[view!.status as keyof typeof LABEL] : uploaded ? "Update on YouTube" : "Upload to YouTube"}
@@ -91,7 +94,7 @@ export function Youtube({ episodeId, enabled, report, revision }: { episodeId: s
                     </a>
                 )}
             </div>
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-gray-400">
                 {working
                     ? "The final cut goes up first, then the thumbnail and captions. About 10-20 minutes; this page updates by itself and you get an email."
                     : view?.blocker
@@ -124,7 +127,6 @@ export function Youtube({ episodeId, enabled, report, revision }: { episodeId: s
                     </dl>
                 </details>
             )}
-            {view?.status === "failed" && <ErrorNote title="The YouTube upload failed" message={view.error} />}
             <ErrorNote message={error} />
         </div>
     );

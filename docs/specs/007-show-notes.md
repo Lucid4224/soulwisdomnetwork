@@ -74,6 +74,31 @@ the model or effort again.
 A request that has not produced notes within 20 minutes counts as failed, so a lost run
 never blocks a retry.
 
+## Page layout
+
+The show notes page carries the whole production after Checkpoint B, in six foldable stages
+(`components/studio/steps.ts`, drawn by `components/studio/Stage.tsx`): **1 Show notes**
+(Checkpoint B), **2 B-roll**, **3 Edit package and Descript**, **4 Final cut**, **5 Thumbnail
+and upload** (Checkpoint D) and **6 Shorts** (Checkpoint E).
+
+- Each stage header says where it stands even when folded: a numbered badge and label (green
+  ✓ Done, gold Your turn, blue Working…, red Failed, grey not yet), one summary line (the chosen
+  title and who approved it; images made and their cost; how long ago the project went to
+  Descript; the final cut's length and loudness; the cause of a failure, such as an account
+  out of credits) and shortcuts to the Descript project, the final cut and the YouTube video.
+- The stage that needs the producer opens by itself, and any that failed. Later, a stage opens
+  by itself the first time it becomes the next one (say, when a job finishes) and each time it
+  fails; nothing folds by itself. **Expand all** and **Collapse all** sit above the stages.
+- Under the video, **Steps** shows the same six stages with a progress bar and, under the
+  current one, the next action; clicking a stage opens it and scrolls there.
+- Inside Show notes, a strip of chips (Title, In this episode, Description, Summary, Chapters,
+  Key quotes, Tags, with counts) stays at the top while scrolling and jumps to each part.
+- The bar at the bottom saves and approves the show notes, and offers **Next: …** to jump to
+  the next step.
+- A link to `…/notes#thumbnail` (or `#notes`, `#broll`, `#package`, `#descript`, `#final`,
+  `#youtube`, `#shorts`) opens that stage; the job emails use this.
+- Folded stages stay mounted, so each keeps loading its view and reporting its step.
+
 ## Data
 
 On `episodes/{id}` (`types/episode.ts`, `EpisodeNotes`): `notes.status` (`queued`,

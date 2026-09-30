@@ -60,7 +60,7 @@ const db = getFirestore();
 const ref = db.collection('episodes').doc(episodeId);
 const bucket = getStorage().bucket();
 const workDir = path.join(process.env.RUNNER_TEMP || '/tmp', 'shorts', episodeId);
-const notesPage = `${SITE_URL}/admin/podcast/${episodeId}/notes`;
+const notesPage = `${SITE_URL}/admin/podcast/${episodeId}/notes#shorts`;
 
 const finalAtOf = (episode: Episode) => (episode.final?.finishedAt as Timestamp | undefined)?.toMillis?.() ?? 0;
 

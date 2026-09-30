@@ -142,7 +142,7 @@ Considered and not chosen: importing only the new clips into the existing projec
 import takes a `project_id`, but cannot rearrange an existing timeline, so the clips would have
 to be placed by hand or by Underlord).
 
-The show notes page lists every step under the video (**Actions**), each a link to its section.
+The show notes page shows every stage under the video (**Steps**), with the next action, each a link to its stage (spec 007, Page layout).
 
 **Setup:** the GitHub secret **`DESCRIPT_API_TOKEN`** (Descript → Settings → API tokens, tied
 to the shared Descript drive). The workflow must be on `main` before the website can start it.

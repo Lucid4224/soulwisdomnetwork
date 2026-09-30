@@ -74,7 +74,7 @@ async function main() {
     await sendEmail({ alert }, `Show notes ready: ${episode.title}`, [
         `Claude has drafted the show notes for "${episode.title}".`,
         '',
-        `Review and approve them: ${SITE}/admin/podcast/${episodeId}/notes`,
+        `Review and approve them: ${SITE}/admin/podcast/${episodeId}/notes#notes`,
         '',
         `Suggested title: ${notes.titles[0]}`,
         '',
