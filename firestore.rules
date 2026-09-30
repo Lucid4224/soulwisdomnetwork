@@ -11,47 +11,82 @@ service cloud.firestore {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
     }
 
+    function unchanged(key) {
+      return request.resource.data.get(key, null) == resource.data.get(key, null);
+    }
+
+    // A counter may only go up by one per write (the like and comment buttons use increment(1)).
+    function bumpedByOne(key) {
+      return onlyChanges([key]) && request.resource.data.get(key, 0) == resource.data.get(key, 0) + 1;
+    }
+
     // Profiles: any signed-in user can read; only you can write yours. `role` gates the
     // admin area, so a new profile must start as 'user' and nobody can change their own.
-    // Roles are changed only through the Admin SDK or the Firebase console.
+    // Roles are changed only through the Admin SDK or the Firebase console. The `uid` field
+    // must be your own, because profile pages look people up by it.
     match /users/{userId} {
       allow read:   if signedIn();
       allow create: if signedIn() && request.auth.uid == userId
-                    && request.resource.data.get('role', 'user') == 'user';
+                    && request.resource.data.get('role', 'user') == 'user'
+                    && request.resource.data.get('uid', userId) == userId;
       allow update: if signedIn() && request.auth.uid == userId
-                    && request.resource.data.get('role', null) == resource.data.get('role', null);
+                    && unchanged('role')
+                    && request.resource.data.get('uid', userId) == userId;
       allow delete: if false;
     }
 
-    // Posts: public to read. Author creates and edits their own. Any signed-in
-    // user may bump ONLY the counters, because the like and comment buttons do.
+    // Posts: public to read. Author creates and edits their own, starting at zero likes and
+    // comments, stamped with the server's time. Any signed-in user may bump ONLY a counter,
+    // by one, because the like and comment buttons do. Nobody can hand a post to someone else.
     match /posts/{postId} {
       allow read:   if true;
-      allow create: if signedIn() && request.resource.data.authorId == request.auth.uid;
+      allow create: if signedIn() && request.resource.data.authorId == request.auth.uid
+                    && request.resource.data.createdAt == request.time
+                    && request.resource.data.get('likesCount', 0) == 0
+                    && request.resource.data.get('commentCount', 0) == 0;
       allow update: if signedIn() && (
-                      resource.data.authorId == request.auth.uid
-                      || onlyChanges(['commentCount', 'likesCount'])
+                      (resource.data.authorId == request.auth.uid
+                        && unchanged('authorId') && unchanged('createdAt')
+                        && unchanged('likesCount') && unchanged('commentCount'))
+                      || bumpedByOne('likesCount')
+                      || bumpedByOne('commentCount')
                     );
       allow delete: if signedIn() && resource.data.authorId == request.auth.uid;
     }
 
     match /comments/{commentId} {
-      allow read:           if true;
-      allow create:         if signedIn() && request.resource.data.authorId == request.auth.uid;
-      allow update, delete: if signedIn() && resource.data.authorId == request.auth.uid;
+      allow read:   if true;
+      allow create: if signedIn() && request.resource.data.authorId == request.auth.uid
+                    && request.resource.data.createdAt == request.time;
+      allow update: if signedIn() && resource.data.authorId == request.auth.uid
+                    && unchanged('authorId') && unchanged('postId') && unchanged('createdAt');
+      allow delete: if signedIn() && resource.data.authorId == request.auth.uid;
     }
 
-    // Direct messages: participants only.
+    // Direct messages: participants only. A conversation is between exactly two people and
+    // its ID is their two uids, sorted and joined with "_" (lib/firebase/messaging.ts), so
+    // nobody can open a conversation in someone else's name or add themselves to one. After
+    // that, sending a message may only update the last-message fields.
     match /conversations/{convId} {
-      allow read, update: if signedIn() && request.auth.uid in resource.data.participants;
-      allow create:       if signedIn() && request.auth.uid in request.resource.data.participants;
-      allow delete:       if false;
+      // A conversation that does not exist yet reads as empty, so the app can check before creating it.
+      allow read:   if signedIn() && (resource == null || request.auth.uid in resource.data.participants);
+      allow create: if signedIn() && request.auth.uid in request.resource.data.participants
+                    && request.resource.data.participants.size() == 2
+                    && request.resource.data.participants[0] != request.resource.data.participants[1]
+                    && (convId == request.resource.data.participants[0] + '_' + request.resource.data.participants[1]
+                        || convId == request.resource.data.participants[1] + '_' + request.resource.data.participants[0]);
+      allow update: if signedIn() && request.auth.uid in resource.data.participants
+                    && onlyChanges(['lastMessage', 'lastMessageTimestamp', 'updatedAt']);
+      allow delete: if false;
     }
 
     match /messages/{messageId} {
       allow read: if signedIn() && request.auth.uid in
         get(/databases/$(database)/documents/conversations/$(resource.data.conversationId)).data.participants;
-      allow create:         if signedIn() && request.resource.data.senderId == request.auth.uid;
+      allow create: if signedIn() && request.resource.data.senderId == request.auth.uid
+                    && request.resource.data.createdAt == request.time
+                    && request.auth.uid in
+                      get(/databases/$(database)/documents/conversations/$(request.resource.data.conversationId)).data.participants;
       allow update, delete: if false;
     }
 

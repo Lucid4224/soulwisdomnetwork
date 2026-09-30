@@ -1,0 +1,12 @@
+rules_version = '2';
+
+// Cloud Storage: nothing is read or written from the browser. The podcast jobs and the
+// server use the Admin SDK (which bypasses these rules), and the Studio shows files through
+// short-lived signed links. Deploy with: firebase deploy --only storage --project soulwisdomnetwork
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
