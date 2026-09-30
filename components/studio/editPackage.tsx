@@ -8,12 +8,10 @@ import { useCallback, useEffect, useState } from "react";
 import { ago } from "@/components/studio/format";
 import { ErrorNote } from "@/components/studio/ErrorNote";
 import { studioFetch } from "@/lib/studioClient";
-import { useStep, type ReportStep } from "@/components/studio/steps";
+import { failure, useStep, type ReportStep } from "@/components/studio/steps";
+import { primary, secondary } from "@/components/studio/ui";
 import type { PackageView } from "@/types/studio";
 
-const button = "text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 disabled:cursor-not-allowed";
-const primary = `${button} border-amber-500/40 text-amber-300 hover:bg-amber-500/10`;
-const secondary = `${button} border-white/10 text-gray-300 hover:bg-white/10`;
 
 const DESCRIPT_LABEL = {
     queued: "Starting…", importing: "Importing into Descript…", cleaning: "Removing filler words and applying Studio Sound…",
@@ -86,9 +84,20 @@ export function EditPackage({ episodeId, enabled, upToDate, report, revision }: 
     // A project made from earlier notes, or before the package was last rebuilt, has old clips and images.
     const descriptStale = d?.status === "ready" && (d.builtFromVersion !== view?.approvedVersion
         || (view?.finishedAt != null && d.finishedAt != null && view.finishedAt > d.finishedAt));
-    useStep({ step: "package", failed: view?.status === "failed", done: built && !stale, key: view ? `${view.status}:${view.finishedAt}:${stale}` : null, report, revision, enabled, load });
+    useStep({
+        step: "package", failed: view?.status === "failed", done: built && !stale, working,
+        summary: working ? "Building the edit package…" : view?.status === "failed" ? failure("The edit package", view.error)
+            : built ? (stale ? "Edit package out of date: rebuild it" : `Package built ${ago(view.finishedAt)}`) : "Edit package not built yet",
+        key: view ? `${view.status}:${view.finishedAt}:${stale}` : null, report, revision, enabled, load,
+    });
     // Reported only; the line above already reloads this section.
-    useStep({ step: "descript", failed: d?.status === "failed", done: d?.status === "ready" && !descriptStale, key: d ? `${d.status}:${d.finishedAt}:${descriptStale}` : null, report, enabled: false, load });
+    useStep({
+        step: "descript", failed: d?.status === "failed", done: d?.status === "ready" && !descriptStale, working: sending,
+        summary: sending ? "Sending to Descript…" : d?.status === "failed" ? failure("Sending to Descript", d.error)
+            : d?.status === "ready" ? (descriptStale ? "Descript project out of date" : `In Descript since ${ago(d.finishedAt)}`) : built ? "Not sent to Descript yet" : "",
+        link: d?.projectUrl ? { label: "Descript", href: d.projectUrl } : null,
+        key: d ? `${d.status}:${d.finishedAt}:${descriptStale}` : null, report, enabled: false, load,
+    });
     // What to do to bring the changes into Descript, from where things stand.
     const staleNext = !upToDate
         ? "Approve the changes to the show notes, rebuild the edit package, then Send to Descript again."
@@ -100,8 +109,9 @@ export function EditPackage({ episodeId, enabled, upToDate, report, revision }: 
 
     return (
         <div className="flex flex-col gap-2">
+            <h3 className="text-base font-semibold text-gray-100">Edit package</h3>
             <div className="flex flex-wrap items-center gap-3">
-                <button onClick={build} disabled={!upToDate || working || starting} className={primary}>
+                <button onClick={build} disabled={!upToDate || working || starting} className={built && !stale ? secondary : primary}>
                     {working ? "Building…" : built ? "Rebuild edit package" : "Build edit package"}
                 </button>
                 {view?.folderUrl && (
@@ -110,7 +120,7 @@ export function EditPackage({ episodeId, enabled, upToDate, report, revision }: 
                     </a>
                 )}
             </div>
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-gray-400">
                 {working
                     ? "Cutting the clips and copying files; usually a few minutes. This page updates by itself."
                     : !upToDate
@@ -126,9 +136,10 @@ export function EditPackage({ episodeId, enabled, upToDate, report, revision }: 
             )}
             {built && view.warnings.map(w => <p key={w} className="text-xs text-amber-300">{w}</p>)}
 
-            <div id="descript" className="flex flex-col gap-2 border-t border-white/5 pt-3 mt-1 scroll-mt-24">
+            <div id="descript" className="flex flex-col gap-2 border-t border-white/5 pt-5 mt-3 scroll-mt-24">
+                <h3 className="text-base font-semibold text-gray-100">Descript project</h3>
                 <div className="flex flex-wrap items-center gap-3">
-                    <button onClick={send} disabled={!canSend} className={d?.projectUrl ? secondary : primary}>
+                    <button onClick={send} disabled={!canSend} className={d?.projectUrl && !descriptStale ? secondary : primary}>
                         {sending ? DESCRIPT_LABEL[d!.status as keyof typeof DESCRIPT_LABEL] : d?.projectUrl ? "Send to Descript again" : "Send to Descript"}
                     </button>
                     {d?.projectUrl && (
@@ -137,7 +148,7 @@ export function EditPackage({ episodeId, enabled, upToDate, report, revision }: 
                         </a>
                     )}
                 </div>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-gray-400">
                     {sending
                         ? "Descript imports and transcribes the media, then Underlord cleans it up. Allow about as long as the episode; this page updates by itself and you get an email."
                         : building

@@ -65,7 +65,7 @@ export function BrollImageView({ broll, index, idea, style }: { broll: Broll; in
                 {/* eslint-disable-next-line @next/next/no-img-element -- signed Storage URL */}
                 <img src={image.url} alt={image.idea} className={`w-48 aspect-[3/2] object-cover rounded-lg bg-black ${pending ? "opacity-40" : ""}`} />
             </a>
-            <div className="flex flex-col gap-1 text-xs text-gray-500 min-w-0">
+            <div className="flex flex-col gap-1 text-xs text-gray-400 min-w-0">
                 {pending && <span className="text-sky-300">Generating a new one…</span>}
                 {image.idea !== idea.trim() && (
                     <span className="text-amber-300">The idea has changed since this image was made.</span>

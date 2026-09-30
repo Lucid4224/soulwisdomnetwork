@@ -12,14 +12,11 @@ import { auth } from "@/lib/firebase/config";
 import { mmss } from "@/lib/showNotes";
 import { ErrorNote } from "@/components/studio/ErrorNote";
 import { studioFetch } from "@/lib/studioClient";
-import { useStep, type ReportStep } from "@/components/studio/steps";
+import { failure, useStep, type ReportStep } from "@/components/studio/steps";
+import { approveButton, chosen, primary, secondary } from "@/components/studio/ui";
 import { THUMB_HEIGHT, THUMB_KINDS, THUMB_LABELS, THUMB_MAX_BYTES, THUMB_WIDTH, type ThumbKind } from "@/lib/thumbnail";
 import type { ThumbnailsView } from "@/types/studio";
 
-const button = "text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 disabled:cursor-not-allowed";
-const primary = `${button} border-amber-500/40 text-amber-300 hover:bg-amber-500/10`;
-const secondary = `${button} border-white/10 text-gray-300 hover:bg-white/10`;
-const approveButton = "text-sm px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed";
 
 // An image from the Studio API (it needs the sign-in token, so not a plain <img src>).
 async function fetchImage(url: string) {
@@ -76,7 +73,10 @@ export function Thumbnails({ episodeId, enabled, report, revision }: { episodeId
 
     const working = view?.status === "queued" || view?.status === "working";
     useStep({
-        step: "thumbnail", failed: view?.status === "failed", done: !!view?.approval && !view.approval.stale,
+        step: "thumbnail", failed: view?.status === "failed", done: !!view?.approval && !view.approval.stale, working,
+        summary: working ? "Making thumbnail options…" : view?.status === "failed" ? failure("Making thumbnails", view.error)
+            : view?.approval ? (view.approval.stale ? "Changed since approval: approve again" : `Episode approved ${ago(view.approval.at)}`)
+                : view?.frames.length ? "Options ready: pick one and approve" : view?.canStart ? "No thumbnail options yet" : "Waiting for the final cut",
         key: view ? `${view.status}:${view.finishedAt}:${view.approval?.at}:${view.approval?.stale}` : null,
         report, revision, enabled, load,
     });
@@ -197,9 +197,9 @@ export function Thumbnails({ episodeId, enabled, report, revision }: { episodeId
                 <button onClick={() => start(false)} disabled={!view?.canStart || working || starting} className={ready ? secondary : primary}>
                     {working && view?.only !== "image" ? "Making thumbnail options…" : ready ? "Make new options" : "Make thumbnail options"}
                 </button>
-                {view?.finishedAt && ready && !working && <span className="text-xs text-gray-500">Made {ago(view.finishedAt)}</span>}
+                {view?.finishedAt && ready && !working && <span className="text-xs text-gray-400">Made {ago(view.finishedAt)}</span>}
             </div>
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-gray-400">
                 {working
                     ? "Claude writes short texts, frames are taken from the final cut at the strongest quotes, and an AI background is made. A few minutes; this page updates by itself and you get an email."
                     : !view?.canStart
@@ -215,11 +215,11 @@ export function Thumbnails({ episodeId, enabled, report, revision }: { episodeId
             {ready && view && (
                 <>
                     <div className="flex flex-col gap-2">
-                        <p className="text-sm text-gray-300">Text <span className="text-xs text-gray-500">(*asterisks* make words gold)</span></p>
+                        <p className="text-sm text-gray-300">Text <span className="text-xs text-gray-400">(*asterisks* make words gold)</span></p>
                         <div className="flex flex-wrap gap-2">
                             {view.hooks.map(h => (
                                 <button key={h} onClick={() => { editText(h); }}
-                                    className={`text-xs px-2.5 py-1 rounded-full border ${h === text ? "border-amber-400 text-amber-200 bg-amber-500/10" : "border-white/10 text-gray-300 hover:bg-white/5"}`}>
+                                    className={`${h === text ? chosen : secondary} !rounded-full`}>
                                     {h.replace(/\*/g, "")}
                                 </button>
                             ))}
@@ -229,7 +229,7 @@ export function Thumbnails({ episodeId, enabled, report, revision }: { episodeId
                     </div>
 
                     <div className="flex flex-col gap-2">
-                        <p className="text-sm text-gray-300">Frame <span className="text-xs text-gray-500">(used by the frame option and the brand template)</span></p>
+                        <p className="text-sm text-gray-300">Frame <span className="text-xs text-gray-400">(used by the frame option and the brand template)</span></p>
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                             {view.frames.map((f, i) => {
                                 const img = imageFor(`frame-${i}`, f.key);
@@ -254,7 +254,7 @@ export function Thumbnails({ episodeId, enabled, report, revision }: { episodeId
                             </button>
                         ))}
                     </div>
-                    <p className="text-xs text-gray-500">Check each one small too: most people see thumbnails at about a fifth of this size.</p>
+                    <p className="text-xs text-gray-400">Check each one small too: most people see thumbnails at about a fifth of this size.</p>
 
                     <details className="text-xs text-gray-400">
                         <summary className="cursor-pointer text-gray-300">AI image: {view.image?.idea ?? "none yet"}</summary>
@@ -277,7 +277,7 @@ export function Thumbnails({ episodeId, enabled, report, revision }: { episodeId
             )}
 
             <div className="border-t border-white/10 pt-4 flex flex-col gap-3">
-                <p className="text-sm text-gray-200 font-medium">Checkpoint D: approve the episode for YouTube</p>
+                <h4 className="text-sm text-gray-100 font-semibold">Checkpoint D: approve the episode for YouTube</h4>
                 <ul className="text-xs text-gray-400 flex flex-col gap-0.5">
                     <li>Title: <span className="text-gray-200">{view?.title ?? "—"}</span></li>
                     <li>Chapters on the final cut: <span className="text-gray-200">{view?.chapterCount ?? 0}</span></li>
@@ -300,7 +300,7 @@ export function Thumbnails({ episodeId, enabled, report, revision }: { episodeId
                     </button>
                     {approval && <button onClick={withdraw} className={secondary}>Withdraw approval</button>}
                 </div>
-                <p className="text-xs text-gray-500">Approving saves the chosen thumbnail as a JPEG and clears the episode for the YouTube upload (spec 005 step 13).</p>
+                <p className="text-xs text-gray-400">Approving saves the chosen thumbnail as a JPEG and clears the episode for the YouTube upload (spec 005 step 13).</p>
             </div>
 
             <ErrorNote message={error} />

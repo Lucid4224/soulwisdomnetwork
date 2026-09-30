@@ -2,6 +2,9 @@
 
 // Checkpoint B (spec 005 step 6; docs/specs/007-show-notes.md): review and edit the show
 // notes Claude drafted from the accepted transcript, then approve them. Edits save as you go.
+// The rest of the episode's production follows on the same page, in six foldable stages
+// (components/studio/steps.ts): the one that needs the producer opens by itself, the others
+// fold to a one-line summary.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -14,21 +17,16 @@ import { Shorts } from "@/components/studio/shorts";
 import { Thumbnails } from "@/components/studio/thumbnails";
 import { Youtube } from "@/components/studio/youtube";
 import { ago, minutes } from "@/components/studio/format";
-import { STEPS, type StepId } from "@/components/studio/steps";
+import { Part, Stage, StepTracker, type TrackedStage } from "@/components/studio/Stage";
+import { failure, STAGES, STEPS, stageOf, stageStatus, stepLabel, type StageId, type StepId, type StepState } from "@/components/studio/steps";
 import { ErrorNote } from "@/components/studio/ErrorNote";
+import { field, hint as small, primary, secondary } from "@/components/studio/ui";
 import { useAutosave } from "@/components/studio/useAutosave";
 import { useAuth } from "@/context/AuthContext";
 import { BROLL_STYLE_IDS, BROLL_STYLES, BROLL_USD_PER_IMAGE, type BrollStyle } from "@/lib/broll";
 import { locate, mmss, youtubeDescription, type ShowNotes, type TeaserClip } from "@/lib/showNotes";
 import { studioFetch } from "@/lib/studioClient";
 import type { EpisodeNotesView } from "@/types/studio";
-
-const button = "text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 disabled:cursor-not-allowed";
-const primary = `${button} border-amber-500/40 text-amber-300 hover:bg-amber-500/10`;
-const secondary = `${button} border-white/10 text-gray-300 hover:bg-white/10`;
-const field = "w-full bg-[#130b29] border border-white/10 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-amber-500/50";
-const small = "text-xs text-gray-500";
-
 
 const words = (s: string) => s.trim().split(/\s+/).filter(Boolean).length;
 
@@ -73,17 +71,13 @@ function NeedsApproval({ what, approved, busy, onApprove }: { what: string; appr
     );
 }
 
-function Section({ id, title, hint, children }: { id?: string; title: string; hint?: string; children: React.ReactNode }) {
-    return (
-        <section id={id} className="bg-[#1E1035]/40 border border-white/5 rounded-2xl p-4 flex flex-col gap-3 scroll-mt-24">
-            <header>
-                <h2 className="font-semibold">{title}</h2>
-                {hint && <p className={small}>{hint}</p>}
-            </header>
-            {children}
-        </section>
-    );
-}
+// Anchors in older links and emails, and the parts inside a stage, open the stage they are in.
+const ANCHOR_STAGE: Record<string, StageId> = { descript: "package", youtube: "thumbnail" };
+const stageFor = (anchor: string): StageId | undefined =>
+    STAGES.find(s => s.id === anchor)?.id ?? ANCHOR_STAGE[anchor] ?? (anchor.startsWith("notes-") ? "notes" : undefined);
+
+const sameStep = (a: StepState | undefined, b: StepState) => !!a && a.done === b.done && a.failed === b.failed && a.working === b.working
+    && a.summary === b.summary && a.key === b.key && a.link?.href === b.link?.href && a.link?.label === b.link?.label;
 
 export default function ShowNotesPage() {
     const { episodeId } = useParams<{ episodeId: string }>();
@@ -112,18 +106,86 @@ export default function ShowNotesPage() {
     // Where each step stands, reported by its section (components/studio/steps.ts). When one
     // changes after the first report (a job finished, something approved), every section fetches
     // its view again, so the next step shows as soon as it is possible.
-    const [done, setDone] = useState<Partial<Record<StepId, boolean>>>({});
-    const [failed, setFailed] = useState<Partial<Record<StepId, boolean>>>({});
+    const [steps, setSteps] = useState<Partial<Record<StepId, StepState>>>({});
     const [revision, setRevision] = useState(0);
     const stepKeys = useRef<Partial<Record<StepId, string>>>({});
-    const report = useCallback((step: StepId, isDone: boolean, key: string, isFailed = false) => {
-        setDone(d => (d[step] === isDone ? d : { ...d, [step]: isDone }));
-        setFailed(f => (!!f[step] === isFailed ? f : { ...f, [step]: isFailed }));
+    const report = useCallback((step: StepId, state: StepState) => {
+        setSteps(all => (sameStep(all[step], state) ? all : { ...all, [step]: state }));
         const before = stepKeys.current[step];
-        stepKeys.current[step] = key;
-        if (before !== undefined && before !== key) setRevision(r => r + 1);
+        stepKeys.current[step] = state.key;
+        if (before !== undefined && before !== state.key) setRevision(r => r + 1);
     }, []);
-    const next = STEPS.find(([id]) => !done[id])?.[0];
+    const next = STEPS.find(([id]) => !steps[id]?.done)?.[0];
+    const nextStage = next ? stageOf(next).id : undefined;
+    const stages = STAGES.map((s, i) => {
+        const status = stageStatus(s.steps, steps, next);
+        const states = s.steps.map(id => steps[id]);
+        const failedStep = s.steps.find(id => steps[id]?.failed);
+        const detail = status === "next" && next ? `Next: ${stepLabel(next)}`
+            : status === "failed" && failedStep ? `${stepLabel(failedStep)} failed`
+                : status === "working" ? states.find(x => x?.working)?.summary ?? "" : "";
+        return {
+            ...s, n: i + 1, status, detail,
+            summary: states.map(x => x?.summary).filter(Boolean).join(" · "),
+            links: states.flatMap(x => (x?.link ? [x.link] : [])),
+        };
+    });
+
+    // Which stages are unfolded. Once every step has reported (or after a few seconds), the stage
+    // that needs the producer opens, and any that failed. After that a stage opens by itself the
+    // first time it becomes the next one, and each time it fails anew; it never folds by itself,
+    // and one the producer folded stays folded when the next step moves back and forth.
+    const [open, setOpen] = useState<Partial<Record<StageId, boolean>>>({});
+    const [waited, setWaited] = useState(false);
+    useEffect(() => {
+        const timer = setTimeout(() => setWaited(true), 5000);
+        return () => clearTimeout(timer);
+    }, []);
+    const settled = waited || STEPS.every(([id]) => steps[id]);
+    const reasons = settled ? [
+        ...(nextStage ? [`next:${nextStage}`] : []),
+        ...stages.filter(s => s.status === "failed").map(s => `failed:${s.id}:${s.steps.map(id => steps[id]?.key).join("|")}`),
+    ] : [];
+    const [opened, setOpened] = useState<string[]>([]);
+    const fresh = reasons.filter(r => !opened.includes(r));
+    if (fresh.length) {
+        setOpened(o => [...o, ...fresh]);
+        setOpen(o => ({ ...o, ...Object.fromEntries(fresh.map(r => [r.split(":")[1], true])) }));
+    }
+    const toggle = (id: StageId) => setOpen(o => ({ ...o, [id]: !o[id] }));
+    const setAll = (value: boolean) => setOpen(Object.fromEntries(STAGES.map(s => [s.id, value])));
+
+    // Opens the stage an anchor is in and scrolls to it once it is showing.
+    const scrollTarget = useRef<string | null>(null);
+    const [scrollRequest, setScrollRequest] = useState(0);
+    const go = useCallback((anchor: string) => {
+        const stage = stageFor(anchor);
+        if (!stage) return;
+        setOpen(o => (o[stage] ? o : { ...o, [stage]: true }));
+        scrollTarget.current = anchor;
+        setScrollRequest(r => r + 1);
+    }, []);
+    useEffect(() => {
+        const anchor = scrollTarget.current;
+        if (!anchor) return;
+        scrollTarget.current = null;
+        document.getElementById(anchor)?.scrollIntoView({ behavior: "smooth", block: "start" });
+        if (location.hash !== `#${anchor}`) history.replaceState(null, "", `#${anchor}`);
+    }, [scrollRequest]);
+    // A link to a stage (#thumbnail, from an email or bookmark) opens it once every section has
+    // loaded, so the stages above it have their final height when it scrolls.
+    const openedHash = useRef(false);
+    const pageReady = settled && !!notes;
+    useEffect(() => {
+        if (!pageReady || openedHash.current) return;
+        openedHash.current = true;
+        if (location.hash.length > 1) go(location.hash.slice(1));
+    }, [pageReady, go]);
+    useEffect(() => {
+        const onHash = () => go(location.hash.slice(1));
+        window.addEventListener("hashchange", onHash);
+        return () => window.removeEventListener("hashchange", onHash);
+    }, [go]);
 
     const load = useCallback(async () => {
         try {
@@ -285,18 +347,43 @@ export default function ShowNotesPage() {
 
     // The notes and b-roll steps, from this page's own state.
     const notesKey = view?.notes ? `${view.notes.status}:${view.notes.approved?.version}` : null;
+    const notesApproved = view?.notes?.approved;
+    const notesChanged = !!notesApproved && (notesApproved.version !== autosave.savedVersion || autosave.saveState !== "saved");
+    const chosenTitle = notes?.titles[notes.chosenTitle] ?? "";
+    const notesSummary = view?.notes?.status === "queued" || view?.notes?.status === "generating" ? "Claude is drafting the show notes…"
+        : view?.notes?.status === "failed" ? failure("Drafting", view.notes.error)
+            : !notes ? "Not drafted yet"
+                : [chosenTitle && `“${chosenTitle}”`, !notesApproved ? "Ready to review and approve" : notesChanged ? "Changes not approved yet" : `Approved by ${notesApproved.by} ${ago(notesApproved.at)}`]
+                    .filter(Boolean).join(" · ");
+    useEffect(() => {
+        if (notesKey === null) return;
+        const status = view?.notes?.status;
+        // Changes not yet approved are the producer's to approve (or undo) before anything else.
+        report("notes", {
+            done: !!view?.notes?.approved && !notesChanged, failed: status === "failed", working: status === "queued" || status === "generating",
+            summary: notesSummary, link: null, key: notesKey,
+        });
+    }, [notesKey, notesSummary, notesChanged, view, report]);
     const brollPending = notes ? notes.broll.filter((b, i) => {
         const image = broll.image(i);
         return image?.idea !== b.idea.trim() || image.style !== b.style;
     }).length : null;
-    useEffect(() => {
-        if (notesKey !== null) report("notes", !!view?.notes?.approved, notesKey, view?.notes?.status === "failed");
-    }, [notesKey, view, report]);
+    const brollImages = broll.view?.images.length ?? 0;
+    const brollSpent = broll.view?.images.reduce((t, i) => t + i.usd, 0) ?? 0;
+    const brollSummary = broll.working ? "Generating images…"
+        : broll.view?.status === "failed" ? failure("Some images", broll.view.error)
+        : !notes?.broll.length ? "No b-roll ideas"
+            : brollPending ? `${brollPending} of ${notes.broll.length} ideas need an image`
+                : `${brollImages} image${brollImages === 1 ? "" : "s"} ready · $${brollSpent.toFixed(2)}`;
     // Keyed on the images, not the ideas, so typing an idea does not refresh every section.
     const brollKey = broll.view ? `${broll.view.status}:${broll.view.images.map(i => i.createdAt).join(",")}` : null;
     useEffect(() => {
-        if (brollPending !== null && brollKey !== null && !broll.working) report("broll", !!view?.notes?.approved && brollPending === 0, brollKey, broll.view?.status === "failed");
-    }, [brollPending, brollKey, broll.working, broll.view?.status, view, report]);
+        if (brollPending === null || brollKey === null) return;
+        report("broll", {
+            done: !broll.working && !!view?.notes?.approved && brollPending === 0, failed: !broll.working && broll.view?.status === "failed",
+            working: broll.working || broll.starting, summary: brollSummary, link: null, key: broll.working ? "working" : brollKey,
+        });
+    }, [brollPending, brollKey, brollSummary, broll.working, broll.starting, broll.view?.status, view, report]);
 
     const copyDescription = () => {
         if (!notes) return;
@@ -323,24 +410,40 @@ export default function ShowNotesPage() {
     // Images are made from the approved ideas, so only offered when the page shows exactly those.
     const brollChanged = brollPending ?? 0;
     const brollBlocked = !upToDate || broll.working || broll.starting;
-    const saveLabel = {
-        saved: "Draft saved to the database", unsaved: "Unsaved changes…", saving: "Saving draft…", error: "Draft not saved",
-    }[autosave.saveState];
+    const saveLabel = { saved: "✓ Saved", unsaved: "Unsaved changes…", saving: "Saving…", error: "Not saved" }[autosave.saveState];
+    const teaserSeconds = notes ? Math.round(notes.teaserClips.reduce((t, c) => t + c.endMs - c.startMs, 0) / 1000) : 0;
+    const noteParts: [string, string, string?][] = notes ? [
+        ["notes-title", "Title"],
+        ["notes-teaser", "In this episode", `${notes.teaserClips.length} · ${teaserSeconds}s`],
+        ["notes-description", "Description"],
+        ["notes-summary", "Summary"],
+        ["notes-chapters", "Chapters", `${notes.chapters.length}`],
+        ["notes-quotes", "Key quotes", `${notes.quotes.length}`],
+        ["notes-tags", "Tags"],
+    ] : [];
+    const stageProps = (id: StageId) => {
+        const s = stages.find(x => x.id === id)!;
+        return {
+            id, n: s.n, title: s.title, checkpoint: "checkpoint" in s ? s.checkpoint : undefined,
+            status: s.status, summary: s.summary, links: s.links, open: !!open[id], onToggle: () => toggle(id),
+        };
+    };
+    const tracked: TrackedStage[] = stages.map(({ id, n, title, status, detail }) => ({ id, n, title, status, detail }));
+    const doneCount = stages.filter(s => s.status === "done").length;
+    const on = !loading && allowed;
 
     return (
         <AuthGuard>
-            <div className="min-h-screen bg-[#130b29] text-gray-100 p-4 pb-28 sm:p-8 sm:pb-28">
+            <div className="min-h-screen bg-[#130b29] text-gray-100 p-4 pb-32 sm:p-8 sm:pb-32">
                 <div className="max-w-7xl mx-auto flex flex-col gap-6">
                     <div>
                         <Link href="/admin/podcast" className="text-sm text-gray-400 hover:text-white">← Podcast Studio</Link>
-                        <h1 className="text-2xl font-bold text-amber-400 mt-1 break-words">
-                            Show notes{view ? `: ${view.title}` : ""}
-                        </h1>
+                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400 mt-3">Show notes and production</p>
+                        <h1 className="text-2xl sm:text-3xl font-bold text-amber-400 mt-1 break-words">{view?.title ?? "Show notes"}</h1>
                         {view && (
                             <p className="text-sm text-gray-400 mt-1">
                                 {[view.recordedAt?.slice(0, 10), minutes(view.durationSeconds)].filter(Boolean).join(" · ")}
                                 {view.notes?.generatedAt && ` · Drafted by Claude ${ago(view.notes.generatedAt)}`}
-                                {approved && ` · Approved by ${approved.by} ${ago(approved.at)}`}
                                 {" · "}
                                 <Link href={`/admin/podcast/${episodeId}`} className="hover:text-white hover:underline">Speaker review</Link>
                             </p>
@@ -373,208 +476,223 @@ export default function ShowNotesPage() {
 
                     {view && notes && (
                         <div className="grid gap-6 lg:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] items-start">
-                            <div className="flex flex-col gap-4 lg:sticky lg:top-20">
+                            <div className="flex flex-col gap-4 lg:sticky lg:top-20 lg:max-h-[calc(100vh-10rem)] lg:overflow-y-auto lg:pr-1">
                                 {view.videoUrl && (
                                     <video ref={video} src={view.videoUrl} controls preload="metadata" onTimeUpdate={onTime} className="w-full rounded-xl bg-black aspect-video" />
                                 )}
                                 <p className={small}>
-                                    Click ▶ beside a chapter, quote or b-roll idea to check it against the video.
-                                    &quot;Add at video time&quot; uses where the video is paused.
+                                    Click ▶ beside a clip, chapter, quote or b-roll idea to check it against the video.
+                                    &ldquo;Add at video time&rdquo; uses where the video is paused.
                                 </p>
-                                {drafting && <p className="text-sm text-amber-300">Claude is drafting new notes; they will replace this page when ready.</p>}
-                                {status === "failed" && <ErrorNote title="The last redraft failed" message={view.notes?.error} />}
-                                <button onClick={() => draft(true)} disabled={busy || drafting} className={`${secondary} self-start`}>
-                                    Draft again with Claude
-                                </button>
-                                <nav aria-label="Steps" className="border-t border-white/5 pt-3">
-                                    <h2 className="text-sm font-semibold text-gray-300 mb-1.5">Actions</h2>
-                                    <ol className="flex flex-col gap-1 text-sm list-decimal pl-5 marker:text-gray-500">
-                                        {STEPS.map(([id, label]) => (
-                                            <li key={id} className={failed[id] ? "marker:text-red-400" : done[id] ? "marker:text-emerald-400" : ""}>
-                                                <a
-                                                    href={`#${id}`}
-                                                    className={`hover:underline ${failed[id] ? "text-red-300 font-bold" : done[id] ? "text-emerald-300/80" : id === next ? "text-amber-300 font-semibold" : "text-gray-400"}`}
-                                                    aria-current={id === next ? "step" : undefined}
-                                                >
-                                                    {failed[id] ? "⚠️ " : done[id] ? "✓ " : ""}{label}{failed[id] ? " (failed)" : id === next ? " ←" : ""}
-                                                </a>
-                                            </li>
-                                        ))}
-                                    </ol>
-                                    <p className={`${small} mt-2`}>
-                                        To change the notes later (say, more &ldquo;In this episode&rdquo; clips after sending to Descript):
-                                        edit them, approve the changes, rebuild the edit package, then send to Descript again.
-                                    </p>
-                                </nav>
+                                <div className="hidden lg:block border-t border-white/5 pt-4">
+                                    <StepTracker stages={tracked} onGo={go} />
+                                </div>
                             </div>
 
                             <div className="flex flex-col gap-4 min-w-0">
-                                <Section id="notes" title="Title" hint="Pick one; edit any of them.">
-                                    {notes.titles.map((t, i) => (
-                                        <div key={i} className="flex items-center gap-2">
-                                            <input
-                                                type="radio"
-                                                name="title"
-                                                checked={notes.chosenTitle === i}
-                                                onChange={() => edit(n => ({ ...n, chosenTitle: i }))}
-                                                aria-label={`Use title ${i + 1}`}
-                                            />
-                                            <input
-                                                value={t}
-                                                onChange={e => edit(n => ({ ...n, titles: n.titles.map((x, j) => (j === i ? e.target.value : x)) }))}
-                                                className={field}
-                                            />
-                                            <span className={`${small} w-10 text-right ${t.length > 70 ? "text-orange-300" : ""}`}>{t.length}</span>
-                                        </div>
-                                    ))}
-                                    <button onClick={() => edit(n => ({ ...n, titles: [...n.titles, ""] }))} className={`${secondary} self-start`}>+ Add a title</button>
-                                </Section>
-
-                                <Section
-                                    title="“In this episode” clips"
-                                    hint="Played in order under an “In this episode” title. Leave them wanting more: end on a question or cut before the answer."
-                                >
-                                    {notes.teaserClips.length > 0 && (
-                                        <div className="flex items-center gap-3">
-                                            <button onClick={() => playClips(notes.teaserClips)} className={primary}>▶ Play the teaser</button>
-                                            <span className={small}>{Math.round(notes.teaserClips.reduce((t, c) => t + c.endMs - c.startMs, 0) / 1000)} seconds in total; aim for 20–40</span>
-                                        </div>
-                                    )}
-                                    {!notes.teaserClips.length && (
-                                        <p className={small}>No clips yet. Add them from the video below, or draft again with Claude.</p>
-                                    )}
-                                    {notes.teaserClips.map((c, i) => (
-                                        <div key={`${i}-${c.startMs}-${c.endMs}`} className="flex flex-col gap-1.5 border-l-2 border-amber-500/40 pl-3">
-                                            <div className="flex flex-wrap items-center gap-2 text-xs">
-                                                <span className="text-gray-500 w-4">{i + 1}</span>
-                                                <button onClick={() => playClips([c])} className="text-gray-400 hover:text-amber-300" title="Play this clip">▶</button>
-                                                <TimeInput ms={c.startMs} onChange={ms => editClip(i, { startMs: ms })} />
-                                                <span className="text-gray-500">to</span>
-                                                <TimeInput ms={c.endMs} onChange={ms => editClip(i, { endMs: ms })} />
-                                                <span className="text-gray-300">{c.speaker}</span>
-                                                <span className="text-gray-500">{((c.endMs - c.startMs) / 1000).toFixed(1)}s</span>
-                                                <span className="ml-auto flex gap-2">
-                                                    <button onClick={() => moveClip(i, -1)} disabled={i === 0} className="text-gray-400 hover:text-white disabled:opacity-30" title="Earlier">▲</button>
-                                                    <button onClick={() => moveClip(i, 1)} disabled={i === notes.teaserClips.length - 1} className="text-gray-400 hover:text-white disabled:opacity-30" title="Later">▼</button>
-                                                    <button onClick={() => edit(n => ({ ...n, teaserClips: n.teaserClips.filter((_, j) => j !== i) }))} className="text-gray-500 hover:text-red-300">Remove</button>
-                                                </span>
-                                            </div>
-                                            <textarea value={c.text} onChange={e => editClip(i, anchored(e.target.value, c.startMs, true))} rows={2} className={field} />
-                                            {!findInTranscript(c.text) && (
-                                                <p className="text-xs text-orange-300">Not found word for word in the transcript, so the times were not updated. Check the words or set the times by hand.</p>
-                                            )}
-                                        </div>
-                                    ))}
-                                    <button onClick={() => addClip()} disabled={!view.words.length} className={`${secondary} self-start`}>
-                                        + Add the line at video time
-                                    </button>
-                                </Section>
-
-                                <Section title="YouTube description" hint="Hook and keywords in the first two lines: that is all YouTube shows before “more”.">
-                                    <textarea value={notes.description} onChange={e => edit(n => ({ ...n, description: e.target.value }))} rows={8} className={field} />
-                                    <label className="flex flex-col gap-1">
-                                        <span className="text-xs text-gray-400">Hashtags (three; YouTube shows them above the title)</span>
-                                        <input
-                                            key={loadedAt}
-                                            defaultValue={notes.hashtags.join(" ")}
-                                            onChange={e => {
-                                                const list = e.target.value.split(/[\s,]+/).filter(Boolean).map(h => (h.startsWith("#") ? h : `#${h}`));
-                                                edit(n => ({ ...n, hashtags: list }));
-                                            }}
-                                            className={field}
-                                        />
-                                    </label>
-                                    <details className="text-sm">
-                                        <summary className="cursor-pointer text-gray-300">Preview the full description as it goes on YouTube</summary>
-                                        <pre className="mt-2 whitespace-pre-wrap font-sans text-gray-300 bg-[#130b29] border border-white/5 rounded-lg p-3">{youtubeDescription(notes)}</pre>
-                                    </details>
-                                    <div className="flex items-center gap-3">
-                                        <p className={small}>{words(notes.description)} words, plus the site link, chapters, subscribe line and hashtags</p>
-                                        <button onClick={copyDescription} className={secondary}>Copy full description</button>
+                                <div className="flex flex-wrap items-center justify-between gap-2 -mb-1">
+                                    <p className="text-sm text-gray-400">
+                                        {next
+                                            ? <span className="lg:hidden">{doneCount} of {stages.length} stages done</span>
+                                            : <span className="text-emerald-300 font-medium">✓ Every stage is done: the episode is on YouTube and its shorts are scheduled.</span>}
+                                    </p>
+                                    <div className="flex items-center gap-1 text-xs">
+                                        <button onClick={() => setAll(true)} className="px-2 py-1 rounded text-gray-400 hover:text-white hover:bg-white/5">Expand all</button>
+                                        <span aria-hidden className="text-gray-600">·</span>
+                                        <button onClick={() => setAll(false)} className="px-2 py-1 rounded text-gray-400 hover:text-white hover:bg-white/5">Collapse all</button>
                                     </div>
-                                </Section>
+                                </div>
 
-                                <Section title="Summary" hint="For the episode page on the website.">
-                                    <textarea value={notes.summary} onChange={e => edit(n => ({ ...n, summary: e.target.value }))} rows={6} className={field} />
-                                </Section>
+                                <Stage {...stageProps("notes")} intro="Check what Claude drafted against the video, edit anything, then approve at the bottom of the page. Changes save as you type.">
+                                    {drafting && <p className="text-sm font-semibold text-sky-200">Claude is drafting new notes; they will replace these when ready.</p>}
+                                    {status === "failed" && <ErrorNote title="The last redraft failed" message={view.notes?.error} />}
+                                    <nav aria-label="Parts of the show notes"
+                                        className="sticky top-[65px] z-20 -mx-4 sm:-mx-5 -mt-2 px-4 sm:px-5 py-2 bg-[#180d2f]/95 backdrop-blur border-b border-white/5 flex gap-1.5 overflow-x-auto">
+                                        {noteParts.map(([anchor, label, count]) => (
+                                            <a key={anchor} href={`#${anchor}`} onClick={e => { e.preventDefault(); go(anchor); }}
+                                                className="shrink-0 text-xs px-2.5 py-1 rounded-full border border-white/10 text-gray-300 hover:border-amber-400/50 hover:text-amber-200 whitespace-nowrap">
+                                                {label}{count && <span className="text-gray-500"> · {count}</span>}
+                                            </a>
+                                        ))}
+                                    </nav>
+                                    <div className="flex flex-col">
+                                        <Part id="notes-title" title="Title" hint="Pick one; edit any of them. Under 70 characters shows in full on YouTube.">
+                                            {notes.titles.map((t, i) => (
+                                                <div key={i} className="flex items-center gap-2">
+                                                    <input
+                                                        type="radio"
+                                                        name="title"
+                                                        checked={notes.chosenTitle === i}
+                                                        onChange={() => edit(n => ({ ...n, chosenTitle: i }))}
+                                                        aria-label={`Use title ${i + 1}`}
+                                                    />
+                                                    <input
+                                                        value={t}
+                                                        onChange={e => edit(n => ({ ...n, titles: n.titles.map((x, j) => (j === i ? e.target.value : x)) }))}
+                                                        className={field}
+                                                    />
+                                                    <span className={`${small} w-10 text-right ${t.length > 70 ? "text-orange-300" : ""}`}>{t.length}</span>
+                                                </div>
+                                            ))}
+                                            <button onClick={() => edit(n => ({ ...n, titles: [...n.titles, ""] }))} className={`${secondary} self-start`}>+ Add a title</button>
+                                        </Part>
 
-                                <Section title="Chapters" hint="YouTube needs the first at 0:00, at least three, each 10 seconds or longer.">
-                                    {notes.chapters.map((c, i) => (
-                                        <div key={`${i}-${c.startMs}`} className="flex items-center gap-2">
-                                            <button onClick={() => seek(c.startMs)} className="text-gray-400 hover:text-amber-300" title="Play from here">▶</button>
-                                            <TimeInput ms={c.startMs} onChange={ms => edit(n => ({
-                                                ...n,
-                                                chapters: n.chapters.map((x, j) => (j === i ? { ...x, startMs: ms } : x)).sort((a, b) => a.startMs - b.startMs),
-                                            }))} />
-                                            <input
-                                                value={c.title}
-                                                onChange={e => edit(n => ({ ...n, chapters: n.chapters.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)) }))}
-                                                className={field}
-                                            />
-                                            <button onClick={() => edit(n => ({ ...n, chapters: n.chapters.filter((_, j) => j !== i) }))} className="text-gray-500 hover:text-red-300" title="Remove">✕</button>
-                                        </div>
-                                    ))}
-                                    <button
-                                        onClick={() => edit(n => ({ ...n, chapters: [...n.chapters, { startMs: now(), title: "" }].sort((a, b) => a.startMs - b.startMs) }))}
-                                        className={`${secondary} self-start`}
-                                    >
-                                        + Add at video time
-                                    </button>
-                                </Section>
+                                        <Part id="notes-teaser" title="“In this episode” clips"
+                                            hint="Played in order at the start, tagged “In this episode” with the speaker’s name. Leave them wanting more: end on a question or cut before the answer."
+                                            aside={notes.teaserClips.length > 0 && (
+                                                <span className="flex items-center gap-3">
+                                                    <span className={`text-xs ${teaserSeconds < 20 || teaserSeconds > 40 ? "text-orange-300" : "text-gray-400"}`}>{teaserSeconds}s in total; aim for 20–40</span>
+                                                    <button onClick={() => playClips(notes.teaserClips)} className={secondary}>▶ Play the teaser</button>
+                                                </span>
+                                            )}>
+                                            {!notes.teaserClips.length && (
+                                                <p className={small}>No clips yet. Add them from the video below, or draft again with Claude.</p>
+                                            )}
+                                            {notes.teaserClips.map((c, i) => (
+                                                <div key={`${i}-${c.startMs}-${c.endMs}`} className="flex flex-col gap-1.5 border-l-2 border-amber-500/40 pl-3">
+                                                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                                                        <span className="text-gray-500 w-4">{i + 1}</span>
+                                                        <button onClick={() => playClips([c])} className="text-gray-400 hover:text-amber-300" title="Play this clip">▶</button>
+                                                        <TimeInput ms={c.startMs} onChange={ms => editClip(i, { startMs: ms })} />
+                                                        <span className="text-gray-500">to</span>
+                                                        <TimeInput ms={c.endMs} onChange={ms => editClip(i, { endMs: ms })} />
+                                                        <span className="text-gray-300">{c.speaker}</span>
+                                                        <span className="text-gray-500">{((c.endMs - c.startMs) / 1000).toFixed(1)}s</span>
+                                                        <span className="ml-auto flex gap-2">
+                                                            <button onClick={() => moveClip(i, -1)} disabled={i === 0} className="text-gray-400 hover:text-white disabled:opacity-30" title="Earlier">▲</button>
+                                                            <button onClick={() => moveClip(i, 1)} disabled={i === notes.teaserClips.length - 1} className="text-gray-400 hover:text-white disabled:opacity-30" title="Later">▼</button>
+                                                            <button onClick={() => edit(n => ({ ...n, teaserClips: n.teaserClips.filter((_, j) => j !== i) }))} className="text-gray-500 hover:text-red-300">Remove</button>
+                                                        </span>
+                                                    </div>
+                                                    <textarea value={c.text} onChange={e => editClip(i, anchored(e.target.value, c.startMs, true))} rows={2} className={field} />
+                                                    {!findInTranscript(c.text) && (
+                                                        <p className="text-xs text-orange-300">Not found word for word in the transcript, so the times were not updated. Check the words or set the times by hand.</p>
+                                                    )}
+                                                </div>
+                                            ))}
+                                            <button onClick={() => addClip()} disabled={!view.words.length} className={`${secondary} self-start`}>
+                                                + Add the line at video time
+                                            </button>
+                                        </Part>
 
-                                <Section title="Key quotes" hint={`Word for word, up to two minutes each. Raw material for shorts and social posts; delete the ones you don't want.${notes.quotes.length ? ` ${notes.quotes.length} quotes from ${new Set(notes.quotes.map(q => q.speaker)).size} speakers.` : ""}`}>
-                                    {notes.quotes.map((q, i) => (
-                                        <div key={i} className="flex flex-col gap-1.5 border-l-2 border-amber-500/30 pl-3">
-                                            <textarea
-                                                value={q.text}
-                                                onChange={e => editQuote(i, anchored(e.target.value, q.startMs, true))}
-                                                rows={Math.min(8, Math.max(2, Math.ceil(q.text.length / 110)))}
-                                                className={field}
-                                            />
-                                            <div className="flex flex-wrap items-center gap-2 text-xs">
-                                                <button onClick={() => playClips([q])} className="text-gray-400 hover:text-amber-300" title="Play this quote">
-                                                    ▶ {mmss(q.startMs)}{q.endMs > q.startMs ? `–${mmss(q.endMs)}` : ""}
-                                                </button>
-                                                <span className="text-gray-300">{q.speaker}</span>
-                                                {q.endMs > q.startMs && <span className="text-gray-500">{Math.round((q.endMs - q.startMs) / 1000)}s</span>}
-                                                {inTeaser(q) ? (
-                                                    <span className="text-green-300">✓ In the teaser</span>
-                                                ) : (
-                                                    <button onClick={() => addQuoteToTeaser(q)} className="text-amber-300 hover:underline">+ Add to “In this episode”</button>
-                                                )}
-                                                {!findInTranscript(q.text) && (
-                                                    <span className="text-orange-300">Not found word for word in the transcript: check it.</span>
-                                                )}
-                                                <button onClick={() => edit(n => ({ ...n, quotes: n.quotes.filter((_, j) => j !== i) }))} className="ml-auto text-gray-500 hover:text-red-300">Remove</button>
+                                        <Part id="notes-description" title="YouTube description" hint="Hook and keywords in the first two lines: that is all YouTube shows before “more”.">
+                                            <textarea value={notes.description} onChange={e => edit(n => ({ ...n, description: e.target.value }))} rows={8} className={field} />
+                                            <label className="flex flex-col gap-1">
+                                                <span className="text-xs text-gray-400">Hashtags (three; YouTube shows them above the title)</span>
+                                                <input
+                                                    key={loadedAt}
+                                                    defaultValue={notes.hashtags.join(" ")}
+                                                    onChange={e => {
+                                                        const list = e.target.value.split(/[\s,]+/).filter(Boolean).map(h => (h.startsWith("#") ? h : `#${h}`));
+                                                        edit(n => ({ ...n, hashtags: list }));
+                                                    }}
+                                                    className={field}
+                                                />
+                                            </label>
+                                            <details className="text-sm">
+                                                <summary className="cursor-pointer text-gray-300">Preview the full description as it goes on YouTube</summary>
+                                                <pre className="mt-2 whitespace-pre-wrap font-sans text-gray-300 bg-[#130b29] border border-white/5 rounded-lg p-3">{youtubeDescription(notes)}</pre>
+                                            </details>
+                                            <div className="flex items-center gap-3">
+                                                <p className={small}>{words(notes.description)} words, plus the site link, chapters, subscribe line and hashtags</p>
+                                                <button onClick={copyDescription} className={secondary}>Copy full description</button>
                                             </div>
+                                        </Part>
+
+                                        <Part id="notes-summary" title="Summary" hint="For the episode page on the website.">
+                                            <textarea value={notes.summary} onChange={e => edit(n => ({ ...n, summary: e.target.value }))} rows={6} className={field} />
+                                        </Part>
+
+                                        <Part id="notes-chapters" title="Chapters" hint="YouTube needs the first at 0:00, at least three, each 10 seconds or longer.">
+                                            {notes.chapters.map((c, i) => (
+                                                <div key={`${i}-${c.startMs}`} className="flex items-center gap-2">
+                                                    <button onClick={() => seek(c.startMs)} className="text-gray-400 hover:text-amber-300" title="Play from here">▶</button>
+                                                    <TimeInput ms={c.startMs} onChange={ms => edit(n => ({
+                                                        ...n,
+                                                        chapters: n.chapters.map((x, j) => (j === i ? { ...x, startMs: ms } : x)).sort((a, b) => a.startMs - b.startMs),
+                                                    }))} />
+                                                    <input
+                                                        value={c.title}
+                                                        onChange={e => edit(n => ({ ...n, chapters: n.chapters.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)) }))}
+                                                        className={field}
+                                                    />
+                                                    <button onClick={() => edit(n => ({ ...n, chapters: n.chapters.filter((_, j) => j !== i) }))} className="text-gray-500 hover:text-red-300" title="Remove">✕</button>
+                                                </div>
+                                            ))}
+                                            <button
+                                                onClick={() => edit(n => ({ ...n, chapters: [...n.chapters, { startMs: now(), title: "" }].sort((a, b) => a.startMs - b.startMs) }))}
+                                                className={`${secondary} self-start`}
+                                            >
+                                                + Add at video time
+                                            </button>
+                                        </Part>
+
+                                        <Part id="notes-quotes" title="Key quotes"
+                                            hint={`Word for word, up to two minutes each. Raw material for shorts and social posts; delete the ones you don't want.${notes.quotes.length ? ` ${notes.quotes.length} quotes from ${new Set(notes.quotes.map(q => q.speaker)).size} speakers.` : ""}`}>
+                                            {notes.quotes.map((q, i) => (
+                                                <div key={i} className="flex flex-col gap-1.5 border-l-2 border-amber-500/30 pl-3">
+                                                    <textarea
+                                                        value={q.text}
+                                                        onChange={e => editQuote(i, anchored(e.target.value, q.startMs, true))}
+                                                        rows={Math.min(8, Math.max(2, Math.ceil(q.text.length / 110)))}
+                                                        className={field}
+                                                    />
+                                                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                                                        <button onClick={() => playClips([q])} className="text-gray-400 hover:text-amber-300" title="Play this quote">
+                                                            ▶ {mmss(q.startMs)}{q.endMs > q.startMs ? `–${mmss(q.endMs)}` : ""}
+                                                        </button>
+                                                        <span className="text-gray-300">{q.speaker}</span>
+                                                        {q.endMs > q.startMs && <span className="text-gray-500">{Math.round((q.endMs - q.startMs) / 1000)}s</span>}
+                                                        {inTeaser(q) ? (
+                                                            <span className="text-green-300">✓ In the teaser</span>
+                                                        ) : (
+                                                            <button onClick={() => addQuoteToTeaser(q)} className="text-amber-300 hover:underline">+ Add to “In this episode”</button>
+                                                        )}
+                                                        {!findInTranscript(q.text) && (
+                                                            <span className="text-orange-300">Not found word for word in the transcript: check it.</span>
+                                                        )}
+                                                        <button onClick={() => edit(n => ({ ...n, quotes: n.quotes.filter((_, j) => j !== i) }))} className="ml-auto text-gray-500 hover:text-red-300">Remove</button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            <button onClick={() => addQuote()} disabled={!view.words.length} className={`${secondary} self-start`}>
+                                                + Add the line at video time
+                                            </button>
+                                            <p className={small}>Pause the video where the quote starts, add it, then trim the words to the quote.</p>
+                                        </Part>
+
+                                        <Part id="notes-tags" title="Tags, themes and topics" hint="Separate with commas.">
+                                            {(["tags", "themes", "topics"] as const).map(key => (
+                                                <label key={key} className="flex flex-col gap-1">
+                                                    <span className="text-xs text-gray-400 capitalize">{key}</span>
+                                                    {/* Uncontrolled: commas and spaces stay as typed; the list is saved trimmed. */}
+                                                    <textarea
+                                                        key={loadedAt}
+                                                        defaultValue={notes[key].join(", ")}
+                                                        onChange={e => {
+                                                            const list = e.target.value.split(",").map(t => t.trim()).filter(Boolean);
+                                                            edit(n => ({ ...n, [key]: list }));
+                                                        }}
+                                                        rows={2}
+                                                        className={field}
+                                                    />
+                                                </label>
+                                            ))}
+                                        </Part>
+                                    </div>
+                                    <div className="flex flex-col gap-3 border-t border-white/5 pt-4">
+                                        <p className="text-xs text-gray-400 leading-relaxed rounded-lg bg-white/[0.03] border border-white/5 px-3 py-2">
+                                            <span className="font-semibold text-gray-200">Changing the notes after sending to Descript?</span> Say, more &ldquo;In this episode&rdquo; clips:
+                                            edit them here, approve the changes, rebuild the edit package, then send to Descript again.
+                                        </p>
+                                        <div className="flex flex-wrap items-center gap-3">
+                                            <button onClick={() => draft(true)} disabled={busy || drafting} className={secondary}>Draft again with Claude</button>
+                                            <span className={small}>Starts over: Claude&rsquo;s new draft replaces everything in this stage, including your edits.</span>
                                         </div>
-                                    ))}
-                                    <button onClick={() => addQuote()} disabled={!view.words.length} className={`${secondary} self-start`}>
-                                        + Add the line at video time
-                                    </button>
-                                    <p className={small}>Pause the video where the quote starts, add it, then trim the words to the quote.</p>
-                                </Section>
+                                    </div>
+                                </Stage>
 
-                                <Section title="Tags, themes and topics" hint="Separate with commas.">
-                                    {(["tags", "themes", "topics"] as const).map(key => (
-                                        <label key={key} className="flex flex-col gap-1">
-                                            <span className="text-xs text-gray-400 capitalize">{key}</span>
-                                            {/* Uncontrolled: commas and spaces stay as typed; the list is saved trimmed. */}
-                                            <textarea
-                                                key={loadedAt}
-                                                defaultValue={notes[key].join(", ")}
-                                                onChange={e => {
-                                                    const list = e.target.value.split(",").map(t => t.trim()).filter(Boolean);
-                                                    edit(n => ({ ...n, [key]: list }));
-                                                }}
-                                                rows={2}
-                                                className={field}
-                                            />
-                                        </label>
-                                    ))}
-                                </Section>
-
-                                <Section id="broll" title="B-roll" hint="Still images with a slow pan and zoom (spec 005, option A), made by AI from the approved ideas. They go to Descript with the episode.">
+                                <Stage {...stageProps("broll")} intro="Still images with a slow pan and zoom, made by AI from the approved ideas. They go to Descript with the episode, in its media bin.">
                                     {notes.broll.map((b, i) => (
                                         <div key={`${i}-${b.startMs}`} className="flex flex-col gap-1.5 border-l-2 border-sky-500/30 pl-3">
                                             <div className="flex items-center gap-2 text-xs">
@@ -653,30 +771,33 @@ export default function ShowNotesPage() {
                                     {(broll.error || broll.view?.error) && (
                                         <ErrorNote title={broll.error ? undefined : "Some b-roll images failed"} message={broll.error || broll.view?.error} />
                                     )}
-                                </Section>
+                                </Stage>
 
-                                <Section id="package" title="Edit package and Descript" hint="Built from the approved notes. Descript has the final say: the edit happens there.">
+                                <Stage {...stageProps("package")} intro="Everything for the edit, built from the approved notes, then made into a Descript project. Descript has the final say: the edit happens there.">
                                     {!upToDate && (
                                         <NeedsApproval what="build the edit package" approved={!!approved} busy={busy || drafting} onApprove={approve} />
                                     )}
-                                    <EditPackage episodeId={episodeId} enabled={!loading && allowed} upToDate={upToDate} report={report} revision={revision} />
-                                </Section>
+                                    <EditPackage episodeId={episodeId} enabled={on} upToDate={upToDate} report={report} revision={revision} />
+                                </Stage>
 
-                                <Section id="final" title="Final cut" hint="The finished edit, published from Descript, set to broadcast loudness and saved to Drive, with the chapter times moved onto it.">
-                                    <FinalCut episodeId={episodeId} enabled={!loading && allowed} report={report} revision={revision} />
-                                </Section>
+                                <Stage {...stageProps("final")} intro="When the edit in Descript is finished: the finished edit, published from Descript, set to broadcast loudness and saved to Drive, with the chapter times moved onto it.">
+                                    <FinalCut episodeId={episodeId} enabled={on} report={report} revision={revision} />
+                                </Stage>
 
-                                <Section id="thumbnail" title="Thumbnail and approval" hint="Checkpoint D. Thumbnails drive more views than anything else, so a person always picks. Then approve the episode for YouTube.">
-                                    <Thumbnails episodeId={episodeId} enabled={!loading && allowed} report={report} revision={revision} />
-                                </Section>
+                                <Stage {...stageProps("thumbnail")} intro="Thumbnails drive more views than anything else, so a person always picks one. Approving the episode clears it for YouTube.">
+                                    <div className="flex flex-col">
+                                        <Part id="thumbnail-options" title="Thumbnail and approval">
+                                            <Thumbnails episodeId={episodeId} enabled={on} report={report} revision={revision} />
+                                        </Part>
+                                        <Part id="youtube" title="YouTube upload" hint="The approved episode, with the final cut's chapters, the approved thumbnail, captions and the AI disclosure.">
+                                            <Youtube episodeId={episodeId} enabled={on} report={report} revision={revision} />
+                                        </Part>
+                                    </div>
+                                </Stage>
 
-                                <Section id="youtube" title="YouTube" hint="The approved episode, with the final cut's chapters, the approved thumbnail, captions and the AI disclosure.">
-                                    <Youtube episodeId={episodeId} enabled={!loading && allowed} report={report} revision={revision} />
-                                </Section>
-
-                                <Section id="shorts" title="Shorts" hint="Checkpoint E. Vertical shorts from the key quotes, made here from the final cut (no Descript credits), approved one by one and scheduled on YouTube one a day.">
-                                    <Shorts episodeId={episodeId} enabled={!loading && allowed} report={report} revision={revision} />
-                                </Section>
+                                <Stage {...stageProps("shorts")} intro="Vertical shorts from the key quotes, made here from the final cut (no Descript credits), approved one by one and scheduled on YouTube one a day.">
+                                    <Shorts episodeId={episodeId} enabled={on} report={report} revision={revision} />
+                                </Stage>
                             </div>
                         </div>
                     )}
@@ -685,33 +806,40 @@ export default function ShowNotesPage() {
                 {view && notes && (
                     <div className="fixed bottom-0 inset-x-0 z-40 border-t border-white/10 bg-[#130b29]/95 backdrop-blur">
                         <div className="max-w-7xl mx-auto px-4 sm:px-8 py-3 flex flex-wrap items-center gap-x-4 gap-y-2">
-                            <span className={`text-sm ${autosave.saveState === "error" ? "text-red-300" : autosave.saveState === "saved" ? "text-green-300" : "text-gray-400"}`}>
-                                {autosave.saveState === "saved" ? "✓ " : ""}{saveLabel}
-                            </span>
-                            {autosave.saveState === "error" && (
-                                <>
-                                    <span className="text-sm font-bold text-red-300">⚠️ Not saved: {autosave.saveError}</span>
-                                    <button onClick={() => { void flush(); }} className={secondary}>Try again</button>
-                                </>
-                            )}
-                            {notice ? (
-                                <span className={`text-sm ${notice.startsWith("⚠️") ? "text-red-300" : "text-green-300"}`}>{notice}</span>
-                            ) : autosave.saveState !== "error" && (
-                                <span className="text-xs text-gray-500">
-                                    {upToDate
-                                        ? `Approved by ${approved!.by}. These are the show notes the next steps will use.`
-                                        : approved
-                                            ? "Approve the changes to make them the show notes the next steps will use."
-                                            : "Approve when the notes are right; they become the show notes the next steps will use."}
+                            <div className="flex flex-col min-w-[10rem] flex-1">
+                                <span className="text-sm whitespace-nowrap">
+                                    <span className="font-semibold text-gray-200">Show notes</span>{" "}
+                                    <span className={autosave.saveState === "error" ? "text-red-300 font-bold" : autosave.saveState === "saved" ? "text-green-300" : "text-gray-400"}>
+                                        {saveLabel}{autosave.saveState === "error" && `: ${autosave.saveError}`}
+                                    </span>
                                 </span>
-                            )}
-                            <button
-                                onClick={approve}
-                                disabled={busy || drafting || upToDate}
-                                className={`${primary} ml-auto !text-sm !px-4 !py-2`}
-                            >
-                                {busy ? "Working…" : upToDate ? "✓ Approved" : approved ? "Approve changes" : "Approve show notes"}
-                            </button>
+                                {notice ? (
+                                    <span className={`text-sm ${notice.startsWith("⚠️") ? "text-red-300 font-semibold" : "text-green-300"}`}>{notice}</span>
+                                ) : autosave.saveState !== "error" && (
+                                    <span className="hidden sm:block text-xs text-gray-400">
+                                        {upToDate
+                                            ? `Approved by ${approved!.by}. These are the show notes the next steps use.`
+                                            : approved
+                                                ? "You have changes that are not approved yet. Approve them to use them in the next steps."
+                                                : "Approve when the notes are right; they become the show notes the next steps use."}
+                                    </span>
+                                )}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2 ml-auto">
+                                {autosave.saveState === "error" && <button onClick={() => { void flush(); }} className={secondary}>Try again</button>}
+                                {next && next !== "notes" && (
+                                    <button onClick={() => go(nextStage!)} className={upToDate && !steps[next]?.working ? primary : secondary} title="Open and scroll to the next step">
+                                        {steps[next]?.working ? "In progress" : "Next"}: {stepLabel(next)} →
+                                    </button>
+                                )}
+                                {upToDate ? (
+                                    <span className="text-sm text-emerald-300 px-1">✓ Approved</span>
+                                ) : (
+                                    <button onClick={approve} disabled={busy || drafting} className={primary}>
+                                        {busy ? "Working…" : approved ? "Approve changes" : "Approve show notes"}
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     </div>
                 )}

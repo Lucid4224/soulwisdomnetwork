@@ -204,7 +204,7 @@ async function main() {
 
     await sendEmail({ alert }, `Thumbnail options ready: ${episode.title}`, [
         `Three thumbnail options for "${episode.title}" are ready to pick from (Checkpoint D):`,
-        `${SITE_URL}/admin/podcast/${episodeId}/notes`,
+        `${SITE_URL}/admin/podcast/${episodeId}/notes#thumbnail`,
         '',
         'Suggested texts:',
         ...hooks.hooks.map(h => `  ${h.replace(/\*/g, '')}`),
