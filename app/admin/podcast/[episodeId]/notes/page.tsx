@@ -692,7 +692,7 @@ export default function ShowNotesPage() {
                                     </div>
                                 </Stage>
 
-                                <Stage {...stageProps("broll")} intro="Still images with a slow pan and zoom, made by AI from the approved ideas. They go to Descript with the episode, in its media bin.">
+                                <Stage {...stageProps("broll")} intro="Images made by AI from the approved ideas. The edit package turns each into a clip with a slow zoom or pan, and they go to Descript with the episode, in its media bin.">
                                     {notes.broll.map((b, i) => (
                                         <div key={`${i}-${b.startMs}`} className="flex flex-col gap-1.5 border-l-2 border-sky-500/30 pl-3">
                                             <div className="flex items-center gap-2 text-xs">

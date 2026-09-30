@@ -107,6 +107,45 @@ export function assStill(ass: string, matte: string, fontsDir: string, output: s
     ]);
 }
 
+// B-roll with movement (spec 005, option A): a still made into a 1920x1080 clip with a slow
+// zoom or pan, so it can go straight on the timeline. The image is cropped to 16:9 and blown
+// up four times first, because zoompan moves in whole input pixels: at 4x that is a quarter of
+// an output pixel per step, which keeps the motion from juddering. The movement eases in and
+// out. Zooms go between 100% and 125%; pans cross the image at 120-125%, about a fifth of the
+// frame, zooming in a little as they go.
+export type BrollMotion = 'in' | 'out' | 'left' | 'right';
+export const BROLL_MOTIONS: BrollMotion[] = ['in', 'right', 'out', 'left'];
+const ZOOM = 0.25;
+const PAN_ZOOM = 1.2;
+
+export function kenBurns(image: string, output: string, seconds: number, motion: BrollMotion, fps = 30) {
+    const frames = Math.max(2, Math.round(seconds * fps));
+    const e = `(0.5-0.5*cos(PI*on/${frames - 1}))`;     // 0 → 1, eased
+    const pan = `${PAN_ZOOM}+0.05*${e}`;
+    const z = { in: `1+${ZOOM}*${e}`, out: `${1 + ZOOM}-${ZOOM}*${e}`, left: pan, right: pan }[motion];
+    const x = { in: 'iw/2-iw/zoom/2', out: 'iw/2-iw/zoom/2', right: `(iw-iw/zoom)*${e}`, left: `(iw-iw/zoom)*(1-${e})` }[motion];
+    return run('ffmpeg', [
+        '-y', '-hide_banner', '-loglevel', 'error', '-i', image,
+        '-vf', `scale=7680:4320:force_original_aspect_ratio=increase,crop=7680:4320,` +
+            `zoompan=z='${z}':x='${x}':y='ih/2-ih/zoom/2':d=${frames}:s=1920x1080:fps=${fps},format=yuv420p`,
+        '-frames:v', String(frames),
+        '-c:v', 'libx264', '-preset', 'medium', '-crf', '18', '-an',
+        '-movflags', '+faststart',
+        output,
+    ]);
+}
+
+// The still at exactly the video's size (1920x1080), cropped from the middle, so it fills the
+// frame in Descript with no border (the AI images are 3:2).
+export function stillForVideo(image: string, output: string) {
+    return run('ffmpeg', [
+        '-y', '-hide_banner', '-loglevel', 'error', '-i', image,
+        '-vf', 'scale=1920:1080:force_original_aspect_ratio=increase:flags=lanczos,crop=1920:1080',
+        '-frames:v', '1',
+        output,
+    ]);
+}
+
 // One clip from the original at full quality, re-encoded so it starts exactly on time
 // (a stream copy can only cut on keyframes). `fill` crops it like fillFrame; `burn` draws an
 // ASS file over it (the "In this episode" tag).

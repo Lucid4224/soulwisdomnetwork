@@ -109,6 +109,8 @@ export interface EpisodePackage {
     notesVersion?: number;                // the approved notes it was built from
     files?: string[];                     // names, in folder order
     clipPaths?: string[];                 // teaser clips in Cloud Storage, in order
+    brollClipPaths?: (string | null)[];   // each b-roll image as a clip with a slow zoom or pan, by idea (null: no image)
+    brollStillPaths?: (string | null)[];  // the same images cropped to 1920x1080, by idea
     introPath?: string | null;            // the show's intro in Cloud Storage
     bannerPath?: string | null;           // the generic "In this episode" banner (transparent PNG) in Cloud Storage
     episodePath?: string | null;          // the episode filled to 1920x1080, when the original is not 16:9

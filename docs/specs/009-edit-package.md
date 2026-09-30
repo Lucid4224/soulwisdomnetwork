@@ -22,7 +22,8 @@ API (part 2). The folder also works on its own: download it and drag it into Des
 | `00 Intro - Soul Wisdom Collective.mp4` | The show's 3-second intro, from `assets/podcast/intro.mp4` in the repo; it closes the episode too, as the outro |
 | `00 In this episode banner.png` | The generic "In this episode" tag, a transparent 1920x1080 PNG, for clips added by hand in Descript (below) |
 | `01 In this episode - clip N (m.ss-m.ss) <speaker>.mp4` | Each approved teaser clip, cut from the original at full quality, in order, with 0.3 s before and 0.6 s after so no word is clipped, and the "In this episode" tag burned in (below) |
-| `02 B-roll N at m.ss for Ns.png` | Each b-roll image, named with where it goes and for how long |
+| `02 B-roll N at m.ss for Ns - moving.mp4` | Each b-roll image as a 1920x1080 clip of that length with a slow zoom or pan built in (zoom in, pan right, zoom out, pan left, in turn; zooms between 100% and 125%, pans across about a fifth of the frame; eased), ready for the timeline |
+| `02 B-roll N at m.ss for Ns.png` | The still, cropped to 1920x1080 so it fills the frame, for animating by hand |
 | `Notes - <title>.txt` | Chosen title; the clip order with words and files; chapters; b-roll timings, styles and reasons; key quotes |
 
 Times are in the full, unedited episode; they shift once filler words and cuts are made. Spec
@@ -107,7 +108,7 @@ reference at https://docs.descriptapi.com, open beta).
    Media come from Cloud Storage as signed links valid 36 hours: the teaser clips (the package
    job also saves them to `episodes/{id}/package/`), the original recording, and the b-roll
    images, and the intro (the package job also saves it to `episodes/{id}/package/intro.mp4`).
-   Media folders in the project: `In this episode/`, `Intro/`, `Full episode/`, `B-roll/`, `Titles/`
+   Media folders in the project: `In this episode/`, `Intro/`, `Full episode/`, `B-roll/` (the moving clips), `B-roll stills/`, `Titles/`
    (the generic banner).
 2. **Timeline**: one composition, **Episode** (1920x1080): the "In this episode" clips in
    order, then the intro, then the full episode (order decided 24 Sept 2026: the hook first,
