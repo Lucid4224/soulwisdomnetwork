@@ -40,11 +40,13 @@ export default function Navbar() {
         ...(isAdmin ? [{ name: "Admin console", href: "/admin" }] : []),
     ] : [];
 
+    // Videos are public; the rest is for members.
     const navItems = user ? [
         { name: "Feed", href: "/dashboard" },
+        { name: "Videos", href: "/videos" },
         { name: "Members", href: "/members" },
         { name: "Messages", href: "/messages" },
-    ] : [];
+    ] : [{ name: "Videos", href: "/videos" }];
 
     const links = (spacing: string) => navItems.map((item) => {
         const isActive = pathname.startsWith(item.href);
@@ -74,7 +76,7 @@ export default function Navbar() {
                         />
                     </Link>
 
-                    {/* Links for signed-in members; on phones they get a row of their own (below) */}
+                    {/* On phones members' links get a row of their own (below) */}
                     <div className="hidden md:flex gap-1">{links("px-4")}</div>
                 </div>
 
@@ -154,18 +156,21 @@ export default function Navbar() {
                             </button>
                         </>
                     ) : (
+                        <>
+                        <div className="md:hidden">{links("px-3")}</div>
                         <Link
                             href="/login"
                             className="bg-gradient-to-b from-gold-400 to-gold-600 hover:scale-105 active:scale-95 text-ocean-950 font-bold py-2 px-6 rounded-full transition-all text-sm shadow-lg shadow-gold-500/10"
                         >
                             Join / Log In
                         </Link>
+                        </>
                     )}
                 </div>
             </div>
 
             {user && (
-                <div className="md:hidden max-w-6xl mx-auto mt-2 -mb-1 grid grid-cols-3 gap-1">{links("px-2 text-center")}</div>
+                <div className="md:hidden max-w-6xl mx-auto mt-2 -mb-1 grid grid-cols-4 gap-1">{links("px-1 text-center")}</div>
             )}
         </nav>
     );
