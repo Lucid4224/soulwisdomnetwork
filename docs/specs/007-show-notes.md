@@ -70,6 +70,21 @@ the model or effort again.
 4. **Approve** copies the draft to `notes.approved` and records who and when. Later edits
    show "Approve changes" until approved again. **Draft again with Claude** replaces the draft
    (after a confirm), and works on approved notes too.
+5. **Changing approved notes.** "Changed" means the notes differ from the approved ones, not
+   that something was typed: an edit undone by hand needs no approval, and approving notes
+   that say the same as the approved ones changes nothing.
+   - Unapproved changes are listed at the top of Show notes (the title from and to; for the
+     other parts, what was added, removed or edited), with **Approve changes** and **Discard
+     changes**. Discard puts the draft back to the approved notes.
+   - The edit package, Descript project, final cut and episode approval (Checkpoint D) each
+     record which approval they were made from (`notesVersion` = `notes.approvedVersion`). After a
+     newer approval, the first stage made from the older one shows what the newer approval
+     changed, so the producer can decide whether to make it again. **Go back to those notes**
+     makes the older approval current again under its old version, so those steps are up to
+     date with no rebuild; the approval it undoes is kept, so going back can be undone too.
+   - Approvals from before earlier ones were kept have no copy. Then the page says so, and the
+     producer puts the notes back by hand and presses **Use these notes for …**, which approves
+     the notes on the page under the version those steps were made from.
 
 A request that has not produced notes within 20 minutes counts as failed, so a lost run
 never blocks a retry.
@@ -105,6 +120,11 @@ On `episodes/{id}` (`types/episode.ts`, `EpisodeNotes`): `notes.status` (`queued
 `generating`, `ready`, `failed`, `approved`), `generated`, `draft`, `approved`, `version`,
 `model`, `unverifiedQuotes`, `requestedAt`, `startedAt`, `generatedAt`, `error`,
 `approvedBy`, `approvedAt`, `approvedVersion`.
+
+An approval that a newer one replaces is kept in `episodes/{id}/approvals/{approvedVersion}`
+(`NotesApproval`: `notes`, `version`, `by`, `at`, `replacedAt`), Admin SDK only. Routes:
+`POST …/notes/discard` `{ version }` and `POST …/notes/restore` `{ version, to }`
+(`lib/server/notes.ts`: `discardChanges`, `restoreApproval`).
 
 ## Setup
 

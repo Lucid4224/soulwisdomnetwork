@@ -117,7 +117,8 @@ firebase deploy --only firestore:rules,firestore:indexes,storage --project soulw
 ```
 
 Collections: `users`, `posts`, `comments`, `conversations`, `messages`, `feed_items`,
-`channels`, `episodes` (podcast pipeline, Admin SDK only; shape in `types/episode.ts`),
+`channels`, `episodes` (podcast pipeline, Admin SDK only; shape in `types/episode.ts`; earlier
+show-notes approvals in its `approvals` subcollection),
 `studio` (Podcast Studio settings such as the backlog order, Admin SDK only), `usage_reports`
 (what each episode cost and took, posted by the podcast jobs; the admin Usage page `/admin/usage`,
 `docs/specs/014-usage.md`, Admin SDK only).

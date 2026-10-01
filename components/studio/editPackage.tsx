@@ -126,7 +126,10 @@ export function EditPackage({ episodeId, enabled, upToDate, report, revision }: 
                     : !upToDate
                         ? "Approve the show notes first; the package is built from the approved notes."
                         : built
-                            ? `Built ${view.finishedAt ? ago(view.finishedAt) : ""}. ${!view.clipsStored ? "Built before Descript could use it; rebuild once." : stale ? "The notes have been approved again since; rebuild to match." : "Rebuilding replaces the files in place."}`
+                            ? <>
+                                {`Built ${view.finishedAt ? ago(view.finishedAt) : ""}. ${!view.clipsStored ? "Built before Descript could use it; rebuild once." : stale ? "The notes have been approved again since: rebuild to match, or go back to the notes it was built from." : "Rebuilding replaces the files in place."}`}
+                                {view.clipsStored && stale && <> <a href="#changes-since" className="text-amber-300 hover:underline">See what changed</a></>}
+                            </>
                             : "The full episode, each “In this episode” clip (tagged “In this episode” with the speaker’s name), each b-roll image as a clip with a slow zoom or pan (and the still), and a notes file, in one Drive folder for Descript."}
             </p>
             {built && view.files.length > 0 && (

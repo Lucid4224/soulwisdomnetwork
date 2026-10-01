@@ -195,3 +195,45 @@ export function youtubeDescription(notes: ShowNotes) {
         notes.hashtags.join(' '),
     ].filter(Boolean).join('\n\n');
 }
+
+// The notes as saving would store them, so a tidy-up (a trimmed tag, a default filled in) does
+// not count as a change. Notes that would not save stay as they are and so compare as changed.
+function canonical(notes: ShowNotes): string {
+    try {
+        return JSON.stringify(parseShowNotes(structuredClone(notes)));
+    } catch {
+        return JSON.stringify(notes);
+    }
+}
+
+// Whether two versions of the notes say the same thing: an edit typed and then undone is no change.
+export function sameNotes(a: ShowNotes, b: ShowNotes) {
+    return canonical(a) === canonical(b);
+}
+
+// What changed from one version of the notes to another, one entry per part, for the producer to
+// decide whether a later step needs making again.
+export function notesChanges(before: ShowNotes, after: ShowNotes): { part: string; detail: string }[] {
+    const [b, a] = [before, after].map(n => JSON.parse(canonical(n)) as ShowNotes);
+    const changes: { part: string; detail: string }[] = [];
+    const title = (n: ShowNotes) => n.titles[n.chosenTitle] ?? '';
+    if (title(b) !== title(a)) changes.push({ part: 'Title', detail: `“${title(b)}” → “${title(a)}”` });
+    else if (JSON.stringify(b.titles) !== JSON.stringify(a.titles)) changes.push({ part: 'Other title options', detail: 'edited' });
+    const parts: [keyof ShowNotes, string][] = [
+        ['teaserClips', '“In this episode” clips'], ['description', 'Description'], ['hashtags', 'Hashtags'], ['summary', 'Summary'],
+        ['chapters', 'Chapters'], ['quotes', 'Key quotes'], ['broll', 'B-roll ideas'], ['tags', 'Tags'], ['themes', 'Themes'], ['topics', 'Topics'],
+    ];
+    for (const [key, part] of parts) {
+        const [x, y] = [b[key], a[key]];
+        if (JSON.stringify(x) === JSON.stringify(y)) continue;
+        if (!Array.isArray(x) || !Array.isArray(y)) {
+            changes.push({ part, detail: 'edited' });
+        } else if (x.length !== y.length) {
+            changes.push({ part, detail: `${x.length} → ${y.length}` });
+        } else {
+            const edited = x.filter((item, i) => JSON.stringify(item) !== JSON.stringify(y[i])).length;
+            changes.push({ part, detail: `${edited} edited` });
+        }
+    }
+    return changes;
+}
