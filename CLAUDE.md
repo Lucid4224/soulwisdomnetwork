@@ -123,7 +123,7 @@ show-notes approvals in its `approvals` subcollection),
 (what each episode cost and took, posted by the podcast jobs; the admin Usage page `/admin/usage`,
 `docs/specs/014-usage.md`, Admin SDK only).
 
-Two rules are load-bearing and easy to break:
+These rules are load-bearing and easy to break:
 
 - **`posts` update** allows any signed-in user to raise *only* `commentCount` or
   `likesCount`, by exactly one (`increment(1)`). The like and comment buttons write to posts
@@ -133,6 +133,10 @@ Two rules are load-bearing and easy to break:
   or starting a new one fails.
 - **`messages` read** checks conversation membership via a `get()` on the parent
   conversation, not a field on the message.
+- **`users`** profiles are readable by every signed-in member, so they hold **no email**
+  (rules refuse one). The admin console gets emails from Firebase Auth via
+  `GET /api/admin/users` (`lib/server/members.ts`), which also strips the email field from
+  profiles made before this.
 
 `feed_items` and `channels` are written by the scout through the Admin SDK, which bypasses
 rules entirely — so they need no client write access and have none.
