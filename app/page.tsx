@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Compass, Heart, MessagesSquare, Mic, Radio, Users } from 'lucide-react';
+import { Compass, Heart, MessagesSquare, Mic, Users } from 'lucide-react';
 import HomeCta from '@/components/HomeCta';
 
 // The home page: the podcast, the community, the site, and what we hold to.
@@ -105,7 +105,7 @@ export default function Home() {
                 {/* --- The site --- */}
                 <section className="py-14 border-t border-white/5 space-y-8">
                     <h2 className="text-2xl md:text-3xl font-bold text-white">What you’ll find here</h2>
-                    <div className="grid sm:grid-cols-2 gap-4">
+                    <div className="grid sm:grid-cols-3 gap-4">
                         <Feature href="/dashboard" Icon={MessagesSquare} title="The Feed">
                             Posts from members: stories, questions, images, links and videos. Vote for what moves you,
                             and reply in threads.
@@ -115,10 +115,6 @@ export default function Home() {
                         </Feature>
                         <Feature href="/messages" Icon={Heart} title="Messages">
                             Private conversations with other members, for when a reply in public isn’t enough.
-                        </Feature>
-                        <Feature href="/signal" Icon={Radio} title="Signal">
-                            A selection of videos on consciousness and frontier science from across YouTube, picked to
-                            skip the clickbait.
                         </Feature>
                     </div>
                 </section>

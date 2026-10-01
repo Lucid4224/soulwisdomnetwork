@@ -58,14 +58,8 @@ export default function Navbar() {
                         />
                     </Link>
 
-                    {/* Public Links (Always Visible) */}
+                    {/* Links for signed-in members */}
                     <div className="flex gap-1">
-                        <Link href="/signal" className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${pathname.startsWith('/signal') ? "text-gold-400" : "text-ocean-300 hover:text-gold-300"}`}>
-                            Signal
-                        </Link>
-                        {/* DISABLED: Daily link removed - video retrieval feature no longer in use */}
-
-                        {/* Private Links (Logged In Only) */}
                         {user && navItems.map((item) => {
                             const isActive = pathname.startsWith(item.href);
                             return (
