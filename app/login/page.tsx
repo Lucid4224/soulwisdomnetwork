@@ -28,7 +28,6 @@ export default function LoginPage() {
                 await setDoc(userDocRef, {
                     uid: user.uid,
                     displayName: user.displayName,
-                    email: user.email,
                     photoURL: user.photoURL,
                     createdAt: serverTimestamp(),
                     bio: "",
@@ -54,7 +53,6 @@ export default function LoginPage() {
                 await setDoc(doc(db, "users", user.uid), {
                     uid: user.uid,
                     displayName: user.email?.split("@")[0] || "User", // Fallback name
-                    email: user.email,
                     photoURL: null,
                     createdAt: serverTimestamp(),
                     bio: "",

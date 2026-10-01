@@ -186,7 +186,7 @@ export default function PodcastStudioPage() {
                         <div>
                             <h1 className="text-3xl font-bold text-amber-400">Podcast Studio</h1>
                             <p className="text-sm text-gray-400 mt-1">
-                                {data ? `${usd(data.monthCostUsd)} spent this month` : "Loading…"}
+                                {data ? `${usd(data.monthCostUsd)} spent this month · ${usd(data.dayCostUsd)} of the ${usd(data.dailyLimitUsd)} daily limit` : "Loading…"}
                                 {lastRun && (
                                     <>
                                         {" · "}

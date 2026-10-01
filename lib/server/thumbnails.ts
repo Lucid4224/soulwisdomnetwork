@@ -9,6 +9,7 @@ import type { Episode, EpisodeThumbnails } from '@/types/episode';
 import type { ThumbnailsView } from '@/types/studio';
 import { adminBucket, adminDb } from './firebaseAdmin';
 import { startThumbnails } from './github';
+import { ESTIMATE_USD, withinDailyLimit } from './spending';
 import { HttpError } from './staff';
 
 // A request that has not finished by now is treated as lost and can be retried.
@@ -82,7 +83,7 @@ export async function requestThumbnails(id: string, body: { only?: unknown; idea
         });
     });
     try {
-        await startThumbnails(id, onlyImage);
+        await withinDailyLimit('thumbnails', onlyImage ? ESTIMATE_USD.brollImage : ESTIMATE_USD.thumbnails, () => startThumbnails(id, onlyImage));
     } catch (error) {
         const message = `Could not start making thumbnails: ${(error as Error).message}`;
         await ref.update({ 'thumbnails.status': 'failed', 'thumbnails.error': message });

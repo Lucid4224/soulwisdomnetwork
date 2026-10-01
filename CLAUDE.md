@@ -123,7 +123,13 @@ show-notes approvals in its `approvals` subcollection),
 (what each episode cost and took, posted by the podcast jobs; the admin Usage page `/admin/usage`,
 `docs/specs/014-usage.md`, Admin SDK only).
 
-Two rules are load-bearing and easy to break:
+**Daily spending limit:** the Studio's paid runs (show notes, b-roll images, final cut
+transcript, thumbnails, shorts titles) can spend at most $10 in any 24 hours
+(`lib/server/spending.ts`, `DAILY_LIMIT_USD`). It counts the costs the jobs recorded and the
+estimates reserved in `studio/spending` at each start, whichever is higher; a refused run shows
+the reason in its step. Ingest has its own per-episode cap in the agent's config.
+
+These rules are load-bearing and easy to break:
 
 - **`posts` update** allows any signed-in user to raise *only* `commentCount` or
   `likesCount`, by exactly one (`increment(1)`). The like and comment buttons write to posts
@@ -133,6 +139,10 @@ Two rules are load-bearing and easy to break:
   or starting a new one fails.
 - **`messages` read** checks conversation membership via a `get()` on the parent
   conversation, not a field on the message.
+- **`users`** profiles are readable by every signed-in member, so they hold **no email**
+  (rules refuse one). The admin console gets emails from Firebase Auth via
+  `GET /api/admin/users` (`lib/server/members.ts`), which also strips the email field from
+  profiles made before this.
 
 `feed_items` and `channels` are written by the scout through the Admin SDK, which bypasses
 rules entirely — so they need no client write access and have none.

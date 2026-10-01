@@ -6,6 +6,7 @@ import type { Episode, EpisodeBroll } from '@/types/episode';
 import type { BrollView } from '@/types/studio';
 import { adminBucket, adminDb } from './firebaseAdmin';
 import { startBroll } from './github';
+import { ESTIMATE_USD, withinDailyLimit } from './spending';
 import { HttpError } from './staff';
 
 const IMAGE_LINK_MS = 6 * 60 * 60_000;
@@ -30,10 +31,13 @@ function busy(broll: EpisodeBroll | undefined) {
 // Starts the Podcast B-roll workflow for the approved ideas; `index` regenerates one image.
 export async function requestBroll(id: string, index: number | null) {
     const ref = episodeRef(id);
+    let images = 0;   // to make, as agent/src/podcast/broll.ts decides: new ideas, or changed ones
     await adminDb().runTransaction(async tx => {
         const episode = (await tx.get(ref)).data() as Episode | undefined;
         if (!episode) throw new HttpError(404, 'Episode not found');
         const ideas = episode.notes?.status === 'approved' ? episode.notes.approved?.broll ?? [] : [];
+        const made = episode.broll?.images ?? {};
+        images = index !== null ? 1 : ideas.filter((b, i) => made[i]?.idea !== b.idea.trim() || (made[i]?.style ?? 'photo') !== (b.style ?? 'photo')).length;
         if (!ideas.length) throw new HttpError(409, 'Approve the show notes with at least one b-roll idea first');
         if (index !== null && index >= ideas.length) throw new HttpError(400, 'There is no such b-roll idea');
         if (busy(episode.broll)) throw new HttpError(409, 'B-roll images are already being generated');
@@ -43,7 +47,7 @@ export async function requestBroll(id: string, index: number | null) {
         }, { merge: true });
     });
     try {
-        await startBroll(id, index);
+        await withinDailyLimit('b-roll images', images * ESTIMATE_USD.brollImage, () => startBroll(id, index));
     } catch (error) {
         const message = `Could not start generating: ${(error as Error).message}`;
         await ref.update({ 'broll.status': 'failed', 'broll.error': message });

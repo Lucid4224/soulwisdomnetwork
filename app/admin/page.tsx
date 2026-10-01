@@ -3,15 +3,13 @@
 import { useEffect, useState } from "react";
 import AuthGuard from "@/components/auth/AuthGuard";
 import { useAuth } from "@/context/AuthContext";
-import { db } from "@/lib/firebase/config";
-import { collection, getDocs } from "firebase/firestore";
 import Link from "next/link";
-import { UserProfile, UserRole } from "@/types/user";
+import type { Member, UserRole } from "@/types/user";
 import { studioFetch } from "@/lib/studioClient";
 
 export default function AdminPage() {
     const { profile, loading } = useAuth();
-    const [users, setUsers] = useState<UserProfile[]>([]);
+    const [users, setUsers] = useState<Member[]>([]);
     const [isLoadingUsers, setIsLoadingUsers] = useState(true);
 
     useEffect(() => {
@@ -20,14 +18,11 @@ export default function AdminPage() {
         }
     }, [loading, profile]);
 
+    // Through the server: emails are not on the profiles members can read (lib/server/members.ts).
     const fetchUsers = async () => {
         try {
-            const querySnapshot = await getDocs(collection(db, "users"));
-            const fetchedUsers = querySnapshot.docs.map(doc => ({
-                ...doc.data(),
-                uid: doc.id // Ensure ID is captured if not in data
-            })) as UserProfile[];
-            setUsers(fetchedUsers);
+            const { members } = await studioFetch<{ members: Member[] }>("/api/admin/users");
+            setUsers(members);
         } catch (error) {
             console.error("Error fetching users:", error);
         } finally {

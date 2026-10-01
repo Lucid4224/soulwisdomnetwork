@@ -1,4 +1,5 @@
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -8,7 +9,6 @@ import * as dotenv from 'dotenv';
 // Inline type to avoid ts-node ESM resolution issues
 interface UserProfile {
     uid: string;
-    email: string | null;
     displayName: string | null;
     photoURL: string | null;
     role: 'admin' | 'user';
@@ -50,16 +50,16 @@ async function main() {
     console.log(`🔍 Searching for user with email: ${targetEmail}`);
 
     try {
-        const usersRef = db.collection('users');
-        const snapshot = await usersRef.where('email', '==', targetEmail).limit(1).get();
+        // Profiles keep no email (firestore.rules), so find the account in Firebase Auth.
+        const account = await getAuth().getUserByEmail(targetEmail).catch(() => null);
+        const userDoc = account ? await db.collection('users').doc(account.uid).get() : null;
 
-        if (snapshot.empty) {
-            console.error("❌ User not found in Firestore.");
+        if (!userDoc?.exists) {
+            console.error("❌ User not found.");
             console.log("   (Make sure they have logged in at least once)");
             process.exit(1);
         }
 
-        const userDoc = snapshot.docs[0];
         const currentData = userDoc.data() as UserProfile;
 
         console.log(`👤 Found user: ${currentData.displayName || 'No Name'} (UID: ${userDoc.id})`);

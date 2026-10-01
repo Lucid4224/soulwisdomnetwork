@@ -23,15 +23,19 @@ service cloud.firestore {
     // Profiles: any signed-in user can read; only you can write yours. `role` gates the
     // admin area, so a new profile must start as 'user' and nobody can change their own.
     // Roles are changed only through the Admin SDK or the Firebase console. The `uid` field
-    // must be your own, because profile pages look people up by it.
+    // must be your own, because profile pages look people up by it. No email: every member
+    // can read profiles, so admins get emails from Firebase Auth (lib/server/members.ts).
+    // An old profile may still have one until an admin opens /admin; it can only be removed.
     match /users/{userId} {
       allow read:   if signedIn();
       allow create: if signedIn() && request.auth.uid == userId
                     && request.resource.data.get('role', 'user') == 'user'
-                    && request.resource.data.get('uid', userId) == userId;
+                    && request.resource.data.get('uid', userId) == userId
+                    && !('email' in request.resource.data);
       allow update: if signedIn() && request.auth.uid == userId
                     && unchanged('role')
-                    && request.resource.data.get('uid', userId) == userId;
+                    && request.resource.data.get('uid', userId) == userId
+                    && (!('email' in request.resource.data) || unchanged('email'));
       allow delete: if false;
     }
 

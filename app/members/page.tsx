@@ -10,7 +10,6 @@ import { useAuth } from "@/context/AuthContext";
 interface Member {
     uid: string;
     displayName: string;
-    email: string;
     photoURL: string | null;
     bio: string;
 }
@@ -90,9 +89,6 @@ export default function MembersPage() {
                                     <h3 className="font-bold text-xl text-ocean-900 dark:text-ocean-100 mb-1 group-hover:text-gold-600 transition-colors">
                                         {member.displayName}
                                     </h3>
-                                    <p className="text-sm text-ocean-500 dark:text-ocean-400 mb-4 line-clamp-1">
-                                        @{member.email.split('@')[0]}
-                                    </p>
 
                                     {member.bio && (
                                         <p className="text-sm text-ocean-600 dark:text-ocean-300 mb-6 line-clamp-2 italic">

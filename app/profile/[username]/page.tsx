@@ -10,7 +10,6 @@ import AuthGuard from "@/components/auth/AuthGuard";
 interface UserProfile {
     uid: string;
     displayName: string;
-    email: string;
     photoURL: string | null;
     bio: string;
     username?: string;
@@ -56,8 +55,7 @@ export default function ProfilePage() {
 
                     return () => unsubscribePosts();
                 } else {
-                    // If not found by UID, maybe search by email prefix as 'username'
-                    // For now, just show error
+                    // Not found: show the error below.
                     setLoading(false);
                 }
             } catch (error) {
@@ -113,7 +111,6 @@ export default function ProfilePage() {
 
                             <div className="space-y-1">
                                 <h2 className="text-2xl font-bold text-ocean-900 dark:text-ocean-100">{profile.displayName}</h2>
-                                <p className="text-ocean-500 dark:text-ocean-400">@{profile.email.split('@')[0]}</p>
                             </div>
 
                             {profile.bio && (
