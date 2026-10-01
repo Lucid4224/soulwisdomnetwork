@@ -10,9 +10,10 @@ interface AuthContextType {
     user: User | null;
     profile: UserProfile | null;
     loading: boolean;
+    refreshProfile: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType>({ user: null, profile: null, loading: true });
+const AuthContext = createContext<AuthContextType>({ user: null, profile: null, loading: true, refreshProfile: async () => {} });
 
 export const useAuth = () => useContext(AuthContext);
 
@@ -51,8 +52,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return () => unsubscribe();
     }, []);
 
+    // After the member edits their profile (app/profile/edit).
+    const refreshProfile = async () => {
+        if (!auth.currentUser) return;
+        const snap = await getDoc(doc(db, "users", auth.currentUser.uid));
+        setProfile(snap.exists() ? (snap.data() as UserProfile) : null);
+    };
+
     return (
-        <AuthContext.Provider value={{ user, profile, loading }}>
+        <AuthContext.Provider value={{ user, profile, loading, refreshProfile }}>
             {!loading && children}
         </AuthContext.Provider>
     );

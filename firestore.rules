@@ -15,56 +15,39 @@ service cloud.firestore {
       return request.resource.data.get(key, null) == resource.data.get(key, null);
     }
 
-    // A counter may only go up by one per write (the like and comment buttons use increment(1)).
-    function bumpedByOne(key) {
-      return onlyChanges([key]) && request.resource.data.get(key, 0) == resource.data.get(key, 0) + 1;
-    }
-
     // Profiles: any signed-in user can read; only you can write yours. `role` gates the
     // admin area, so a new profile must start as 'user' and nobody can change their own.
     // Roles are changed only through the Admin SDK or the Firebase console. The `uid` field
     // must be your own, because profile pages look people up by it. No email: every member
     // can read profiles, so admins get emails from Firebase Auth (lib/server/members.ts).
     // An old profile may still have one until an admin opens /admin; it can only be removed.
+    // After sign-up a member may change only their name and bio, and remove their photo
+    // (app/profile/edit): a ban (`banned`, set by an admin through the server) stays put.
     match /users/{userId} {
       allow read:   if signedIn();
       allow create: if signedIn() && request.auth.uid == userId
                     && request.resource.data.get('role', 'user') == 'user'
                     && request.resource.data.get('uid', userId) == userId
-                    && !('email' in request.resource.data);
+                    && !('email' in request.resource.data)
+                    && !('banned' in request.resource.data);
       allow update: if signedIn() && request.auth.uid == userId
-                    && unchanged('role')
-                    && request.resource.data.get('uid', userId) == userId
-                    && (!('email' in request.resource.data) || unchanged('email'));
+                    && onlyChanges(['displayName', 'bio', 'photoURL', 'email'])
+                    && (!('email' in request.resource.data) || unchanged('email'))
+                    && (unchanged('photoURL') || request.resource.data.photoURL == null)
+                    && (unchanged('displayName') || (request.resource.data.displayName is string
+                        && request.resource.data.displayName.size() >= 2 && request.resource.data.displayName.size() <= 40))
+                    && (unchanged('bio') || (request.resource.data.bio is string && request.resource.data.bio.size() <= 500));
       allow delete: if false;
     }
 
-    // Posts: public to read. Author creates and edits their own, starting at zero likes and
-    // comments, stamped with the server's time. Any signed-in user may bump ONLY a counter,
-    // by one, because the like and comment buttons do. Nobody can hand a post to someone else.
-    match /posts/{postId} {
-      allow read:   if true;
-      allow create: if signedIn() && request.resource.data.authorId == request.auth.uid
-                    && request.resource.data.createdAt == request.time
-                    && request.resource.data.get('likesCount', 0) == 0
-                    && request.resource.data.get('commentCount', 0) == 0;
-      allow update: if signedIn() && (
-                      (resource.data.authorId == request.auth.uid
-                        && unchanged('authorId') && unchanged('createdAt')
-                        && unchanged('likesCount') && unchanged('commentCount'))
-                      || bumpedByOne('likesCount')
-                      || bumpedByOne('commentCount')
-                    );
-      allow delete: if signedIn() && resource.data.authorId == request.auth.uid;
+    // The community feed (docs/specs/016-community-feed.md): posts, comments and their votes
+    // are read and written only by the server routes in app/api/community, which check
+    // sign-in, email confirmation, bans, App Check and rate limits. Nothing from the browser.
+    match /posts/{postId}/{document=**} {
+      allow read, write: if false;
     }
-
-    match /comments/{commentId} {
-      allow read:   if true;
-      allow create: if signedIn() && request.resource.data.authorId == request.auth.uid
-                    && request.resource.data.createdAt == request.time;
-      allow update: if signedIn() && resource.data.authorId == request.auth.uid
-                    && unchanged('authorId') && unchanged('postId') && unchanged('createdAt');
-      allow delete: if signedIn() && resource.data.authorId == request.auth.uid;
+    match /comments/{commentId}/{document=**} {
+      allow read, write: if false;
     }
 
     // Direct messages: participants only. A conversation is between exactly two people and
@@ -87,8 +70,10 @@ service cloud.firestore {
     match /messages/{messageId} {
       allow read: if signedIn() && request.auth.uid in
         get(/databases/$(database)/documents/conversations/$(resource.data.conversationId)).data.participants;
+      // A banned member's account is disabled, but a sign-in token lasts up to an hour.
       allow create: if signedIn() && request.resource.data.senderId == request.auth.uid
                     && request.resource.data.createdAt == request.time
+                    && !get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('banned', false)
                     && request.auth.uid in
                       get(/databases/$(database)/documents/conversations/$(request.resource.data.conversationId)).data.participants;
       allow update, delete: if false;
@@ -114,6 +99,11 @@ service cloud.firestore {
     // Usage reports (docs/specs/014-usage.md), written by the podcast jobs and read by the
     // Usage page through the server. Unmatched paths are denied anyway; this says so.
     match /usage_reports/{reportId} {
+      allow read, write: if false;
+    }
+
+    // Each member's recent posts and comments, for the hourly limits (lib/server/community.ts).
+    match /community_limits/{userId} {
       allow read, write: if false;
     }
   }

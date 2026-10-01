@@ -3,6 +3,7 @@
 // a client component: it bypasses Firestore rules.
 
 import { getApps, initializeApp, type App } from 'firebase-admin/app';
+import { getAppCheck } from 'firebase-admin/app-check';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
@@ -14,6 +15,7 @@ function app(): App {
     return getApps()[0] ?? initializeApp({ projectId: PROJECT_ID, storageBucket: BUCKET });
 }
 
+export const adminAppCheck = () => getAppCheck(app());
 export const adminAuth = () => getAuth(app());
 export const adminDb = () => getFirestore(app());
 export const adminBucket = () => getStorage(app()).bucket();

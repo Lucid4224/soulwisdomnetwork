@@ -1,83 +1,102 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import AuthGuard from "@/components/auth/AuthGuard";
+import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { Flame, Image as ImageIcon, Link as LinkIcon, Sparkles, Trophy } from "lucide-react";
+import CommunitySidebar from "@/components/feed/CommunitySidebar";
+import MemberGate from "@/components/feed/MemberGate";
+import PostCard from "@/components/feed/PostCard";
 import { useAuth } from "@/context/AuthContext";
-import { auth, db } from "@/lib/firebase/config";
-import { signOut } from "firebase/auth";
-import PostComposer from "@/components/feed/PostComposer";
-import PostCard, { Post } from "@/components/feed/PostCard";
-import { collection, query, orderBy, onSnapshot } from "firebase/firestore";
+import { studioFetch } from "@/lib/studioClient";
+import type { CommunityPost, FeedSort } from "@/types/community";
 
-export default function DashboardPage() {
-    const { user } = useAuth();
-    const [posts, setPosts] = useState<Post[]>([]);
-    const [loadingPosts, setLoadingPosts] = useState(true);
+// The community feed, Reddit-style: one community, Hot / New / Top (docs/specs/016-community-feed.md).
+export default function FeedPage() {
+    return <MemberGate><Feed /></MemberGate>;
+}
 
-    useEffect(() => {
-        // Real-time subscription to posts
-        const q = query(collection(db, "posts"), orderBy("createdAt", "desc"));
+const SORTS: { id: FeedSort; label: string; Icon: typeof Flame }[] = [
+    { id: "hot", label: "Hot", Icon: Flame },
+    { id: "new", label: "New", Icon: Sparkles },
+    { id: "top", label: "Top", Icon: Trophy },
+];
 
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const postsData = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            })) as Post[];
+function Feed() {
+    const { profile } = useAuth();
+    const [sort, setSort] = useState<FeedSort>("hot");
+    const [posts, setPosts] = useState<CommunityPost[]>([]);
+    const [next, setNext] = useState<string | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState("");
 
-            setPosts(postsData);
-            setLoadingPosts(false);
-        }, (error) => {
-            console.error("Error fetching posts:", error);
-            setLoadingPosts(false);
-        });
+    const load = useCallback(async (after: string | null) => {
+        setLoading(true);
+        setError("");
+        try {
+            const page = await studioFetch<{ posts: CommunityPost[]; next: string | null }>(
+                `/api/community/posts?sort=${sort}${after ? `&after=${after}` : ""}`);
+            setPosts(prev => (after ? [...prev, ...page.posts] : page.posts));
+            setNext(page.next);
+        } catch (e) {
+            setError((e as Error).message);
+        } finally {
+            setLoading(false);
+        }
+    }, [sort]);
 
-        return () => unsubscribe();
-    }, []);
+    useEffect(() => { void load(null); }, [load]);
 
+    const initial = (profile?.displayName || "M")[0].toUpperCase();
     return (
-        <AuthGuard>
-            <div className="min-h-screen bg-sand-50 dark:bg-ocean-950">
-                <main className="max-w-2xl mx-auto p-4 py-8">
-                    <PostComposer />
+        <div className="min-h-screen bg-sand-50 dark:bg-ocean-950">
+            <div className="max-w-5xl mx-auto px-4 py-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
+                <main className="space-y-3 min-w-0">
+                    <div className="flex items-center gap-2 bg-white dark:bg-ocean-900 rounded-lg border border-sand-200 dark:border-ocean-800 p-2">
+                        {profile?.photoURL
+                            ? <img src={profile.photoURL} alt="" className="w-9 h-9 rounded-full object-cover" referrerPolicy="no-referrer" />
+                            : <span className="w-9 h-9 rounded-full bg-gold-500/15 text-gold-600 dark:text-gold-400 font-bold flex items-center justify-center">{initial}</span>}
+                        <Link href="/dashboard/submit" className="flex-1 min-w-0 px-3 py-2 rounded-md bg-sand-50 dark:bg-ocean-950 border border-sand-200 dark:border-ocean-800 text-sm text-ocean-400 hover:border-gold-500">
+                            Create post
+                        </Link>
+                        <Link href="/dashboard/submit?kind=image" aria-label="Post an image" className="p-2 rounded-md text-ocean-400 hover:bg-sand-100 dark:hover:bg-ocean-800"><ImageIcon className="w-5 h-5" /></Link>
+                        <Link href="/dashboard/submit?kind=link" aria-label="Post a link" className="p-2 rounded-md text-ocean-400 hover:bg-sand-100 dark:hover:bg-ocean-800"><LinkIcon className="w-5 h-5" /></Link>
+                    </div>
 
-                    {loadingPosts ? (
-                        <div className="space-y-4">
-                            {[1, 2, 3].map((i) => (
-                                <div
-                                    key={i}
-                                    className="bg-white dark:bg-ocean-900 rounded-xl shadow-sm border border-sand-200 dark:border-ocean-800 p-6 animate-pulse"
-                                >
-                                    <div className="flex items-center gap-3 mb-4">
-                                        <div className="w-12 h-12 bg-ocean-100 dark:bg-ocean-800 rounded-full"></div>
-                                        <div className="space-y-2">
-                                            <div className="w-32 h-4 bg-ocean-100 dark:bg-ocean-800 rounded"></div>
-                                            <div className="w-20 h-3 bg-ocean-100 dark:bg-ocean-800 rounded"></div>
-                                        </div>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <div className="w-full h-4 bg-ocean-100 dark:bg-ocean-800 rounded"></div>
-                                        <div className="w-3/4 h-4 bg-ocean-100 dark:bg-ocean-800 rounded"></div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="space-y-4">
-                            {posts.map((post) => (
-                                <PostCard key={post.id} post={post} />
-                            ))}
+                    <div className="flex gap-1 bg-white dark:bg-ocean-900 rounded-lg border border-sand-200 dark:border-ocean-800 p-1.5">
+                        {SORTS.map(({ id, label, Icon }) => (
+                            <button key={id} type="button" onClick={() => setSort(id)} aria-pressed={sort === id}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold ${sort === id
+                                    ? "bg-sand-100 dark:bg-ocean-800 text-ocean-900 dark:text-ocean-50"
+                                    : "text-ocean-500 hover:bg-sand-50 dark:hover:bg-ocean-800/50"}`}>
+                                <Icon className="w-4 h-4" /> {label}
+                            </button>
+                        ))}
+                    </div>
 
-                            {posts.length === 0 && (
-                                <div className="text-center py-20 bg-white dark:bg-ocean-900 rounded-xl border border-dashed border-sand-300 dark:border-ocean-800">
-                                    <p className="text-ocean-500 dark:text-ocean-400">
-                                        No posts yet. Be the first to share something!
-                                    </p>
-                                </div>
-                            )}
+                    {error && <p className="p-3 rounded-lg bg-red-50 dark:bg-red-950/30 text-sm text-red-700 dark:text-red-300">{error}</p>}
+
+                    {posts.map(post => (
+                        <PostCard key={post.id} post={post} onDeleted={() => setPosts(prev => prev.filter(p => p.id !== post.id))} />
+                    ))}
+
+                    {loading && [1, 2, 3].map(i => (
+                        <div key={i} className="h-28 bg-white dark:bg-ocean-900 rounded-lg border border-sand-200 dark:border-ocean-800 animate-pulse" />
+                    ))}
+
+                    {!loading && !error && posts.length === 0 && (
+                        <div className="text-center py-16 bg-white dark:bg-ocean-900 rounded-lg border border-dashed border-ocean-200 dark:border-ocean-800">
+                            <p className="text-ocean-500 dark:text-ocean-400">No posts yet. Be the first to share something.</p>
                         </div>
                     )}
+
+                    {!loading && next && (
+                        <button type="button" onClick={() => load(next)} className="w-full py-2.5 rounded-full border border-ocean-200 dark:border-ocean-700 text-sm font-bold text-ocean-700 dark:text-ocean-200 hover:bg-white dark:hover:bg-ocean-900">
+                            Load more
+                        </button>
+                    )}
                 </main>
+                <div className="hidden lg:block"><CommunitySidebar /></div>
             </div>
-        </AuthGuard>
+        </div>
     );
 }

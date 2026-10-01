@@ -44,6 +44,20 @@ export default function AdminPage() {
         }
     };
 
+    // A ban disables the member's sign-in; unbanning restores it (app/api/admin/users/ban).
+    const setBanned = async (member: Member, banned: boolean) => {
+        const name = member.displayName || 'this member';
+        if (!confirm(banned
+            ? `Ban ${name}? They are signed out and cannot sign in, post or message until unbanned. Their posts stay until deleted.`
+            : `Unban ${name}? They can sign in again.`)) return;
+        try {
+            await studioFetch("/api/admin/users/ban", { method: "POST", body: JSON.stringify({ uid: member.uid, banned }) });
+            setUsers(prev => prev.map(u => (u.uid === member.uid ? { ...u, banned } : u)));
+        } catch (error) {
+            alert((error as Error).message);
+        }
+    };
+
     if (loading) return <div className="p-8 text-center text-white">Loading...</div>;
 
     if (profile?.role !== 'admin') {
@@ -87,7 +101,10 @@ export default function AdminPage() {
                                 <tbody className="divide-y divide-white/5">
                                     {users.map((user) => (
                                         <tr key={user.uid} className="hover:bg-white/5 transition-colors">
-                                            <td className="p-4 font-medium text-white">{user.displayName || 'Anonymous'}</td>
+                                            <td className="p-4 font-medium text-white">
+                                                {user.displayName || 'Anonymous'}
+                                                {user.banned && <span className="ml-2 px-2 py-0.5 rounded-full text-xs font-bold bg-red-500/20 text-red-300">Banned</span>}
+                                            </td>
                                             <td className="p-4 text-gray-400">{user.email}</td>
                                             <td className="p-4">
                                                 <span className={`px-2 py-1 rounded-full text-xs font-bold ${user.role === 'admin'
@@ -100,7 +117,18 @@ export default function AdminPage() {
                                                 </span>
                                             </td>
                                             <td className="p-4 text-right">
-                                                {user.uid !== profile.uid && ( // Prevent self-demotion
+                                                {user.uid !== profile.uid && user.role === 'user' && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setBanned(user, !user.banned)}
+                                                        className={`mr-2 text-xs px-2 py-1.5 rounded-lg border transition-colors ${user.banned
+                                                            ? 'border-white/10 hover:bg-white/10'
+                                                            : 'border-red-500/40 text-red-300 hover:bg-red-500/10'}`}
+                                                    >
+                                                        {user.banned ? 'Unban' : 'Ban'}
+                                                    </button>
+                                                )}
+                                                {user.uid !== profile.uid && !user.banned && ( // Prevent self-demotion
                                                     <select
                                                         value={user.role}
                                                         onChange={e => changeRole(user.uid, e.target.value as UserRole)}
