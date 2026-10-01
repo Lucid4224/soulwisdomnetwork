@@ -45,5 +45,4 @@ it here when it ships.
 
 ## Not code
 
-- A **music licence** for the intro and outro.
 - **Daniel** to review the privacy policy and terms.
