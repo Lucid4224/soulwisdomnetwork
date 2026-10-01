@@ -33,7 +33,7 @@ agent/src/    scout.ts — YouTube scorer, runs in GitHub Actions, NOT on App Ho
               podcast/shorts.ts — spec 005 step 14 (Shorts from picked key quotes: titles, draw with ffmpeg + podcast/shortsRender.ts,
               schedule on YouTube), GitHub Actions only; fonts for the burned-in text in agent/assets/fonts
 scripts/      make_admin.ts
-docs/specs/   numbered specs, 001-014
+docs/specs/   numbered specs, 001-014; docs/BACKLOG.md lists features agreed for later
 types/
 ```
 
