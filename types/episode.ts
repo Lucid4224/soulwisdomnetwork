@@ -2,6 +2,7 @@ import type { BrollStyle } from '../lib/broll';
 import type { ShortAspect, ShortEdit, ShortRenderInputs } from '../lib/shorts';
 import type { ShowNotes } from '../lib/showNotes';
 import type { ThumbKind } from '../lib/thumbnail';
+import type { EpisodeEdit } from '../lib/edit';
 
 // Firestore `episodes/{driveFileId}` — written by agent/src/podcast/ingest.ts via the
 // Admin SDK. See docs/specs/005-podcast-production-pipeline.md, steps 1-3.
@@ -67,6 +68,8 @@ export interface EpisodeNotes {
     approvedBy?: { uid: string; name: string };
     approvedAt?: unknown;
     approvedVersion?: number;             // the draft version approved; later steps record which one they used
+    // Editor Light (spec 015): the transcript edit, behind NEXT_PUBLIC_EDITOR_LIGHT.
+    edit?: EpisodeEdit & { updatedAt?: unknown; updatedBy?: string };
 }
 
 // An approval that a later one replaced, kept in `episodes/{id}/approvals/{approvedVersion}` so the

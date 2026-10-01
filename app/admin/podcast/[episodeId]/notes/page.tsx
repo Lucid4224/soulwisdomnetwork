@@ -892,6 +892,11 @@ export default function ShowNotesPage() {
                                         <NeedsApproval what="build the edit package" approved={!!approved} busy={busy || drafting} onApprove={approve} onDiscard={discard} />
                                     )}
                                     <EditPackage episodeId={episodeId} enabled={on} upToDate={upToDate} report={report} revision={revision} />
+                                    {process.env.NEXT_PUBLIC_EDITOR_LIGHT === '1' && (
+                                        <Part title="Edit here instead (preview)">
+                                            <p className={small}>The transcript editor (Editor Light) is a preview. It is not connected to the render yet.</p>
+                                        </Part>
+                                    )}
                                 </Stage>
 
                                 <Stage {...stageProps("final")} intro="When the edit in Descript is finished: the finished edit, published from Descript, set to broadcast loudness and saved to Drive, with the chapter times moved onto it.">
