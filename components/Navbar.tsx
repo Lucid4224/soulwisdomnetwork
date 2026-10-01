@@ -35,6 +35,7 @@ export default function Navbar() {
     const isStudio = isAdmin || profile?.role === "producer";
     const menuItems = user ? [
         { name: "My profile", href: `/profile/${user.uid}` },
+        { name: "Edit profile", href: "/profile/edit" },
         ...(isStudio ? [{ name: "Podcast Studio", href: "/admin/podcast" }] : []),
         ...(isAdmin ? [{ name: "Admin console", href: "/admin" }] : []),
     ] : [];
@@ -99,15 +100,16 @@ export default function Navbar() {
                                     aria-expanded={menuOpen}
                                     className="flex items-center gap-2 px-2 py-1 rounded-full hover:bg-ocean-900/50 transition-all border border-transparent hover:border-ocean-800"
                                 >
-                                    {user.photoURL ? (
-                                        <img src={user.photoURL} alt="Profile" className="w-8 h-8 rounded-full border border-ocean-700" />
+                                    {/* The profile's name and photo, which the member chooses (app/profile/edit). */}
+                                    {profile?.photoURL ? (
+                                        <img src={profile.photoURL} alt="Profile" referrerPolicy="no-referrer" className="w-8 h-8 rounded-full border border-ocean-700" />
                                     ) : (
                                         <div className="w-8 h-8 rounded-full bg-gold-500/10 flex items-center justify-center text-gold-400 font-bold text-xs">
-                                            {(user.displayName?.[0] || user.email?.[0] || "U").toUpperCase()}
+                                            {(profile?.displayName?.[0] || "M").toUpperCase()}
                                         </div>
                                     )}
                                     <span className="hidden md:inline text-sm font-bold text-ocean-100">
-                                        {user.displayName || "Member"}
+                                        {profile?.displayName || "Member"}
                                     </span>
                                     <svg className={`w-3 h-3 text-ocean-400 transition-transform ${menuOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />

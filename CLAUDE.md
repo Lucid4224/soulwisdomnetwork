@@ -12,7 +12,7 @@ Next.js 16 (App Router) · React 19 · Tailwind v4 · TypeScript · Firebase (Fi
 App Hosting) · Node 24
 
 ```
-app/          routes (dashboard, members, messages, profile, signal, admin, login)
+app/          routes (dashboard = the community feed, members, messages, profile, signal, admin, login)
 components/   auth/ curate/ daily/ feed/
 lib/firebase/ config.ts (client init), firestore.ts, messaging.ts
 lib/server/   Admin SDK, Drive and GitHub helpers for API routes; requireRole() in staff.ts
@@ -33,7 +33,7 @@ agent/src/    scout.ts — YouTube scorer, runs in GitHub Actions, NOT on App Ho
               podcast/shorts.ts — spec 005 step 14 (Shorts from picked key quotes: titles, draw with ffmpeg + podcast/shortsRender.ts,
               schedule on YouTube), GitHub Actions only; fonts for the burned-in text in agent/assets/fonts
 scripts/      make_admin.ts
-docs/specs/   numbered specs, 001-014; docs/BACKLOG.md lists features agreed for later
+docs/specs/   numbered specs, 001-016; docs/BACKLOG.md lists features agreed for later
 types/
 ```
 
@@ -116,7 +116,9 @@ touches Storage) are the source of truth. Nothing deploys them automatically:
 firebase deploy --only firestore:rules,firestore:indexes,storage --project soulwisdomnetwork
 ```
 
-Collections: `users`, `posts`, `comments`, `conversations`, `messages`, `feed_items`,
+Collections: `users`, `posts` and `comments` (the community feed, `docs/specs/016-community-feed.md`;
+each has a `votes` subcollection; server only), `community_limits` (hourly post and comment
+limits, server only), `conversations`, `messages`, `feed_items`,
 `channels`, `episodes` (podcast pipeline, Admin SDK only; shape in `types/episode.ts`; earlier
 show-notes approvals in its `approvals` subcollection),
 `studio` (Podcast Studio settings such as the backlog order, Admin SDK only), `usage_reports`
@@ -131,9 +133,10 @@ the reason in its step. Ingest has its own per-episode cap in the agent's config
 
 These rules are load-bearing and easy to break:
 
-- **`posts` update** allows any signed-in user to raise *only* `commentCount` or
-  `likesCount`, by exactly one (`increment(1)`). The like and comment buttons write to posts
-  they do not own. Tightening this to author-only breaks both buttons.
+- **`posts` and `comments`** (and their `votes`) are closed to the browser. The feed reads and
+  writes them only through `app/api/community` (`lib/server/community.ts`), which checks
+  sign-in, email confirmation, bans, App Check and rate limits in one place. Opening them in
+  the rules would bypass all of that.
 - **`conversations`** are for exactly two people, with the ID `<uid>_<uid>` sorted
   (`lib/firebase/messaging.ts`); a conversation that does not exist yet must stay readable,
   or starting a new one fails.
@@ -142,7 +145,9 @@ These rules are load-bearing and easy to break:
 - **`users`** profiles are readable by every signed-in member, so they hold **no email**
   (rules refuse one). The admin console gets emails from Firebase Auth via
   `GET /api/admin/users` (`lib/server/members.ts`), which also strips the email field from
-  profiles made before this.
+  profiles made before this. Members may change only `displayName`, `bio` and remove
+  `photoURL`, so they cannot lift their own `banned` flag.
+- **`messages` create** reads the sender's profile and refuses a banned member.
 
 `feed_items` and `channels` are written by the scout through the Admin SDK, which bypasses
 rules entirely — so they need no client write access and have none.
@@ -158,8 +163,10 @@ Adding a query with `where` + `orderBy` on different fields needs a composite in
 (`firestore.rules`); admins change roles from `/admin`, which calls a server route. The
 browser's role check only decides what to show. **Every API route must call
 `requireRole()`** (`lib/server/staff.ts`), which verifies the ID token and reads the role
-with the Admin SDK. Producers get the Podcast Studio (`/admin/podcast`); only admins manage
-members.
+with the Admin SDK, and refuses banned members. Producers get the Podcast Studio
+(`/admin/podcast`); only admins manage members and ban them (`/api/admin/users/ban`, which also
+disables their Firebase Auth account). Community routes use `requireMember()`
+(`lib/server/community.ts`): `requireRole` with every role, plus a confirmed email and App Check.
 
 Speaker review (`/admin/podcast/[episodeId]`) never edits `raw.json`: fixes are saved on the
 episode as `corrections` (`types/episode.ts`), and `lib/transcript.ts` rebuilds the lines
@@ -176,6 +183,11 @@ Content manager on the pipeline shared drive. `GITHUB_ACTIONS_TOKEN` (Secret Man
 Google and Email/Password. Any new domain the app is served from must be added to
 **Authentication → Settings → Authorized domains**, or sign-in fails there with
 `auth/unauthorized-domain` while the rest of the site works normally.
+
+**Bot protection:** the community needs a confirmed email (Google accounts always have one),
+and limits posts and comments per hour. Firebase App Check with reCAPTCHA Enterprise turns on
+when `NEXT_PUBLIC_RECAPTCHA_SITE_KEY` is set in `apphosting.yaml`. Register the key in App Check
+first, or posting fails (`docs/specs/016-community-feed.md`).
 
 The browser API key is not a secret — it ships in every client bundle. The **service
 account JSON** is, and bypasses all security rules.

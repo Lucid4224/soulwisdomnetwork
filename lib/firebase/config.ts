@@ -1,4 +1,5 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
+import { initializeAppCheck, ReCaptchaEnterpriseProvider, type AppCheck } from "firebase/app-check";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
@@ -31,7 +32,16 @@ if (!firebaseConfig.apiKey && process.env.FIREBASE_WEBAPP_CONFIG) {
 
 // Initialize Firebase
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+
+// App Check (bot protection): proves requests come from this site in a real browser, using
+// reCAPTCHA Enterprise. Off until NEXT_PUBLIC_RECAPTCHA_SITE_KEY is set in apphosting.yaml
+// (docs/specs/016-community-feed.md has the console steps). Set up before Auth and Firestore.
+const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
+const appCheck: AppCheck | null = typeof window !== "undefined" && siteKey
+    ? initializeAppCheck(app, { provider: new ReCaptchaEnterpriseProvider(siteKey), isTokenAutoRefreshEnabled: true })
+    : null;
+
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-export { app, auth, db };
+export { app, appCheck, auth, db };

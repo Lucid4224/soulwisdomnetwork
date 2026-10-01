@@ -16,6 +16,12 @@ env:
   - variable: NEXT_PUBLIC_FIREBASE_APP_ID
     secret: FIREBASE_APP_ID
 
+  # App Check (bot protection) for the community feed: the reCAPTCHA Enterprise site key, which
+  # is public. Register it in Firebase App Check FIRST, then uncomment this
+  # (docs/specs/016-community-feed.md, "Bot protection").
+  # - variable: NEXT_PUBLIC_RECAPTCHA_SITE_KEY
+  #   value: <site key>
+
   # Podcast Studio (docs/specs/006-podcast-studio.md), server-side only.
   - variable: GITHUB_ACTIONS_TOKEN
     secret: GITHUB_ACTIONS_TOKEN

@@ -35,15 +35,17 @@ it here when it ships.
 ## Studio
 
 - **Shorts cover-frame slider**: pick the frame YouTube shows for each short.
-- **Profile editing**: members cannot change their name or bio yet. Members who sign up with
-  email and password are named after the part of their email before the @ until then.
 
 ## Community site
 
+- **Community feed, next steps** (spec 016): more than one community; editing posts and
+  comments; reporting a post to the admins; reply notifications; link previews; search.
+- **Older profiles named after their email**: members who signed up with email and password
+  before spec 016 are named after the part of their email before the @. They can rename
+  themselves in Edit profile; an admin could rename the rest.
 - **People directory.**
 - **Navbar** overflows on phones.
 
 ## Not code
 
-- A **music licence** for the intro and outro.
 - **Daniel** to review the privacy policy and terms.

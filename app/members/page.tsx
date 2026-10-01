@@ -24,7 +24,8 @@ export default function MembersPage() {
             try {
                 const q = query(collection(db, "users"), orderBy("displayName", "asc"));
                 const snapshot = await getDocs(q);
-                const membersData = snapshot.docs.map(doc => doc.data() as Member);
+                // Banned members are left out of the directory.
+                const membersData = snapshot.docs.map(doc => doc.data() as Member & { banned?: boolean }).filter(m => !m.banned);
                 setMembers(membersData);
             } catch (error) {
                 console.error("Error fetching members:", error);

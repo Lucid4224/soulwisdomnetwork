@@ -109,7 +109,7 @@ Built separately by us as fixed video assets with licensed music, versioned in s
 
 **Required before Stage 1 ships:** the intro file (~3 seconds), the outro file, and written confirmation of the music licence covering both.
 
-**Intro: done (24 Sept 2026).** `assets/podcast/intro.mp4` (3 s, 1080p), placed after the "In this episode" clips and before the episode by the edit package and the Descript step (`docs/specs/009-edit-package.md`). Still open: an outro, and written confirmation of the music licence.
+**Intro: done (24 Sept 2026).** `assets/podcast/intro.mp4` (3 s, 1080p), placed after the "In this episode" clips and before the episode by the edit package and the Descript step (`docs/specs/009-edit-package.md`). Still open: a separate outro (the intro doubles as one). **Music: no licence needed (1 Oct 2026)**: the soundtrack was generated from scratch with code, with no library, samples or recordings; the record is `docs/licences/intro-music.md`.
 
 ### The "In this episode" teaser
 AI suggests three or four clips from the episode; a producer adjusts them at Checkpoint B (spec 007). They go to Descript as separate files (step 8) and are placed by hand at Checkpoint C.

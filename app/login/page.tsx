@@ -6,6 +6,14 @@ import { auth, db } from "@/lib/firebase/config";
 import { useRouter } from "next/navigation";
 import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
 
+// A banned member's account is disabled (app/api/admin/users/ban).
+function message(err: unknown): string {
+    const { code, message } = (err ?? {}) as { code?: string; message?: string };
+    return code === "auth/user-disabled"
+        ? "This account has been banned from the community."
+        : message ?? "Something went wrong";
+}
+
 export default function LoginPage() {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
@@ -33,11 +41,14 @@ export default function LoginPage() {
                     bio: "",
                     role: "user",
                 });
+                // New members choose the name others see (it starts as their Google name).
+                router.push("/profile/edit?welcome=1");
+                return;
             }
 
             router.push("/dashboard");
         } catch (err: any) {
-            setError(err.message);
+            setError(message(err));
         }
     };
 
@@ -50,9 +61,11 @@ export default function LoginPage() {
                 userCredential = await createUserWithEmailAndPassword(auth, email, password);
                 const user = userCredential.user;
                 // Create user doc for new email users
+                // Not the email's first part: that would show other members part of the address.
+                // They choose a name next (app/profile/edit).
                 await setDoc(doc(db, "users", user.uid), {
                     uid: user.uid,
-                    displayName: user.email?.split("@")[0] || "User", // Fallback name
+                    displayName: `Member ${Math.floor(1000 + Math.random() * 9000)}`,
                     photoURL: null,
                     createdAt: serverTimestamp(),
                     bio: "",
@@ -60,14 +73,16 @@ export default function LoginPage() {
                 });
 
                 // Send Verification Email
+                // The feed opens once the address is confirmed (components/feed/MemberGate.tsx).
                 await sendEmailVerification(user);
-                alert("Account created! Please check your email inbox to verify your account."); // Simple visual feedback
+                router.push("/profile/edit?welcome=1");
+                return;
             } else {
                 await signInWithEmailAndPassword(auth, email, password);
             }
             router.push("/dashboard");
         } catch (err: any) {
-            setError(err.message);
+            setError(message(err));
         }
     };
 

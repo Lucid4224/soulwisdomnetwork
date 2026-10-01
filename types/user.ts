@@ -8,6 +8,7 @@ export interface Member {
     displayName: string | null;
     email: string | null;
     role: UserRole;
+    banned: boolean;
 }
 
 export interface UserProfile {
@@ -16,5 +17,6 @@ export interface UserProfile {
     photoURL: string | null;
     role: UserRole;
     bio?: string;
+    banned?: boolean;    // set only by an admin (app/api/admin/users/ban)
     createdAt: any; // Firestore Timestamp
 }

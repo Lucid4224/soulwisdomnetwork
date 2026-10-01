@@ -28,5 +28,6 @@ export async function listMembers(): Promise<Member[]> {
         displayName: (d.get('displayName') as string | undefined) ?? null,
         email: emails.get(d.id) ?? null,
         role: (d.get('role') as UserRole | undefined) ?? 'user',
+        banned: d.get('banned') === true,
     }));
 }
