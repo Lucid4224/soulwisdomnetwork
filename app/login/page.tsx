@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification } from "firebase/auth";
 import { auth, db } from "@/lib/firebase/config";
 import { useRouter } from "next/navigation";
 import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
+import { useAuth } from "@/context/AuthContext";
 
 // A banned member's account is disabled (app/api/admin/users/ban).
 function message(err: unknown): string {
@@ -14,12 +15,28 @@ function message(err: unknown): string {
         : message ?? "Something went wrong";
 }
 
+// Where to go after signing in: the page that sent them here (components/auth/AuthGuard.tsx),
+// if it is on this site, or else the feed.
+function nextPage(): string {
+    const next = new URLSearchParams(window.location.search).get("next") ?? "";
+    return next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/\\") ? next : "/dashboard";
+}
+
 export default function LoginPage() {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [isRegistering, setIsRegistering] = useState(false);
     const [error, setError] = useState("");
     const router = useRouter();
+
+    // Sign-in is kept in this browser until they sign out, so someone already signed in who
+    // opens this page (a bookmark, an old tab) goes straight on. Only who was signed in when
+    // the page opened: signing in here sends them on itself, to the right page.
+    const { user } = useAuth();
+    const [signedInAlready] = useState(() => !!user);
+    useEffect(() => {
+        if (signedInAlready) router.replace(nextPage());
+    }, [signedInAlready, router]);
 
     const handleGoogleLogin = async () => {
         try {
@@ -46,7 +63,7 @@ export default function LoginPage() {
                 return;
             }
 
-            router.push("/dashboard");
+            router.push(nextPage());
         } catch (err: any) {
             setError(message(err));
         }
@@ -80,11 +97,13 @@ export default function LoginPage() {
             } else {
                 await signInWithEmailAndPassword(auth, email, password);
             }
-            router.push("/dashboard");
+            router.push(nextPage());
         } catch (err: any) {
             setError(message(err));
         }
     };
+
+    if (signedInAlready) return null;
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-sand-50 dark:bg-ocean-950 px-4">

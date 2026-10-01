@@ -13,9 +13,19 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  // The Signal, Curate and Daily pages were removed; old links land on the home page.
   async redirects() {
-    return ["/signal", "/curate", "/daily"].map(source => ({ source, destination: "/", permanent: true }));
+    return [
+      // One address for the site. A browser keeps sign-in per address, so a member signed in on
+      // www would look signed out on soulwisdomcollective.com, and the other way round.
+      {
+        source: "/:path*",
+        has: [{ type: "host" as const, value: "www.soulwisdomcollective.com" }],
+        destination: "https://soulwisdomcollective.com/:path*",
+        permanent: true,
+      },
+      // The Signal, Curate and Daily pages were removed; old links land on the home page.
+      ...["/signal", "/curate", "/daily"].map(source => ({ source, destination: "/", permanent: true })),
+    ];
   },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];

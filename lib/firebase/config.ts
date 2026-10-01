@@ -41,6 +41,7 @@ const appCheck: AppCheck | null = typeof window !== "undefined" && siteKey
     ? initializeAppCheck(app, { provider: new ReCaptchaEnterpriseProvider(siteKey), isTokenAutoRefreshEnabled: true })
     : null;
 
+// Sign-in is kept in the browser (IndexedDB) until the member signs out: getAuth's default.
 const auth = getAuth(app);
 const db = getFirestore(app);
 
