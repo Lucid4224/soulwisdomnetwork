@@ -46,10 +46,26 @@ export default function Navbar() {
         { name: "Messages", href: "/messages" },
     ] : [];
 
+    const links = (spacing: string) => navItems.map((item) => {
+        const isActive = pathname.startsWith(item.href);
+        return (
+            <Link
+                key={item.href}
+                href={item.href}
+                className={`${spacing} py-2 rounded-lg text-sm font-bold transition-all ${isActive
+                    ? "bg-gold-500/10 text-gold-400"
+                    : "text-ocean-300 hover:bg-ocean-900/50 hover:text-gold-300"
+                    }`}
+            >
+                {item.name}
+            </Link>
+        );
+    });
+
     return (
         <nav className="bg-ocean-950 backdrop-blur-md border-b border-ocean-800/30 px-4 py-3 sticky top-0 z-50 shadow-2xl">
             <div className="max-w-6xl mx-auto flex justify-between items-center">
-                <div className="flex items-center gap-8">
+                <div className="flex items-center gap-4 md:gap-8 min-w-0">
                     <Link href="/" className="flex items-center gap-2 group">
                         <img
                             src="/logo-trimmed.png"
@@ -58,34 +74,20 @@ export default function Navbar() {
                         />
                     </Link>
 
-                    {/* Links for signed-in members */}
-                    <div className="flex gap-1">
-                        {user && navItems.map((item) => {
-                            const isActive = pathname.startsWith(item.href);
-                            return (
-                                <Link
-                                    key={item.href}
-                                    href={item.href}
-                                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${isActive
-                                        ? "bg-gold-500/10 text-gold-400"
-                                        : "text-ocean-300 hover:bg-ocean-900/50 hover:text-gold-300"
-                                        }`}
-                                >
-                                    {item.name}
-                                </Link>
-                            );
-                        })}
-                    </div>
+                    {/* Links for signed-in members; on phones they get a row of their own (below) */}
+                    <div className="hidden md:flex gap-1">{links("px-4")}</div>
                 </div>
 
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2 md:gap-4 shrink-0">
                     {user ? (
                         <>
                             <div
                                 ref={menuRef}
                                 className="relative"
-                                onMouseEnter={() => setMenuOpen(true)}
-                                onMouseLeave={() => setMenuOpen(false)}
+                                // Hover opens it for a mouse only: on a phone a tap fires both, which
+                                // would open the menu and close it again at once.
+                                onPointerEnter={e => e.pointerType === "mouse" && setMenuOpen(true)}
+                                onPointerLeave={e => e.pointerType === "mouse" && setMenuOpen(false)}
                             >
                                 <button
                                     type="button"
@@ -140,9 +142,10 @@ export default function Navbar() {
                                     </div>
                                 )}
                             </div>
+                            {/* The menu has Sign out too; on phones that is the only one, to save room. */}
                             <button
                                 onClick={() => signOut(auth)}
-                                className="p-2 text-ocean-400 hover:text-red-400 transition-colors rounded-lg hover:bg-red-950/20"
+                                className="hidden sm:block p-2 text-ocean-400 hover:text-red-400 transition-colors rounded-lg hover:bg-red-950/20"
                                 title="Sign Out"
                             >
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -160,6 +163,10 @@ export default function Navbar() {
                     )}
                 </div>
             </div>
+
+            {user && (
+                <div className="md:hidden max-w-6xl mx-auto mt-2 -mb-1 grid grid-cols-3 gap-1">{links("px-2 text-center")}</div>
+            )}
         </nav>
     );
 }

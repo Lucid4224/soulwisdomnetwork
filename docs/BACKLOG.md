@@ -44,7 +44,6 @@ it here when it ships.
   before spec 016 are named after the part of their email before the @. They can rename
   themselves in Edit profile; an admin could rename the rest.
 - **People directory.**
-- **Navbar** overflows on phones.
 
 ## Not code
 
