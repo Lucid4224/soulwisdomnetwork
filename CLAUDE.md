@@ -1,7 +1,6 @@
 # Soul Wisdom Network
 
-Next.js community site for the Soul Wisdom podcast, plus an agent that scores YouTube
-videos. A podcast production pipeline is specified but not yet built — see
+Next.js community site for the Soul Wisdom podcast. A podcast production pipeline is specified but not yet built — see
 `docs/specs/005-podcast-production-pipeline.md`.
 
 **Live:** https://soulwisdomcollective.com
@@ -13,13 +12,12 @@ App Hosting) · Node 24
 
 ```
 app/          routes (dashboard = the community feed, members, messages, profile, admin, login)
-components/   auth/ curate/ daily/ feed/
-lib/firebase/ config.ts (client init), firestore.ts, messaging.ts
+components/   auth/ feed/ studio/
+lib/firebase/ config.ts (client init), messaging.ts
 lib/server/   Admin SDK, Drive and GitHub helpers for API routes; requireRole() in staff.ts
 app/api/      server routes; every one must call requireRole() (see Roles below)
 context/      React context providers
-agent/src/    scout.ts — YouTube scorer, runs in GitHub Actions, NOT on App Hosting
-              podcast/ingest.ts — spec 005 steps 1-3, also GitHub Actions only
+agent/src/    podcast/ingest.ts — spec 005 steps 1-3, runs in GitHub Actions, NOT on App Hosting
               podcast/notes.ts — spec 005 step 5 (show notes with Claude), GitHub Actions only;
               the prompt and call are in podcast/notesDraft.ts, shared with podcast/compareNotes.ts
               (podcast_notes_compare.yml: side-by-side models/efforts, read-only, run by hand)
@@ -77,9 +75,9 @@ firebase apphosting:secrets:grantaccess SECRET_NAME \
   --project soulwisdomnetwork --backend soulwisdomnetwork
 ```
 
-The agent's keys (`YOUTUBE_API_KEY`, `OPENAI_API_KEY`, `FIREBASE_SERVICE_ACCOUNT_JSON`) are
-**GitHub repo secrets**, not Secret Manager, because the agent runs in Actions. They are
-deliberately absent from `apphosting.yaml`.
+The podcast jobs' keys (such as `OPENAI_API_KEY` and `ANTHROPIC_API_KEY`) are **GitHub repo
+secrets**, not Secret Manager, because the jobs run in Actions. They are deliberately absent
+from `apphosting.yaml`.
 
 The podcast ingest job (`podcast_ingest.yml`) uses its own service account
 (`podcast-pipeline@`, roles: Cloud Datastore User + Storage Object Admin, Editor on the
@@ -118,8 +116,7 @@ firebase deploy --only firestore:rules,firestore:indexes,storage --project soulw
 
 Collections: `users`, `posts` and `comments` (the community feed, `docs/specs/016-community-feed.md`;
 each has a `votes` subcollection; server only), `community_limits` (hourly post and comment
-limits, server only), `conversations`, `messages`, `feed_items`,
-`channels`, `episodes` (podcast pipeline, Admin SDK only; shape in `types/episode.ts`; earlier
+limits, server only), `conversations`, `messages`, `episodes` (podcast pipeline, Admin SDK only; shape in `types/episode.ts`; earlier
 show-notes approvals in its `approvals` subcollection),
 `studio` (Podcast Studio settings such as the backlog order, Admin SDK only), `usage_reports`
 (what each episode cost and took, posted by the podcast jobs; the admin Usage page `/admin/usage`,
@@ -148,9 +145,6 @@ These rules are load-bearing and easy to break:
   profiles made before this. Members may change only `displayName`, `bio` and remove
   `photoURL`, so they cannot lift their own `banned` flag.
 - **`messages` create** reads the sender's profile and refuses a banned member.
-
-`feed_items` and `channels` are written by the scout through the Admin SDK, which bypasses
-rules entirely — so they need no client write access and have none.
 
 Never use Firestore "Test mode". It permits unrestricted reads and writes from anywhere.
 
@@ -208,8 +202,5 @@ Merging to `main` deploys to production. Keep PRs to one concern.
 
 ## Known state
 
-- `@google/generative-ai` is end-of-life; migrate to `@google/genai`.
 - `firebase-admin` is on v14, which removed the namespaced API (`admin.firestore()`,
   `admin.credential`). Import from `firebase-admin/app` and `firebase-admin/firestore`.
-- `/curate` and `/daily` are disabled stubs; `daily_harvest.yml` is manual-trigger only.
-- `agent/src/test_gemini.ts` reads `GEMINI_API_KEY`, which no longer exists anywhere.

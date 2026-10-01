@@ -79,17 +79,6 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-    // Written by the scout agent via the Admin SDK, which bypasses these rules.
-    // No client writes are needed.
-    match /feed_items/{itemId} {
-      allow read:  if signedIn();
-      allow write: if false;
-    }
-    match /channels/{channelId} {
-      allow read:  if signedIn();
-      allow write: if false;
-    }
-
     // Podcast pipeline state, written by agent/src/podcast/ingest.ts via the Admin SDK.
     // No client access until the review page exists; it will read through the server.
     match /episodes/{episodeId} {
