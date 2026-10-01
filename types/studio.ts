@@ -88,7 +88,10 @@ export interface EpisodeNotesView {
         error: string | null;
         requestedAt: number | null;
         generatedAt: number | null;
-        approved: { by: string; at: number; version: number } | null;
+        approved: { by: string; at: number; version: number; notes: ShowNotes } | null;
+        // Later steps made from an earlier approval: which, and its notes (null: approved before
+        // earlier approvals were kept), to show what changed since and to go back to them.
+        madeFrom: { version: number; steps: ('package' | 'descript' | 'final' | 'approval')[]; notes: ShowNotes | null; by: string | null; at: number | null } | null;
     } | null;
 }
 

@@ -6,7 +6,7 @@
 // (components/studio/steps.ts): the one that needs the producer opens by itself, the others
 // fold to a one-line summary.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import AuthGuard from "@/components/auth/AuthGuard";
@@ -24,9 +24,11 @@ import { field, hint as small, primary, secondary } from "@/components/studio/ui
 import { useAutosave } from "@/components/studio/useAutosave";
 import { useAuth } from "@/context/AuthContext";
 import { BROLL_STYLE_IDS, BROLL_STYLES, BROLL_USD_PER_IMAGE, type BrollStyle } from "@/lib/broll";
-import { locate, mmss, youtubeDescription, type ShowNotes, type TeaserClip } from "@/lib/showNotes";
+import { locate, mmss, notesChanges, sameNotes, youtubeDescription, type ShowNotes, type TeaserClip } from "@/lib/showNotes";
 import { studioFetch } from "@/lib/studioClient";
 import type { EpisodeNotesView } from "@/types/studio";
+
+type NotesView = NonNullable<EpisodeNotesView["notes"]>;
 
 const words = (s: string) => s.trim().split(/\s+/).filter(Boolean).length;
 
@@ -55,7 +57,9 @@ function TimeInput({ ms, onChange }: { ms: number; onChange: (ms: number) => voi
 }
 
 // Shown where a step needs the approved notes and the page has changes not yet approved.
-function NeedsApproval({ what, approved, busy, onApprove }: { what: string; approved: boolean; busy: boolean; onApprove: () => void }) {
+function NeedsApproval({ what, approved, busy, onApprove, onDiscard }: {
+    what: string; approved: boolean; busy: boolean; onApprove: () => void; onDiscard: () => void;
+}) {
     return (
         <div role="status" className="rounded-lg border-2 border-amber-500/70 bg-amber-950/50 px-4 py-3 flex flex-wrap items-center gap-3">
             <p className="text-sm font-bold text-amber-200 flex-1 min-w-[14rem]">
@@ -64,9 +68,70 @@ function NeedsApproval({ what, approved, busy, onApprove }: { what: string; appr
                     The next steps use the approved notes, so edits count once they are approved.
                 </span>
             </p>
-            <button onClick={onApprove} disabled={busy} className="text-sm px-4 py-2 rounded-lg bg-amber-500 text-black font-semibold hover:bg-amber-400 disabled:opacity-40">
-                {approved ? "Approve changes" : "Approve show notes"}
-            </button>
+            <span className="flex flex-wrap gap-2">
+                {approved && <button onClick={onDiscard} disabled={busy} className={secondary}>Discard changes</button>}
+                <button onClick={onApprove} disabled={busy} className="text-sm px-4 py-2 rounded-lg bg-amber-500 text-black font-semibold hover:bg-amber-400 disabled:opacity-40">
+                    {approved ? "Approve changes" : "Approve show notes"}
+                </button>
+            </span>
+        </div>
+    );
+}
+
+// "the edit package, final cut and episode approval"
+const listed = (items: string[]) => items.length < 2 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
+
+// What changed between two versions of the notes (notesChanges in lib/showNotes.ts).
+function Changes({ changes, none }: { changes: { part: string; detail: string }[]; none: string }) {
+    return (
+        <ul className="text-sm text-gray-200 list-disc pl-5 flex flex-col gap-0.5 break-words">
+            {changes.length
+                ? changes.map(c => <li key={c.part}><span className="font-semibold">{c.part}</span>: {c.detail}</li>)
+                : <li>{none}</li>}
+        </ul>
+    );
+}
+
+// The later steps that record which approved notes they were made from, and where they show.
+const MADE_FROM: Record<NonNullable<NotesView["madeFrom"]>["steps"][number], { label: string; stage: StageId }> = {
+    package: { label: "edit package", stage: "package" },
+    descript: { label: "Descript project", stage: "package" },
+    final: { label: "final cut", stage: "final" },
+    approval: { label: "episode approval", stage: "thumbnail" },
+};
+
+// Shown in the first stage made from earlier approved notes, where the choice to make it again
+// is: what the newer approval changed, and the way back to the notes it was made from
+// (restoreApproval in lib/server/notes.ts).
+function ChangedSince({ madeFrom, approved, changes, busy, onRestore }: {
+    madeFrom: NonNullable<NotesView["madeFrom"]>; approved: NonNullable<NotesView["approved"]>;
+    changes: { part: string; detail: string }[] | null; busy: boolean; onRestore: () => void;
+}) {
+    const steps = listed(madeFrom.steps.map(s => MADE_FROM[s].label));
+    return (
+        <div id="changes-since" role="status" className="scroll-mt-28 rounded-lg border border-sky-500/40 bg-sky-950/30 px-4 py-3 flex flex-col gap-2">
+            <p className="text-sm font-semibold text-sky-200">
+                The show notes were approved again after the {steps} {madeFrom.steps.length > 1 ? "were" : "was"} made
+            </p>
+            {changes ? (
+                <>
+                    <p className={small}>
+                        {madeFrom.steps.length > 1 ? "They were" : "It was"} made from the notes approved{madeFrom.by && ` by ${madeFrom.by}`}{madeFrom.at ? ` ${ago(madeFrom.at)}` : ""}.
+                        The approval by {approved.by} {ago(approved.at)} changed:
+                    </p>
+                    <Changes changes={changes} none="Nothing in the notes themselves" />
+                    <p className={small}>Make again what these changes affect, or, if they were a mistake, go back to the notes the {steps} {madeFrom.steps.length > 1 ? "were" : "was"} made from.</p>
+                    <div><button onClick={onRestore} disabled={busy} className={secondary}>Go back to those notes</button></div>
+                </>
+            ) : (
+                <>
+                    <p className={small}>
+                        Those notes were approved before the Studio kept earlier approvals, so it cannot show what changed.
+                        If the change was a mistake, put the show notes back the way they were, then press the button: the {steps} count as made from them again.
+                    </p>
+                    <div><button onClick={onRestore} disabled={busy} className={secondary}>Use these notes for the {steps}</button></div>
+                </>
+            )}
         </div>
     );
 }
@@ -159,7 +224,8 @@ export default function ShowNotesPage() {
     const scrollTarget = useRef<string | null>(null);
     const [scrollRequest, setScrollRequest] = useState(0);
     const go = useCallback((anchor: string) => {
-        const stage = stageFor(anchor);
+        // Otherwise the stage the anchor is in, for parts shown in whichever stage needs them.
+        const stage = stageFor(anchor) ?? document.getElementById(anchor)?.closest("section")?.id as StageId | undefined;
         if (!stage) return;
         setOpen(o => (o[stage] ? o : { ...o, [stage]: true }));
         scrollTarget.current = anchor;
@@ -345,10 +411,41 @@ export default function ShowNotesPage() {
         return "Show notes approved.";
     });
 
+    const discard = () => run(async () => {
+        if (!confirm("Discard the changes that are not approved? The show notes go back to the approved ones.")) return "";
+        await flush();
+        await studioFetch(`/api/studio/episodes/${episodeId}/notes/discard`, {
+            method: "POST",
+            body: JSON.stringify({ version: autosave.version.current }),
+        });
+        await load();
+        return "Changes discarded: these are the approved show notes.";
+    });
+
+    // Back to the approval a later step was made from (see restoreApproval in lib/server/notes.ts).
+    const restore = (to: number, kept: boolean) => run(async () => {
+        const question = kept
+            ? "Go back to the show notes those steps were made from? They replace the notes on this page, and the approval you are undoing is kept."
+            : "Use the show notes as they are on this page for those steps? Only do this if you have put the notes back the way they were.";
+        if (!confirm(question)) return "";
+        if (!(await flush())) throw new Error(`Your latest changes could not be saved: ${autosave.lastError.current}`);
+        await studioFetch(`/api/studio/episodes/${episodeId}/notes/restore`, {
+            method: "POST",
+            body: JSON.stringify({ version: autosave.version.current, to }),
+        });
+        await load();
+        return "Done: the later steps are up to date with the approved show notes again.";
+    });
+
     // The notes and b-roll steps, from this page's own state.
     const notesKey = view?.notes ? `${view.notes.status}:${view.notes.approved?.version}` : null;
     const notesApproved = view?.notes?.approved;
-    const notesChanged = !!notesApproved && (notesApproved.version !== autosave.savedVersion || autosave.saveState !== "saved");
+    // By content, not version: an edit typed and then undone needs no approval.
+    const pendingChanges = useMemo(() => (notes && notesApproved && !sameNotes(notes, notesApproved.notes) ? notesChanges(notesApproved.notes, notes) : null),
+        [notes, notesApproved]);
+    const notesChanged = pendingChanges !== null;
+    const madeFrom = view?.notes?.madeFrom ?? null;
+    const sinceMade = useMemo(() => (madeFrom?.notes && notesApproved ? notesChanges(madeFrom.notes, notesApproved.notes) : null), [madeFrom, notesApproved]);
     const chosenTitle = notes?.titles[notes.chosenTitle] ?? "";
     const notesSummary = view?.notes?.status === "queued" || view?.notes?.status === "generating" ? "Claude is drafting the show notes…"
         : view?.notes?.status === "failed" ? failure("Drafting", view.notes.error)
@@ -406,7 +503,12 @@ export default function ShowNotesPage() {
 
     const status = view?.notes?.status;
     const approved = view?.notes?.approved;
-    const upToDate = status === "approved" && approved?.version === autosave.savedVersion && autosave.saveState === "saved";
+    const sinceStage = madeFrom ? MADE_FROM[madeFrom.steps[0]].stage : null;
+    const changedSince = madeFrom && approved && (
+        <ChangedSince madeFrom={madeFrom} approved={approved} changes={sinceMade} busy={busy || drafting}
+            onRestore={() => restore(madeFrom.version, !!madeFrom.notes)} />
+    );
+    const upToDate = status === "approved" && !!approved && !notesChanged;
     // Images are made from the approved ideas, so only offered when the page shows exactly those.
     const brollChanged = brollPending ?? 0;
     const brollBlocked = !upToDate || broll.working || broll.starting;
@@ -506,6 +608,17 @@ export default function ShowNotesPage() {
                                 <Stage {...stageProps("notes")} intro="Check what Claude drafted against the video, edit anything, then approve at the bottom of the page. Changes save as you type.">
                                     {drafting && <p className="text-sm font-semibold text-sky-200">Claude is drafting new notes; they will replace these when ready.</p>}
                                     {status === "failed" && <ErrorNote title="The last redraft failed" message={view.notes?.error} />}
+                                    {pendingChanges && approved && (
+                                        <div role="status" className="rounded-lg border border-amber-500/50 bg-amber-950/30 px-4 py-3 flex flex-col gap-2">
+                                            <p className="text-sm font-semibold text-amber-200">Changes not approved yet</p>
+                                            <Changes changes={pendingChanges} none="Small edits" />
+                                            <p className={small}>The next steps use the approved notes ({approved.by}, {ago(approved.at)}) until you approve these.</p>
+                                            <div className="flex flex-wrap gap-2">
+                                                <button onClick={approve} disabled={busy || drafting} className={primary}>Approve changes</button>
+                                                <button onClick={discard} disabled={busy || drafting} className={secondary}>Discard changes</button>
+                                            </div>
+                                        </div>
+                                    )}
                                     <nav aria-label="Parts of the show notes"
                                         className="sticky top-[65px] z-20 -mx-4 sm:-mx-5 -mt-2 px-4 sm:px-5 py-2 bg-[#180d2f]/95 backdrop-blur border-b border-white/5 flex gap-1.5 overflow-x-auto">
                                         {noteParts.map(([anchor, label, count]) => (
@@ -766,7 +879,7 @@ export default function ShowNotesPage() {
                                         </span>
                                     </div>
                                     {!upToDate && !broll.working && (
-                                        <NeedsApproval what="generate images" approved={!!approved} busy={busy || drafting} onApprove={approve} />
+                                        <NeedsApproval what="generate images" approved={!!approved} busy={busy || drafting} onApprove={approve} onDiscard={discard} />
                                     )}
                                     {(broll.error || broll.view?.error) && (
                                         <ErrorNote title={broll.error ? undefined : "Some b-roll images failed"} message={broll.error || broll.view?.error} />
@@ -774,17 +887,20 @@ export default function ShowNotesPage() {
                                 </Stage>
 
                                 <Stage {...stageProps("package")} intro="Everything for the edit, built from the approved notes, then made into a Descript project. Descript has the final say: the edit happens there.">
+                                    {sinceStage === "package" && changedSince}
                                     {!upToDate && (
-                                        <NeedsApproval what="build the edit package" approved={!!approved} busy={busy || drafting} onApprove={approve} />
+                                        <NeedsApproval what="build the edit package" approved={!!approved} busy={busy || drafting} onApprove={approve} onDiscard={discard} />
                                     )}
                                     <EditPackage episodeId={episodeId} enabled={on} upToDate={upToDate} report={report} revision={revision} />
                                 </Stage>
 
                                 <Stage {...stageProps("final")} intro="When the edit in Descript is finished: the finished edit, published from Descript, set to broadcast loudness and saved to Drive, with the chapter times moved onto it.">
+                                    {sinceStage === "final" && changedSince}
                                     <FinalCut episodeId={episodeId} enabled={on} report={report} revision={revision} />
                                 </Stage>
 
                                 <Stage {...stageProps("thumbnail")} intro="Thumbnails drive more views than anything else, so a person always picks one. Approving the episode clears it for YouTube.">
+                                    {sinceStage === "thumbnail" && changedSince}
                                     <div className="flex flex-col">
                                         <Part id="thumbnail-options" title="Thumbnail and approval">
                                             <Thumbnails episodeId={episodeId} enabled={on} report={report} revision={revision} />
@@ -819,8 +935,8 @@ export default function ShowNotesPage() {
                                     <span className="hidden sm:block text-xs text-gray-400">
                                         {upToDate
                                             ? `Approved by ${approved!.by}. These are the show notes the next steps use.`
-                                            : approved
-                                                ? "You have changes that are not approved yet. Approve them to use them in the next steps."
+                                            : approved && pendingChanges
+                                                ? `Not approved yet: ${pendingChanges.length ? pendingChanges.map(c => c.part).join(", ") : "small edits"}. Approve to use them in the next steps, or discard them.`
                                                 : "Approve when the notes are right; they become the show notes the next steps use."}
                                     </span>
                                 )}
@@ -835,9 +951,12 @@ export default function ShowNotesPage() {
                                 {upToDate ? (
                                     <span className="text-sm text-emerald-300 px-1">✓ Approved</span>
                                 ) : (
-                                    <button onClick={approve} disabled={busy || drafting} className={primary}>
-                                        {busy ? "Working…" : approved ? "Approve changes" : "Approve show notes"}
-                                    </button>
+                                    <>
+                                        {approved && notesChanged && <button onClick={discard} disabled={busy || drafting} className={secondary}>Discard</button>}
+                                        <button onClick={approve} disabled={busy || drafting} className={primary}>
+                                            {busy ? "Working…" : approved ? "Approve changes" : "Approve show notes"}
+                                        </button>
+                                    </>
                                 )}
                             </div>
                         </div>

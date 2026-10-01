@@ -66,7 +66,17 @@ export interface EpisodeNotes {
     error?: string | null;
     approvedBy?: { uid: string; name: string };
     approvedAt?: unknown;
-    approvedVersion?: number;
+    approvedVersion?: number;             // the draft version approved; later steps record which one they used
+}
+
+// An approval that a later one replaced, kept in `episodes/{id}/approvals/{approvedVersion}` so the
+// Studio can show what changed since a step was made, and go back to it (docs/specs/007-show-notes.md).
+export interface NotesApproval {
+    notes: ShowNotes;
+    version: number;
+    by: { uid: string; name: string } | null;
+    at: unknown;                          // when it was approved
+    replacedAt: unknown;
 }
 
 // One generated b-roll still (spec 005 step 7; docs/specs/008-broll-images.md), with its
