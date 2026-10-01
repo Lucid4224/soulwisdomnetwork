@@ -52,9 +52,9 @@ export default function Navbar() {
                 <div className="flex items-center gap-8">
                     <Link href="/" className="flex items-center gap-2 group">
                         <img
-                            src="/logo.png"
+                            src="/logo-trimmed.png"
                             alt="Soul Wisdom Collective"
-                            className="h-10 w-auto transition-transform group-hover:scale-105"
+                            className="h-12 md:h-14 w-auto transition-transform group-hover:scale-105"
                         />
                     </Link>
 

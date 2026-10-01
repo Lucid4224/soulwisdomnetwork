@@ -52,6 +52,11 @@ export default function Home() {
                 {/* --- Hero --- */}
                 <section className="text-center max-w-3xl mx-auto pt-24 pb-20 space-y-6">
                     <p className="text-sm font-bold uppercase tracking-[0.2em] text-amber-400/80">Soul Wisdom Collective</p>
+                    <img
+                        src="/logo-trimmed.png"
+                        alt="Soul Wisdom Collective: Awaken, Empower, Transform"
+                        className="mx-auto w-64 md:w-80 h-auto drop-shadow-[0_0_40px_rgba(245,158,11,0.15)]"
+                    />
                     <h1 className="text-5xl md:text-7xl font-bold tracking-tight leading-tight text-white">
                         Wonder, <span className="text-amber-400">together.</span>
                     </h1>
