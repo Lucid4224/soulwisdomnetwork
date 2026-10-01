@@ -13,9 +13,9 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  // The Signal page was removed; old links land on the home page.
+  // The Signal, Curate and Daily pages were removed; old links land on the home page.
   async redirects() {
-    return [{ source: "/signal", destination: "/", permanent: true }];
+    return ["/signal", "/curate", "/daily"].map(source => ({ source, destination: "/", permanent: true }));
   },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];

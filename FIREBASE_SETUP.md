@@ -51,15 +51,6 @@ firebase deploy --only firestore:rules,firestore:indexes --project soulwisdomnet
 
 Do **not** use Firestore's "Test mode" — it permits unrestricted reads and writes from anywhere.
 
-## The scout agent
-
-`agent/src/scout.ts` runs in **GitHub Actions**, not App Hosting, and reads its keys from
-**GitHub → Settings → Secrets and variables → Actions**: `YOUTUBE_API_KEY`, `OPENAI_API_KEY`,
-`FIREBASE_SERVICE_ACCOUNT_JSON`. These deliberately do not appear in `apphosting.yaml` — the web
-app never reads them.
-
-The workflow (`.github/workflows/daily_harvest.yml`) is currently disabled.
-
 ## First-time project setup
 
 Only needed when standing up a new Firebase project from scratch.

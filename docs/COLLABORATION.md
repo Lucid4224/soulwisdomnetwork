@@ -31,7 +31,6 @@ Ask the owner to add your Google account to the Firebase console as an **Editor*
 
 Antigravity uses the project files to understand the codebase. To get the best results:
 - **Read the Docs**: Start by reading `docs/specs/` to understand current features.
-- **Reference Blueprints**: Check `agent/blueprint.md` for AI agent logic.
 - **Use Task Management**: Always look for the `task.md` in the `.gemini` folder (if shared) or create your own to track your work.
 
 ---
