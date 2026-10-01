@@ -1,0 +1,53 @@
+# Editor Light (spec 015): renders the edited episode. Started by hand from the
+# Actions tab with the episode ID. Downloading the real episode is a TODO.
+
+name: Podcast Edit Render
+run-name: "Podcast Edit Render · ${{ inputs.episode_id }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      episode_id:
+        description: 'Episode ID (the Drive file ID in the Podcast Studio URL)'
+        required: true
+
+concurrency:
+  group: podcast-edit-render-${{ inputs.episode_id }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v7
+      with:
+        persist-credentials: false
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v7
+      with:
+        node-version: '24'
+        cache: 'npm'
+
+    - name: Install Dependencies
+      run: npm ci
+
+    - name: Install ffmpeg
+      run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+
+    - name: Render the edit
+      env:
+        EPISODE_ID: ${{ inputs.episode_id }}
+        PODCAST_SA_JSON: ${{ secrets.PODCAST_SA_JSON }}
+        # TODO: download the episode file and the edit JSON from Drive/Firestore.
+        # The script itself is complete and tested locally; this workflow needs
+        # the download step wired up before it can run against a real episode.
+      run: |
+        echo "TODO: download episode and edit for $EPISODE_ID"
+        echo "Then: npx tsx agent/src/podcast/editRender.ts --video episode.mp4 --edit edit.json --out output.mp4"
