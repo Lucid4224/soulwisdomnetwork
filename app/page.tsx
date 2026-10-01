@@ -52,9 +52,8 @@ export default function Home() {
                 {/* --- Hero --- */}
                 <section className="text-center max-w-3xl mx-auto pt-24 pb-20 space-y-6">
                     <p className="text-sm font-bold uppercase tracking-[0.2em] text-amber-400/80">Soul Wisdom Collective</p>
-                    <h1 className="text-4xl md:text-6xl font-bold tracking-tight leading-tight text-white">
-                        Some experiences change everything.
-                        <span className="block text-amber-400">You don’t have to make sense of them alone.</span>
+                    <h1 className="text-5xl md:text-7xl font-bold tracking-tight leading-tight text-white">
+                        Wonder, <span className="text-amber-400">together.</span>
                     </h1>
                     <p className="text-lg text-gray-300 max-w-2xl mx-auto leading-relaxed">
                         A podcast and a community for people who have touched something larger than themselves,
