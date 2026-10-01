@@ -13,6 +13,7 @@ import type { Episode, EpisodeShorts, ShortItem } from '@/types/episode';
 import type { ShortsView } from '@/types/studio';
 import { adminBucket, adminDb } from './firebaseAdmin';
 import { startShorts } from './github';
+import { ESTIMATE_USD, withinDailyLimit } from './spending';
 import { HttpError } from './staff';
 
 // A request that has not finished by now is treated as lost and can be retried.
@@ -100,7 +101,8 @@ export async function requestShorts(id: string, body: { mode?: unknown; firstAt?
         tx.update(ref, update);
     });
     try {
-        await startShorts(id, mode);
+        // Only the titles cost money (Claude); drawing and scheduling do not.
+        await withinDailyLimit('shorts titles', mode === 'titles' ? ESTIMATE_USD.shortsTitles : 0, () => startShorts(id, mode));
     } catch (error) {
         const message = `Could not start the shorts job: ${(error as Error).message}`;
         await ref.update({ 'shorts.status': 'failed', 'shorts.error': message });

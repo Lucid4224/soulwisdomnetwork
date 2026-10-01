@@ -7,6 +7,7 @@ import type { Episode, EpisodeNotes, NotesApproval } from '@/types/episode';
 import type { EpisodeNotesView } from '@/types/studio';
 import { adminBucket, adminDb } from './firebaseAdmin';
 import { startNotes } from './github';
+import { ESTIMATE_USD, withinDailyLimit } from './spending';
 import { HttpError } from './staff';
 
 const VIDEO_LINK_MS = 6 * 60 * 60_000;
@@ -50,7 +51,7 @@ export async function requestNotes(id: string, { force = false } = {}) {
         });
     });
     try {
-        await startNotes(id);
+        await withinDailyLimit('show notes', ESTIMATE_USD.notes, () => startNotes(id));
     } catch (error) {
         const message = `Could not start drafting: ${(error as Error).message}`;
         await ref.update({ 'notes.status': 'failed', 'notes.error': message });

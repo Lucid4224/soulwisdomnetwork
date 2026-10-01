@@ -123,6 +123,12 @@ show-notes approvals in its `approvals` subcollection),
 (what each episode cost and took, posted by the podcast jobs; the admin Usage page `/admin/usage`,
 `docs/specs/014-usage.md`, Admin SDK only).
 
+**Daily spending limit:** the Studio's paid runs (show notes, b-roll images, final cut
+transcript, thumbnails, shorts titles) can spend at most $10 in any 24 hours
+(`lib/server/spending.ts`, `DAILY_LIMIT_USD`). It counts the costs the jobs recorded and the
+estimates reserved in `studio/spending` at each start, whichever is higher; a refused run shows
+the reason in its step. Ingest has its own per-episode cap in the agent's config.
+
 These rules are load-bearing and easy to break:
 
 - **`posts` update** allows any signed-in user to raise *only* `commentCount` or

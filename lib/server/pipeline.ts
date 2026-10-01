@@ -7,6 +7,7 @@ import type { DriveVideo, EpisodeSummary, Pipeline } from '@/types/studio';
 import { DRIVE_FOLDERS, studioDrive } from './drive';
 import { adminDb } from './firebaseAdmin';
 import { latestIngestRuns } from './github';
+import { DAILY_LIMIT_USD, spentToday } from './spending';
 import { HttpError } from './staff';
 
 const STUCK_MS = 24 * 60 * 60_000;
@@ -75,12 +76,13 @@ function summarise(id: string, e: Episode): EpisodeSummary {
 }
 
 export async function getPipeline(): Promise<Pipeline> {
-    const [backlog, toProcess, order, episodesSnap, runs] = await Promise.all([
+    const [backlog, toProcess, order, episodesSnap, runs, dayCostUsd] = await Promise.all([
         DRIVE_FOLDERS.backlog ? listVideos(DRIVE_FOLDERS.backlog) : Promise.resolve([]),
         listVideos(DRIVE_FOLDERS.toProcess),
         savedOrder(),
         adminDb().collection('episodes').get(),
         latestIngestRuns(5).catch(() => []),
+        spentToday(),
     ]);
 
     const episodes = episodesSnap.docs
@@ -94,7 +96,7 @@ export async function getPipeline(): Promise<Pipeline> {
         .filter(e => (e.createdAt ?? 0) >= monthStart.getTime())
         .reduce((sum, e) => sum + e.costUsd, 0);
 
-    return { backlog: ordered(backlog, order), toProcess, episodes, runs, monthCostUsd };
+    return { backlog: ordered(backlog, order), toProcess, episodes, runs, monthCostUsd, dayCostUsd, dailyLimitUsd: DAILY_LIMIT_USD };
 }
 
 export async function saveBacklogOrder(order: string[]) {

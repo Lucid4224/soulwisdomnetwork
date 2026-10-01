@@ -51,6 +51,8 @@ export interface Pipeline {
     episodes: EpisodeSummary[];
     runs: IngestRun[];
     monthCostUsd: number;
+    dayCostUsd: number;            // paid runs in the last 24 hours (lib/server/spending.ts)
+    dailyLimitUsd: number;
 }
 
 // GET /api/studio/episodes/[id]: everything the speaker review page needs.

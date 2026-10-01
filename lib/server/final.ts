@@ -7,6 +7,7 @@ import type { Episode, EpisodeFinal } from '@/types/episode';
 import type { FinalView } from '@/types/studio';
 import { adminDb } from './firebaseAdmin';
 import { startFinal } from './github';
+import { ESTIMATE_USD, withinDailyLimit } from './spending';
 import { HttpError } from './staff';
 
 // A request that has not finished by now is treated as lost and can be retried.
@@ -37,9 +38,11 @@ function descriptBusy(episode: Episode) {
 // Publishes whatever is in the Descript project now; running it again picks up later edits.
 export async function requestFinal(id: string) {
     const ref = episodeRef(id);
+    let hours = 1;
     await adminDb().runTransaction(async tx => {
         const episode = (await tx.get(ref)).data() as Episode | undefined;
         if (!episode) throw new HttpError(404, 'Episode not found');
+        hours = (episode.media?.durationSeconds ?? 3600) / 3600;
         if (episode.notes?.status !== 'approved') throw new HttpError(409, 'Approve the show notes first');
         if (descriptBusy(episode)) throw new HttpError(409, 'Wait until the Descript project is made');
         if (episode.descript?.status !== 'ready' || !episode.descript.projectId) throw new HttpError(409, 'Send the episode to Descript first');
@@ -50,7 +53,7 @@ export async function requestFinal(id: string) {
         }, { merge: true });
     });
     try {
-        await startFinal(id);
+        await withinDailyLimit('final cut', hours * ESTIMATE_USD.finalPerHour, () => startFinal(id));
     } catch (error) {
         const message = `Could not start the final cut: ${(error as Error).message}`;
         await ref.update({ 'final.status': 'failed', 'final.error': message });
