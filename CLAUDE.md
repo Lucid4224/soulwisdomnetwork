@@ -11,7 +11,7 @@ Next.js 16 (App Router) · React 19 · Tailwind v4 · TypeScript · Firebase (Fi
 App Hosting) · Node 24
 
 ```
-app/          routes (dashboard = the community feed, members, messages, profile, admin, login)
+app/          routes (dashboard = the community feed, videos, members, messages, profile, admin, login)
 components/   auth/ feed/ studio/
 lib/firebase/ config.ts (client init), messaging.ts
 lib/server/   Admin SDK, Drive and GitHub helpers for API routes; requireRole() in staff.ts
@@ -31,7 +31,7 @@ agent/src/    podcast/ingest.ts — spec 005 steps 1-3, runs in GitHub Actions, 
               podcast/shorts.ts — spec 005 step 14 (Shorts from picked key quotes: titles, draw with ffmpeg + podcast/shortsRender.ts,
               schedule on YouTube), GitHub Actions only; fonts for the burned-in text in agent/assets/fonts
 scripts/      make_admin.ts
-docs/specs/   numbered specs, 001-016; docs/BACKLOG.md lists features agreed for later
+docs/specs/   numbered specs, 001-017; docs/BACKLOG.md lists features agreed for later
 types/
 ```
 
@@ -58,7 +58,8 @@ in CI — App Hosting connects to the repo directly. Do not add one.
 ### Secrets
 
 Runtime config lives in **Google Secret Manager**, mapped to env vars by `apphosting.yaml`.
-Six secrets, all `FIREBASE_*`. To add or rotate one:
+The six `FIREBASE_*` secrets, plus `YOUTUBE_API_KEY` (the public Videos pages,
+`docs/specs/017-videos.md`) and `GITHUB_ACTIONS_TOKEN`. To add or rotate one:
 
 ```bash
 firebase apphosting:secrets:set SECRET_NAME --project soulwisdomnetwork

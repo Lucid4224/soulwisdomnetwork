@@ -1,7 +1,6 @@
 import Link from 'next/link';
-import { Compass, Heart, MessagesSquare, Mic, Users, Youtube } from 'lucide-react';
+import { Compass, Heart, MessagesSquare, Mic, Play, Users } from 'lucide-react';
 import HomeCta from '@/components/HomeCta';
-import { YOUTUBE_CHANNEL_URL } from '@/lib/site';
 
 // The home page: the podcast, the community, the site, and what we hold to.
 
@@ -86,14 +85,9 @@ export default function Home() {
                             don’t treat anyone’s experience as proof of anything. We just listen closely, and follow the
                             questions where they lead: consciousness, love, purpose, and what matters most.
                         </p>
-                        <a
-                            href={YOUTUBE_CHANNEL_URL}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-2 font-bold text-amber-400 hover:text-amber-300"
-                        >
-                            <Youtube className="w-5 h-5" /> Watch every episode on YouTube
-                        </a>
+                        <Link href="/videos" className="inline-flex items-center gap-2 font-bold text-amber-400 hover:text-amber-300">
+                            <Play className="w-5 h-5" fill="currentColor" /> Watch every episode
+                        </Link>
                     </div>
                 </section>
 
@@ -119,7 +113,11 @@ export default function Home() {
                 {/* --- The site --- */}
                 <section className="py-14 border-t border-white/5 space-y-8">
                     <h2 className="text-2xl md:text-3xl font-bold text-white">What you’ll find here</h2>
-                    <div className="grid sm:grid-cols-3 gap-4">
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <Feature href="/videos" Icon={Play} title="Videos">
+                            Every episode and short of the podcast, to watch right here. Sort by newest or most
+                            viewed, or search for a guest or a topic.
+                        </Feature>
                         <Feature href="/dashboard" Icon={MessagesSquare} title="The Feed">
                             Posts from members: stories, questions, images, links and videos. Vote for what moves you,
                             and reply in threads.
