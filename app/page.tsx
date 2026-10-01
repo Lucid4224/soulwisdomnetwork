@@ -1,103 +1,191 @@
-import React from 'react';
 import Link from 'next/link';
-import { BookOpen, Sparkles, Users, Video } from 'lucide-react';
+import { Compass, Heart, MessagesSquare, Mic, Radio, Users } from 'lucide-react';
+import HomeCta from '@/components/HomeCta';
+
+// The home page: the podcast, the community, the site, and what we hold to.
+
+const MANIFESTO = [
+    {
+        title: 'We listen first.',
+        body: 'Before we answer, advise or compare, we let someone finish. Most people have never been fully heard about the thing that changed them.',
+    },
+    {
+        title: 'Every experience is welcome here.',
+        body: 'No one has to prove what happened to them. We can wonder about it together without needing to agree on what it means.',
+    },
+    {
+        title: 'We hold beliefs lightly and people gently.',
+        body: 'Curiosity over certainty. You can be a scientist, a mystic, a skeptic or all three, and still belong.',
+    },
+    {
+        title: 'Nobody carries the profound alone.',
+        body: 'A near-death experience, a loss, an awakening, a moment that rearranged everything: these can be hard to explain at home. Here you can find people who understand, and take the time you need.',
+    },
+    {
+        title: 'We support; we don’t fix.',
+        body: 'We offer company, questions and our own stories, not prescriptions. When someone is struggling, we stay with them.',
+    },
+    {
+        title: 'We practise gratitude in ordinary days.',
+        body: 'Many people come back from the edge of life noticing small things: light, a voice, a cup of tea. We share them, and help each other notice more.',
+    },
+    {
+        title: 'We share; we don’t sell.',
+        body: 'No pitches, no recruiting, no paid paths to enlightenment. What helped you is a gift, not a product.',
+    },
+    {
+        title: 'We keep each other’s stories safe.',
+        body: 'What someone tells us in trust stays with us. Members choose the name they show, and their contact details are never shared.',
+    },
+];
 
 export default function Home() {
     return (
         <div className="min-h-screen bg-[#130b29] text-gray-100 font-sans selection:bg-amber-500/30">
-
-            {/* Background Glows */}
             <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
-                <div className="absolute top-[-20%] left-[20%] w-[60%] h-[60%] bg-purple-900/20 rounded-full blur-[120px] opacity-40 animate-pulse-slow"></div>
+                <div className="absolute top-[-20%] left-[20%] w-[60%] h-[60%] bg-purple-900/20 rounded-full blur-[120px] opacity-40"></div>
                 <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-amber-900/10 rounded-full blur-[100px] opacity-30"></div>
             </div>
 
-            <div className="relative z-10 max-w-7xl mx-auto px-6 py-8 flex flex-col min-h-screen">
+            <div className="relative z-10 max-w-5xl mx-auto px-6">
 
-                {/* --- Hero Section --- */}
-                <div className="text-center space-y-6 max-w-3xl mx-auto mb-24 animate-fade-in-up pt-24">
-                    <h1 className="text-5xl md:text-7xl font-bold tracking-tight leading-tight">
-                        <span className="block text-amber-400">Connect Deeper.</span>
-                        <span className="block text-white">Ascend Higher.</span>
+                {/* --- Hero --- */}
+                <section className="text-center max-w-3xl mx-auto pt-24 pb-20 space-y-6">
+                    <p className="text-sm font-bold uppercase tracking-[0.2em] text-amber-400/80">Soul Wisdom Collective</p>
+                    <h1 className="text-5xl md:text-7xl font-bold tracking-tight leading-tight text-white">
+                        Wonder, <span className="text-amber-400">together.</span>
                     </h1>
-
-                    <p className="text-lg text-gray-400 max-w-xl mx-auto leading-relaxed">
-                        The premier network for spiritual growth, connection, and wisdom. Join a collective dedicated to elevating consciousness.
+                    <p className="text-lg text-gray-300 max-w-2xl mx-auto leading-relaxed">
+                        A podcast and a community for people who have touched something larger than themselves,
+                        and for anyone curious about what it means to be alive.
                     </p>
+                    <HomeCta />
+                </section>
 
-                    <div className="pt-8 flex justify-center gap-4">
-                        <Link href="/login" className="px-8 py-4 bg-gradient-to-r from-amber-500 to-yellow-600 text-black font-bold rounded-full hover:shadow-[0_0_20px_rgba(245,158,11,0.4)] transition-all transform hover:scale-105 active:scale-95">
-                            Join the Collective
-                        </Link>
-
-                        <Link href="/daily" className="px-8 py-4 border border-white/10 text-white font-bold rounded-full hover:bg-white/5 transition-all">
-                            Daily Wisdom
-                        </Link>
+                {/* --- The podcast --- */}
+                <section className="grid md:grid-cols-[auto_1fr] gap-6 md:gap-10 items-start py-14 border-t border-white/5">
+                    <div className="w-12 h-12 rounded-xl bg-amber-500/10 flex items-center justify-center">
+                        <Mic className="w-6 h-6 text-amber-400" />
                     </div>
-                </div>
-
-                {/* --- Feature Grid --- */}
-                <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto w-full mb-32">
-
-                    {/* Card 1: Signal (Curated Wisdom) */}
-                    <Link href="/signal" className="group p-8 rounded-2xl bg-[#1E1035]/50 border border-white/5 hover:border-amber-500/30 hover:bg-[#1E1035] transition-all duration-300">
-                        <div className="w-10 h-10 rounded-lg bg-amber-500/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                            <BookOpen className="w-5 h-5 text-amber-400" />
-                        </div>
-                        <h3 className="text-xl font-bold text-white mb-3 group-hover:text-amber-400 transition-colors">Curated Wisdom</h3>
-                        <p className="text-sm text-gray-400 leading-relaxed">
-                            Access exclusive content, courses, and teachings from world-renowned spiritual masters.
+                    <div className="space-y-4 max-w-2xl">
+                        <h2 className="text-2xl md:text-3xl font-bold text-white">The podcast</h2>
+                        <p className="text-gray-300 leading-relaxed">
+                            The Soul Wisdom Collective podcast is hosted by Daniel Endy and Tom Wood. In long, unhurried
+                            conversations, guests tell what happened to them: near-death experiences, encounters they
+                            can’t explain, moments that changed how they see life and death. Then we ask what it
+                            taught them, and what it might teach the rest of us.
                         </p>
-                    </Link>
-
-                    {/* Card 2: Daily (Daily Harvest) */}
-                    <Link href="/daily" className="group p-8 rounded-2xl bg-[#1E1035]/50 border border-white/5 hover:border-purple-500/30 hover:bg-[#1E1035] transition-all duration-300">
-                        <div className="w-10 h-10 rounded-lg bg-purple-500/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                            <Sparkles className="w-5 h-5 text-purple-400" />
-                        </div>
-                        <h3 className="text-xl font-bold text-white mb-3 group-hover:text-purple-400 transition-colors">Daily Deep Harvest</h3>
-                        <p className="text-sm text-gray-400 leading-relaxed">
-                            Wake up to high-signal videos harvested daily by our AI agent. Your morning wisdom routine.
-                        </p>
-                    </Link>
-
-                    {/* Card 3: Community (Placeholder) */}
-                    <div className="group p-8 rounded-2xl bg-[#1E1035]/50 border border-white/5 hover:border-blue-500/30 hover:bg-[#1E1035] transition-all duration-300 cursor-default opacity-80">
-                        <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center mb-6">
-                            <Users className="w-5 h-5 text-blue-400" />
-                        </div>
-                        <h3 className="text-xl font-bold text-white mb-3">Community Connection</h3>
-                        <p className="text-sm text-gray-400 leading-relaxed">
-                            Find your soul tribe. Connect with like-minded seekers on the same path of ascension.
+                        <p className="text-gray-300 leading-relaxed">
+                            We come to every story with warmth and curiosity. We don’t tell you what to believe, and we
+                            don’t treat anyone’s experience as proof of anything. We just listen closely, and follow the
+                            questions where they lead: consciousness, love, purpose, and what matters most.
                         </p>
                     </div>
+                </section>
 
-                </div>
-
-                {/* --- Mission Section --- */}
-                <div className="flex justify-end mb-24 max-w-5xl mx-auto w-full">
-                    <div className="max-w-md text-right space-y-6">
-                        <h2 className="text-2xl font-bold text-amber-400">The Soul Wisdom Mission</h2>
-                        <p className="text-sm text-gray-400 leading-relaxed">
-                            We believe that we are all interconnected. The Soul Wisdom Network is built to facilitate the flow of ancient wisdom into the modern world.
+                {/* --- The community --- */}
+                <section className="grid md:grid-cols-[auto_1fr] gap-6 md:gap-10 items-start py-14 border-t border-white/5">
+                    <div className="w-12 h-12 rounded-xl bg-purple-500/10 flex items-center justify-center">
+                        <Users className="w-6 h-6 text-purple-300" />
+                    </div>
+                    <div className="space-y-4 max-w-2xl">
+                        <h2 className="text-2xl md:text-3xl font-bold text-white">The community</h2>
+                        <p className="text-gray-300 leading-relaxed">
+                            The conversation doesn’t end when an episode does. The Collective is a place to keep it going:
+                            to share your own story, ask the question you’ve never asked out loud, pass on a video or a
+                            book that helped, and find people who have been somewhere similar.
                         </p>
-                        <p className="text-sm text-gray-400 leading-relaxed">
-                            Our platform uses technology not to distract, but to deepen. Every feature is designed with the intention of supporting your spiritual journey and connecting you with the truth of who you are.
+                        <p className="text-gray-300 leading-relaxed">
+                            It is for members only, and moderated with care. You choose the name other people see, and
+                            your email is never shown to anyone.
                         </p>
                     </div>
-                </div>
+                </section>
 
-                {/* --- Footer --- */}
-                <footer className="mt-auto border-t border-white/5 py-8 text-center text-xs text-gray-600">
-                    <p>&copy; 2026 Soul Wisdom Network. All rights reserved.</p>
+                {/* --- The site --- */}
+                <section className="py-14 border-t border-white/5 space-y-8">
+                    <h2 className="text-2xl md:text-3xl font-bold text-white">What you’ll find here</h2>
+                    <div className="grid sm:grid-cols-2 gap-4">
+                        <Feature href="/dashboard" Icon={MessagesSquare} title="The Feed">
+                            Posts from members: stories, questions, images, links and videos. Vote for what moves you,
+                            and reply in threads.
+                        </Feature>
+                        <Feature href="/members" Icon={Users} title="Members">
+                            The people of the Collective, each with a short profile in their own words.
+                        </Feature>
+                        <Feature href="/messages" Icon={Heart} title="Messages">
+                            Private conversations with other members, for when a reply in public isn’t enough.
+                        </Feature>
+                        <Feature href="/signal" Icon={Radio} title="Signal">
+                            A selection of videos on consciousness and frontier science from across YouTube, picked to
+                            skip the clickbait.
+                        </Feature>
+                    </div>
+                </section>
+
+                {/* --- Manifesto --- */}
+                <section className="py-16 border-t border-white/5">
+                    <div className="max-w-2xl mb-10 space-y-3">
+                        <div className="flex items-center gap-2 text-amber-400">
+                            <Compass className="w-5 h-5" />
+                            <span className="text-sm font-bold uppercase tracking-[0.2em]">What we hold to</span>
+                        </div>
+                        <h2 className="text-3xl md:text-4xl font-bold text-white">A manifesto for the Collective</h2>
+                        <p className="text-gray-300 leading-relaxed">
+                            How we hope to be with each other, in the feed, in messages, and beyond the screen.
+                        </p>
+                    </div>
+                    <ol className="grid md:grid-cols-2 gap-x-10 gap-y-8">
+                        {MANIFESTO.map((item, i) => (
+                            <li key={item.title} className="flex gap-4">
+                                <span className="text-2xl font-bold text-amber-400/60 tabular-nums w-8 shrink-0">{i + 1}</span>
+                                <div className="space-y-1.5">
+                                    <h3 className="text-lg font-bold text-white">{item.title}</h3>
+                                    <p className="text-sm text-gray-400 leading-relaxed">{item.body}</p>
+                                </div>
+                            </li>
+                        ))}
+                    </ol>
+                    <p className="mt-12 max-w-2xl text-sm text-gray-400 leading-relaxed border-l-2 border-amber-500/40 pl-4">
+                        This community is a place for friendship and shared experience, not a substitute for medical or
+                        mental-health care. If you are in crisis or thinking about harming yourself, please contact your
+                        local emergency number or a crisis line now. In the US, call or text 988.
+                    </p>
+                </section>
+
+                {/* --- Closing --- */}
+                <section className="text-center py-20 border-t border-white/5 space-y-6">
+                    <h2 className="text-3xl md:text-4xl font-bold text-white">Come as you are.</h2>
+                    <p className="text-gray-300 max-w-xl mx-auto leading-relaxed">
+                        Whether you have a story to tell or just a question you can’t put down, there is a seat for you here.
+                    </p>
+                    <HomeCta />
+                </section>
+
+                <footer className="border-t border-white/5 py-8 text-center text-xs text-gray-600">
+                    <p>&copy; 2026 Soul Wisdom Collective. All rights reserved.</p>
                     <div className="flex justify-center gap-4 mt-2">
                         <Link href="/privacy" className="hover:text-gray-400">Privacy Policy</Link>
                         <Link href="/terms" className="hover:text-gray-400">Terms of Service</Link>
                         <a href="mailto:soulwisdomcollective@gmail.com" className="hover:text-gray-400">Contact</a>
                     </div>
                 </footer>
-
             </div>
         </div>
+    );
+}
+
+function Feature({ href, Icon, title, children }: {
+    href: string;
+    Icon: typeof Mic;
+    title: string;
+    children: React.ReactNode;
+}) {
+    return (
+        <Link href={href} className="group p-6 rounded-2xl bg-[#1E1035]/50 border border-white/5 hover:border-amber-500/30 hover:bg-[#1E1035] transition-colors">
+            <Icon className="w-5 h-5 text-amber-400 mb-4" />
+            <h3 className="text-lg font-bold text-white mb-2 group-hover:text-amber-400 transition-colors">{title}</h3>
+            <p className="text-sm text-gray-400 leading-relaxed">{children}</p>
+        </Link>
     );
 }

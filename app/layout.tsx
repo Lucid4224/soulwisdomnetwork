@@ -21,8 +21,8 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: "Soul Wisdom Network",
-  description: "The premier network for spiritual growth, connection, and wisdom.",
+  title: "Soul Wisdom Collective",
+  description: "A podcast and a community for people who have touched something larger than themselves: near-death experiences, consciousness and the meaning of life.",
 };
 
 export default function RootLayout({
