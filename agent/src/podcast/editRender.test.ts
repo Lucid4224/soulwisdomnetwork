@@ -162,3 +162,45 @@ test('render with cuts, teasers, intro, outro, b-roll, and --clean light', async
     assert.ok(reportData.outputSeconds > 0);
     assert.equal(reportData.cuts, 3);
 });
+
+test('block rendering for long episodes', async () => {
+    const dir = path.join(process.env.TMPDIR || '/tmp', 'edit-render-block-test');
+    fs.mkdirSync(dir, { recursive: true });
+
+    // Generate a 180 s (3 minute) test video (testsrc + sine).
+    const video = path.join(dir, 'episode.mp4');
+    await run('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error',
+        '-f', 'lavfi', '-i', 'testsrc=duration=180:size=1920x1080:rate=30',
+        '-f', 'lavfi', '-i', 'sine=frequency=440:duration=180',
+        '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p',
+        '-c:a', 'aac', '-b:a', '128k', '-shortest',
+        video,
+    ]);
+
+    // 30 cuts spread across the 180 s clip, each 2 s wide, every ~6 s.
+    const cuts: Cut[] = [];
+    for (let i = 0; i < 30; i++) {
+        cuts.push({ startMs: i * 6000, endMs: i * 6000 + 2000, reason: 'filler' });
+    }
+    const edit: EpisodeEdit = { cuts, version: 1 };
+    const ranges = keepRanges(180_000, cuts);
+    const expectedEditedMs = editedDuration(ranges);
+
+    const out = path.join(dir, 'output.mp4');
+    await renderEdit({
+        video,
+        edit,
+        out,
+        clean: 'off',
+        blockMinutes: 1,
+    });
+
+    // Check output length within 200 ms of editedDuration.
+    const probe = await probeStreams(out);
+    const diff = Math.abs(probe.duration - expectedEditedMs / 1000);
+    assert.ok(diff < 0.200, `output duration ${probe.duration}s differs from expected ${expectedEditedMs / 1000}s by ${diff}s`);
+
+    // Exactly one video stream and one audio stream.
+    assert.equal(probe.video, 1, 'exactly one video stream');
+    assert.equal(probe.audio, 1, 'exactly one audio stream');
+});
