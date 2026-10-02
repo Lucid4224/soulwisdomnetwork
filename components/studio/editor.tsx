@@ -103,15 +103,32 @@ export function Editor({ words, videoUrl, edit, onChange }: {
     }, [onChange]);
 
     // Keyboard: Delete/Backspace to cut, Ctrl/Cmd+Z for undo/redo, Space to play/pause.
+    // When focus is in a text box (INPUT, TEXTAREA, contentEditable), only Delete is
+    // handled (it cuts the selected match). Typing, Backspace, Space and Ctrl/Cmd+Z
+    // then work normally in the box.
     useEffect(() => {
         const el = containerRef.current;
         if (!el) return;
         const handler = (e: KeyboardEvent) => {
-            // Space plays or pauses the video when the editor has focus
-            // and the focus is not inside a text box (input, textarea).
+            const target = e.target as HTMLElement;
+            const inTextBox = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+            // In a text box, only handle Delete (cut the selected match).
+            if (inTextBox) {
+                if (e.key === 'Delete' && selectedRange) {
+                    e.preventDefault();
+                    const [start, end] = selectedRange;
+                    const startMs = words[start]?.start ?? 0;
+                    const endMs = words[end]?.end ?? startMs;
+                    updateEdit(prev => ({
+                        ...prev,
+                        cuts: [...prev.cuts, { startMs, endMs, reason: 'manual' }],
+                    }));
+                    setSelectedRange(null);
+                }
+                return;
+            }
+            // Outside a text box, handle all keys.
             if (e.key === ' ') {
-                const target = e.target as HTMLElement;
-                if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return;
                 e.preventDefault();
                 const video = videoRef.current;
                 if (!video) return;
@@ -257,19 +274,22 @@ export function Editor({ words, videoUrl, edit, onChange }: {
             if (words[i].text.toLowerCase().includes(lower)) matches.push(i);
         }
         setSearchMatches(matches);
-        setSearchCursor(0);
+        setSearchCursor(-1); // -1 means "not yet navigated"; first Enter goes to match 0.
     };
 
     const onSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
         if (e.key === 'Enter' && searchMatches.length > 0) {
             e.preventDefault();
-            const next = (searchCursor + 1) % searchMatches.length;
+            const next = searchCursor < 0 ? 0 : (searchCursor + 1) % searchMatches.length;
             setSearchCursor(next);
             const idx = searchMatches[next];
             setSelectedRange([idx, idx]);
             seekTo(idx);
         }
     };
+
+    // Search matches as a Set for O(1) lookup per word.
+    const matchSet = useMemo(() => new Set(searchMatches), [searchMatches]);
 
     // Count cuts by reason.
     const reasonCounts = useMemo(() => {
@@ -313,7 +333,7 @@ export function Editor({ words, videoUrl, edit, onChange }: {
                 />
                 {searchMatches.length > 0 && (
                     <span className={hint}>
-                        {searchCursor + 1}/{searchMatches.length}
+                        {searchCursor < 0 ? `${searchMatches.length} matches` : `${searchCursor + 1}/${searchMatches.length}`}
                     </span>
                 )}
             </div>
@@ -341,7 +361,7 @@ export function Editor({ words, videoUrl, edit, onChange }: {
                                     const isSelected = selectedRange &&
                                         index >= selectedRange[0] && index <= selectedRange[1];
                                     const isCurrent = index === currentWord;
-                                    const isMatch = searchMatches.includes(index);
+                                    const isMatch = matchSet.has(index);
                                     // The silence before this word, also across a change of speaker. It shows
                                     // as a chip when it is long, or when a cut sits in it (a filler AssemblyAI
                                     // left out of the transcript), so every suggestion can be seen and undone.
