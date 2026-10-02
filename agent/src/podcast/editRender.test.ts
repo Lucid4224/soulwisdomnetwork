@@ -37,6 +37,26 @@ function probeStreams(file: string): Promise<{ video: number; audio: number; dur
     });
 }
 
+// Per-stream durations so we can check video and audio are in sync.
+function probeStreamDurations(file: string): Promise<{ videoDur: number; audioDur: number }> {
+    return new Promise((resolve, reject) => {
+        const child = spawn('ffprobe', ['-v', 'error', '-show_entries', 'stream=codec_type,duration', '-of', 'csv=p=0', file], { stdio: ['ignore', 'pipe', 'pipe'] });
+        let out = '';
+        child.stdout.on('data', d => out += d);
+        child.on('close', () => {
+            const lines = out.trim().split('\n');
+            let videoDur = 0, audioDur = 0;
+            for (const l of lines) {
+                const parts = l.split(',');
+                if (parts[0] === 'video') videoDur = parseFloat(parts[1] || '0');
+                if (parts[0] === 'audio') audioDur = parseFloat(parts[1] || '0');
+            }
+            resolve({ videoDur, audioDur });
+        });
+        child.on('error', reject);
+    });
+}
+
 // The average colour of one frame, as [r, g, b].
 function frameColour(file: string, seconds: number): Promise<number[]> {
     return new Promise((resolve, reject) => {
@@ -184,7 +204,12 @@ test('block rendering for long episodes', async () => {
     }
     const edit: EpisodeEdit = { cuts, version: 1 };
     const ranges = keepRanges(180_000, cuts);
-    const expectedEditedMs = editedDuration(ranges);
+
+    // Expected seconds: sum over keepRanges of Math.ceil(lengthMs * 30 / 1000) / 30.
+    const expectedSec = ranges.reduce((sum, r) => {
+        const frames = Math.ceil((r.endMs - r.startMs) * 30 / 1000);
+        return sum + frames / 30;
+    }, 0);
 
     const out = path.join(dir, 'output.mp4');
     await renderEdit({
@@ -195,12 +220,17 @@ test('block rendering for long episodes', async () => {
         blockMinutes: 1,
     });
 
-    // Check output length within 200 ms of editedDuration.
+    // Check output length within 200 ms of expected.
     const probe = await probeStreams(out);
-    const diff = Math.abs(probe.duration - expectedEditedMs / 1000);
-    assert.ok(diff < 0.200, `output duration ${probe.duration}s differs from expected ${expectedEditedMs / 1000}s by ${diff}s`);
+    const diff = Math.abs(probe.duration - expectedSec);
+    assert.ok(diff < 0.200, `output duration ${probe.duration}s differs from expected ${expectedSec}s by ${diff}s`);
 
     // Exactly one video stream and one audio stream.
     assert.equal(probe.video, 1, 'exactly one video stream');
     assert.equal(probe.audio, 1, 'exactly one audio stream');
+
+    // Video and audio stream durations within 50 ms of each other.
+    const probeDetail = await probeStreamDurations(out);
+    const vAdiff = Math.abs(probeDetail.videoDur - probeDetail.audioDur);
+    assert.ok(vAdiff < 0.050, `video ${probeDetail.videoDur}s vs audio ${probeDetail.audioDur}s differ by ${vAdiff}s`);
 });
