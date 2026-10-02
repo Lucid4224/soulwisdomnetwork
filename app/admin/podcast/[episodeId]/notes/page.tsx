@@ -27,6 +27,9 @@ import { BROLL_STYLE_IDS, BROLL_STYLES, BROLL_USD_PER_IMAGE, type BrollStyle } f
 import { locate, mmss, notesChanges, sameNotes, youtubeDescription, type ShowNotes, type TeaserClip } from "@/lib/showNotes";
 import { studioFetch } from "@/lib/studioClient";
 import type { EpisodeNotesView } from "@/types/studio";
+import { Editor } from "@/components/studio/editor";
+import type { EpisodeEdit } from "@/lib/edit";
+import type { SpokenWord } from "@/lib/showNotes";
 
 type NotesView = NonNullable<EpisodeNotesView["notes"]>;
 
@@ -143,6 +146,47 @@ const stageFor = (anchor: string): StageId | undefined =>
 
 const sameStep = (a: StepState | undefined, b: StepState) => !!a && a.done === b.done && a.failed === b.failed && a.working === b.working
     && a.summary === b.summary && a.key === b.key && a.link?.href === b.link?.href && a.link?.label === b.link?.label;
+
+// Editor Light (spec 015): loads the edit via GET, saves via PUT with useAutosave,
+// and renders the Editor component. Shown only when NEXT_PUBLIC_EDITOR_LIGHT=1.
+function EditorLightStage({ episodeId, words, videoUrl }: { episodeId: string; words: SpokenWord[]; videoUrl: string }) {
+    const [edit, setEdit] = useState<EpisodeEdit>({ cuts: [], version: 0 });
+    const [loaded, setLoaded] = useState(false);
+    const { change, reset, saveState } = useAutosave<EpisodeEdit>(
+        async (value, version) => {
+            const res = await studioFetch<{ version: number }>(`/api/studio/episodes/${episodeId}/edit`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ edit: value, version }),
+            });
+            return res.version;
+        }
+    );
+
+    useEffect(() => {
+        studioFetch<{ edit: EpisodeEdit }>(`/api/studio/episodes/${episodeId}/edit`)
+            .then((data) => {
+                setEdit(data.edit);
+                reset(data.edit.version);
+                setLoaded(true);
+            })
+            .catch(() => { setLoaded(true); });
+    }, [episodeId, reset]);
+
+    if (!loaded) return <p className={small}>Loading editor…</p>;
+
+    return (
+        <>
+            <p className={small + ' mb-2'}>Save state: {saveState}</p>
+            <Editor
+                words={words}
+                videoUrl={videoUrl}
+                edit={edit}
+                onChange={(e) => { setEdit(e); change(e); }}
+            />
+        </>
+    );
+}
 
 export default function ShowNotesPage() {
     const { episodeId } = useParams<{ episodeId: string }>();
@@ -892,9 +936,13 @@ export default function ShowNotesPage() {
                                         <NeedsApproval what="build the edit package" approved={!!approved} busy={busy || drafting} onApprove={approve} onDiscard={discard} />
                                     )}
                                     <EditPackage episodeId={episodeId} enabled={on} upToDate={upToDate} report={report} revision={revision} />
-                                    {process.env.NEXT_PUBLIC_EDITOR_LIGHT === '1' && (
+                                    {process.env.NEXT_PUBLIC_EDITOR_LIGHT === '1' && view && (
                                         <Part title="Edit here instead (preview)">
-                                            <p className={small}>The transcript editor (Editor Light) is a preview. It is not connected to the render yet.</p>
+                                            <EditorLightStage
+                                                episodeId={episodeId}
+                                                words={view.words}
+                                                videoUrl={view.videoUrl ?? ''}
+                                            />
                                         </Part>
                                     )}
                                 </Stage>

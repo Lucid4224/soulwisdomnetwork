@@ -196,6 +196,31 @@ describe('suggestCuts', () => {
         ];
         assert.deepEqual(suggestCuts(words), []);
     });
+
+    test('filler-as-gap detected inside a sentence', () => {
+        // A 600 ms gap between two words in the middle of a sentence.
+        const words: SpokenWord[] = [
+            { text: 'the', start: 0, end: 300, speaker: 'Host', clip: false },
+            { text: 'meaning', start: 900, end: 1200, speaker: 'Host', clip: false },
+        ];
+        const cuts = suggestCuts(words);
+        const fillers = cuts.filter(c => c.reason === 'filler');
+        assert.equal(fillers.length, 1);
+        // Cut starts at 300 + 150 = 450, ends at 900.
+        assert.equal(fillers[0].startMs, 450);
+        assert.equal(fillers[0].endMs, 900);
+    });
+
+    test('filler-as-gap not detected after sentence end', () => {
+        // A 600 ms gap after a word ending with a period — not a filler, it's a pause.
+        const words: SpokenWord[] = [
+            { text: 'done.', start: 0, end: 300, speaker: 'Host', clip: false },
+            { text: 'Next', start: 900, end: 1200, speaker: 'Host', clip: false },
+        ];
+        const cuts = suggestCuts(words);
+        const fillers = cuts.filter(c => c.reason === 'filler');
+        assert.equal(fillers.length, 0);
+    });
 });
 
 describe('applyToChapters', () => {

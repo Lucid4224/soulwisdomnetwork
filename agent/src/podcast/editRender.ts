@@ -7,7 +7,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { spawn } from 'child_process';
-import { keepRanges, editedTime, type EpisodeEdit } from '../../../lib/edit';
+import { keepRanges, editedDuration, editedTime, type EpisodeEdit } from '../../../lib/edit';
 import { kenBurns, normalizeLoudness, probeDuration } from './media';
 
 // ─── helpers ───────────────────────────────────────────────────────────────
@@ -50,15 +50,32 @@ export async function renderEdit(opts: {
     intro?: string;
     outro?: string;
     broll?: BrollArg[];
-    clean?: 'off' | 'light' | 'strong';
+    clean?: 'off' | 'light' | 'strong' | 'auphonic';
+    detect?: 'auphonic';
     noiseModel?: string;
 }): Promise<RenderReport> {
     const start = Date.now();
     const clean = opts.clean ?? 'light';
     const inSeconds = await probeDuration(opts.video);
     const inMs = Math.round(inSeconds * 1000);
-    const ranges = keepRanges(inMs, opts.edit.cuts);
+    let ranges = keepRanges(inMs, opts.edit.cuts);
+    let editedMs = editedDuration(ranges);
     const fadeSecs = 0.015;
+
+    // Auphonic detect: run detection and add cuts to the edit.
+    if (opts.detect === 'auphonic') {
+        const { auphonicProcess, auphonicCutsToEdit } = await import('./auphonic');
+        const { regions } = await auphonicProcess(opts.video, {
+            detectOnly: true,
+            fillerCutting: true,
+            silenceCutting: true,
+            coughCutting: true,
+            noiseReduction: false,
+        });
+        const detectedCuts = auphonicCutsToEdit(regions);
+        ranges = keepRanges(inMs, [...opts.edit.cuts, ...detectedCuts]);
+        editedMs = editedDuration(ranges);
+    }
 
     // Pre-render b-roll clips with kenBurns to temp files.
     const tmpDir = path.join(path.dirname(opts.out), `_broll_${Date.now()}`);
@@ -117,7 +134,7 @@ export async function renderEdit(opts: {
         const e = (r.endMs / 1000).toFixed(3);
         filter += `[${episodeIdx}:v]trim=start=${s}:end=${e},setpts=PTS-STARTPTS,${FILL_1080},format=yuv420p[sv${i}];`;
         let af = `atrim=start=${s}:end=${e},asetpts=PTS-STARTPTS`;
-        if (clean !== 'off') {
+        if (clean !== 'off' && clean !== 'auphonic') {
             af += ',highpass=f=80';
             if (clean === 'strong' && opts.noiseModel) af += `,arnndn=model=${opts.noiseModel}`;
             else af += ',afftdn=nr=12';
@@ -149,12 +166,14 @@ export async function renderEdit(opts: {
         const b = opts.broll![i];
         const at = editedTime(b.atMs, ranges, true);
         if (at === null) continue;
-        const s0 = (at / 1000).toFixed(3);
-        const s1 = (at / 1000 + b.seconds).toFixed(3);
+        const startSec = at / 1000;
+        const endSec = startSec + b.seconds;
+        const fadeDur = 0.5;
         const br = `br${bi}`;
         const next = `ep${bi + 1}`;
-        filter += `[${brollIdxs[i]}:v]format=yuv420p[${br}];`;
-        filter += `[${epV}][${br}]overlay=x=0:y=0:enable='between(t,${s0},${s1})':eof_action=pass,format=yuv420p[${next}];`;
+        // Shift the b-roll clip to start at the edited time, with 0.5s alpha fade in and out.
+        filter += `[${brollIdxs[i]}:v]setpts=PTS-STARTPTS+${startSec}/TB,format=yuv420p,fade=t=in:st=${startSec.toFixed(3)}:d=${fadeDur}:alpha=1,fade=t=out:st=${(endSec - fadeDur).toFixed(3)}:d=${fadeDur}:alpha=1[${br}];`;
+        filter += `[${epV}][${br}]overlay=x=0:y=0:enable='between(t,${startSec.toFixed(3)},${endSec.toFixed(3)})':eof_action=pass,format=yuv420p[${next}];`;
         epV = next;
         bi++;
     }
@@ -179,7 +198,8 @@ export async function renderEdit(opts: {
     await run('ffmpeg', args);
 
     // Loudness normalization as a separate two-pass (per media.ts normalizeLoudness).
-    if (opts.clean !== 'off') {
+    // Skip when clean is 'auphonic' — Auphonic handles loudness itself.
+    if (opts.clean !== 'off' && opts.clean !== 'auphonic') {
         await normalizeLoudness(rawOut, opts.out);
         try { fs.unlinkSync(rawOut); } catch {}
     } else {
@@ -194,7 +214,7 @@ export async function renderEdit(opts: {
         inputSeconds: inSeconds,
         outputSeconds: outSecs,
         cuts: opts.edit.cuts.length,
-        timeSavedSeconds: Math.max(0, inSeconds - outSecs),
+        timeSavedSeconds: Math.max(0, inSeconds - (editedMs / 1000)),
         renderSeconds: (Date.now() - start) / 1000,
     };
     const reportPath = opts.out.replace(/\.\w+$/, '') + '.report.json';
@@ -207,7 +227,7 @@ export async function renderEdit(opts: {
 interface ParsedArgs {
     video?: string; editPath?: string; out?: string;
     teasers: string[]; intro?: string; outro?: string;
-    broll: BrollArg[]; clean: 'off' | 'light' | 'strong'; noiseModel?: string;
+    broll: BrollArg[]; clean: 'off' | 'light' | 'strong' | 'auphonic'; detect?: 'auphonic'; noiseModel?: string;
 }
 
 function parseArgs(argv: string[]): ParsedArgs {
@@ -221,7 +241,8 @@ function parseArgs(argv: string[]): ParsedArgs {
             case '--intro': args.intro = argv[++i]; break;
             case '--outro': args.outro = argv[++i]; break;
             case '--broll': args.broll.push(JSON.parse(argv[++i])); break;
-            case '--clean': args.clean = argv[++i] as 'off' | 'light' | 'strong'; break;
+            case '--clean': args.clean = argv[++i] as 'off' | 'light' | 'strong' | 'auphonic'; break;
+            case '--detect': args.detect = argv[++i] as 'auphonic'; break;
             case '--noise-model': args.noiseModel = argv[++i]; break;
         }
     }
@@ -240,7 +261,7 @@ if (require.main === module) {
         teasers: args.teasers.length ? args.teasers : undefined,
         intro: args.intro, outro: args.outro,
         broll: args.broll.length ? args.broll : undefined,
-        clean: args.clean, noiseModel: args.noiseModel,
+        clean: args.clean, detect: args.detect, noiseModel: args.noiseModel,
     }).then(r => console.log(JSON.stringify(r, null, 2)))
       .catch(e => { console.error('Render failed:', e); process.exit(1); });
 }

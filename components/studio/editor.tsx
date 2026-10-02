@@ -63,10 +63,11 @@ export function Editor({ words, videoUrl, edit, onChange }: {
     const rafRef = useRef<number>(0);
 
     const paras = useMemo(() => groupBySpeaker(words), [words]);
+    const [videoDuration, setVideoDuration] = useState(0);
     const ranges = useMemo(() => keepRanges(
-        words.length > 0 ? words[words.length - 1].end : 0,
+        videoDuration || (words.length > 0 ? words[words.length - 1].end : 0),
         edit.cuts,
-    ), [words, edit.cuts]);
+    ), [videoDuration, words, edit.cuts]);
     const editedMs = useMemo(() => editedDuration(ranges), [ranges]);
 
     // Push edit to history when it changes.
@@ -127,22 +128,17 @@ export function Editor({ words, videoUrl, edit, onChange }: {
         return () => el.removeEventListener('keydown', handler);
     }, [selectedRange, words, updateEdit, undo, redo]);
 
-    // Video time mapping: skip cut ranges during playback.
+    // Video time mapping: skip cut ranges during playback — jump only when
+    // the time is outside every kept range (in a cut), to the next kept range.
     useEffect(() => {
         const video = videoRef.current;
         if (!video) return;
         const onTimeUpdate = () => {
             const t = video.currentTime * 1000;
-            // Check if current time falls in a cut — if so, jump to next kept range.
-            for (const r of ranges) {
-                if (t >= r.startMs && t < r.endMs) {
-                    // Find the next kept range after this cut.
-                    const nextRange = ranges.find(r2 => r2.startMs >= r.endMs);
-                    if (nextRange) {
-                        video.currentTime = nextRange.startMs / 1000;
-                    }
-                    break;
-                }
+            const inKept = ranges.some(r => t >= r.startMs && t < r.endMs);
+            if (!inKept) {
+                const next = ranges.find(r => r.startMs > t);
+                if (next) video.currentTime = next.startMs / 1000;
             }
         };
         video.addEventListener('timeupdate', onTimeUpdate);
@@ -154,13 +150,12 @@ export function Editor({ words, videoUrl, edit, onChange }: {
         const video = videoRef.current;
         if (!video) return;
         const tick = () => {
-            if (video.paused) { rafRef.current = requestAnimationFrame(tick); return; }
-            const t = video.currentTime * 1000;
-            for (const r of ranges) {
-                if (t >= r.startMs && t < r.endMs) {
-                    const nextRange = ranges.find(r2 => r2.startMs >= r.endMs);
-                    if (nextRange) video.currentTime = nextRange.startMs / 1000;
-                    break;
+            if (!video.paused) {
+                const t = video.currentTime * 1000;
+                const inKept = ranges.some(r => t >= r.startMs && t < r.endMs);
+                if (!inKept) {
+                    const next = ranges.find(r => r.startMs > t);
+                    if (next) video.currentTime = next.startMs / 1000;
                 }
             }
             rafRef.current = requestAnimationFrame(tick);
@@ -267,6 +262,7 @@ export function Editor({ words, videoUrl, edit, onChange }: {
                         src={videoUrl}
                         className="w-full rounded-lg bg-black"
                         controls
+                        onLoadedMetadata={e => setVideoDuration(e.currentTarget.duration * 1000)}
                     />
                 </div>
 

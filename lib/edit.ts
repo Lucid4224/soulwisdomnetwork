@@ -133,6 +133,26 @@ export function suggestCuts(words: SpokenWord[], options?: SuggestOptions): Cut[
         }
     }
 
+    // Filler-as-gap: AssemblyAI leaves out "um" and "uh" by default, so fillers
+    // often show up as a gap between two words inside a sentence. Inside a sentence
+    // (previous word not ending in . ? !), a gap of 350–1200 ms becomes a 'filler'
+    // cut leaving 150 ms of air.
+    const FILLER_GAP_MIN = 350;
+    const FILLER_GAP_MAX = 1200;
+    const FILLER_KEEP_MS = 150;
+    const endsSentence = (s: string) => /[.?!]$/.test(s.trim());
+    for (let i = 1; i < words.length; i++) {
+        const prev = words[i - 1];
+        const gap = words[i].start - prev.end;
+        if (gap >= FILLER_GAP_MIN && gap <= FILLER_GAP_MAX && !endsSentence(prev.text)) {
+            cuts.push({
+                startMs: prev.end + FILLER_KEEP_MS,
+                endMs: words[i].start,
+                reason: 'filler',
+            });
+        }
+    }
+
     return cuts;
 }
 

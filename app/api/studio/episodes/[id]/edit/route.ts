@@ -17,23 +17,24 @@ export const GET = handle<Context>(async (request, { params }) => {
 });
 
 export const PUT = handle<Context>(async (request, { params }) => {
-    await requireRole(request, STUDIO_ROLES);
+    const { uid } = await requireRole(request, STUDIO_ROLES);
     const id = (await params).id;
     const body = await request.json().catch(() => ({})) as { edit?: EpisodeEdit; version?: number };
     if (!body.edit) throw new HttpError(400, 'Missing edit');
+    if (body.version === undefined) throw new HttpError(400, 'Missing version');
 
     const ref = adminDb().collection('episodes').doc(id);
     const snap = await ref.get();
     if (!snap.exists) throw new HttpError(404, 'Episode not found');
 
     const current = (snap.data() as { edit?: { version: number } }).edit;
-    if (current && body.version !== undefined && body.version !== current.version) {
+    if (current && body.version !== current.version) {
         throw new HttpError(409, 'Version mismatch — someone else edited');
     }
 
     const newVersion = (current?.version ?? 0) + 1;
     await ref.update({
-        edit: { ...body.edit, version: newVersion },
+        edit: { ...body.edit, version: newVersion, updatedAt: new Date().toISOString(), updatedBy: uid },
     });
     return Response.json({ version: newVersion });
 });
