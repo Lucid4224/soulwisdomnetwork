@@ -62,19 +62,24 @@ export async function renderEdit(opts: {
     let editedMs = editedDuration(ranges);
     const fadeSecs = 0.015;
 
-    // Auphonic detect: run detection and add cuts to the edit.
-    if (opts.detect === 'auphonic') {
+    // Auphonic, run once when it detects cuts, cleans the voice, or both. It works in
+    // "export_uncut_audio" mode, so its cleaned audio keeps the original timing and
+    // the cuts above still line up with it.
+    let cleanedAudio: string | null = null;
+    if (opts.detect === 'auphonic' || clean === 'auphonic') {
         const { auphonicProcess, auphonicCutsToEdit } = await import('./auphonic');
-        const { regions } = await auphonicProcess(opts.video, {
+        const result = await auphonicProcess(opts.video, {
             detectOnly: true,
             fillerCutting: true,
             silenceCutting: true,
             coughCutting: true,
-            noiseReduction: false,
+            noiseReduction: clean === 'auphonic',
         });
-        const detectedCuts = auphonicCutsToEdit(regions);
-        ranges = keepRanges(inMs, [...opts.edit.cuts, ...detectedCuts]);
-        editedMs = editedDuration(ranges);
+        if (clean === 'auphonic') cleanedAudio = result.cleanedAudio;
+        if (opts.detect === 'auphonic') {
+            ranges = keepRanges(inMs, [...opts.edit.cuts, ...auphonicCutsToEdit(result.regions)]);
+            editedMs = editedDuration(ranges);
+        }
     }
 
     // Pre-render b-roll clips with kenBurns to temp files.
@@ -101,6 +106,8 @@ export async function renderEdit(opts: {
     const introIdx = opts.intro ? (inputs.push(opts.intro), idx++) : -1;
     const episodeIdx = idx++; inputs.push(opts.video);
     const outroIdx = opts.outro ? (inputs.push(opts.outro), idx++) : -1;
+    // With --clean auphonic the episode's sound comes from Auphonic's cleaned audio.
+    const episodeAudioIdx = cleanedAudio ? (inputs.push(cleanedAudio), idx++) : episodeIdx;
     const brollIdxs: number[] = [];
     for (const bf of brollFiles) { if (bf) { inputs.push(bf); brollIdxs.push(idx++); } else brollIdxs.push(-1); }
 
@@ -144,7 +151,7 @@ export async function renderEdit(opts: {
         const segDur = (r.endMs - r.startMs) / 1000;
         if (segDur > fadeSecs * 2)
             af += `,afade=t=in:d=${fadeSecs},afade=t=out:st=${(segDur - fadeSecs).toFixed(3)}:d=${fadeSecs}`;
-        filter += `[${episodeIdx}:a]${af}[sa${i}];`;
+        filter += `[${episodeAudioIdx}:a]${af}[sa${i}];`;
         segV.push(`sv${i}`);
         segA.push(`sa${i}`);
     }
@@ -198,8 +205,8 @@ export async function renderEdit(opts: {
     await run('ffmpeg', args);
 
     // Loudness normalization as a separate two-pass (per media.ts normalizeLoudness).
-    // Skip when clean is 'auphonic' — Auphonic handles loudness itself.
-    if (opts.clean !== 'off' && opts.clean !== 'auphonic') {
+    // Loudness for the whole programme (teasers and intro included) unless cleanup is off.
+    if (clean !== 'off') {
         await normalizeLoudness(rawOut, opts.out);
         try { fs.unlinkSync(rawOut); } catch {}
     } else {

@@ -3,7 +3,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { auphonicCutsToEdit, type AuphonicRegion } from './auphonic';
+import { auphonicCutsToEdit, parseReaperRegions, type AuphonicRegion } from './auphonic';
 
 test('auphonicCutsToEdit converts regions to Cut[]', () => {
     // A small sample shaped like Auphonic's documented cut data:
@@ -36,4 +36,13 @@ test('auphonicCutsToEdit converts regions to Cut[]', () => {
 
 test('auphonicCutsToEdit handles empty input', () => {
     assert.deepEqual(auphonicCutsToEdit([]), []);
+});
+
+test('parseReaperRegions reads the Reaper regions cut list', () => {
+    const csv = '#,Name,Start,End,Length\nR1,Filler,0:01.500,0:02.100,0:00.600\nR2,Silence,10.24,10.48,0.24\nR3,Cough,1:00:15.000,1:00:15.300,0:00.300\n';
+    assert.deepEqual(parseReaperRegions(csv), [
+        { start: 1.5, end: 2.1, type: 'filler' },
+        { start: 10.24, end: 10.48, type: 'silence' },
+        { start: 3615, end: 3615.3, type: 'cough' },
+    ]);
 });

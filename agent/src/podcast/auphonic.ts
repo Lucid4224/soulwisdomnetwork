@@ -49,26 +49,23 @@ export async function auphonicProcess(
     const apiKey = opts.apiKey ?? process.env.AUPHONIC_API_KEY;
     if (!apiKey) throw new Error('AUPHONIC_API_KEY is not set');
 
-    const cutMode = opts.detectOnly ? 'export_uncut_audio' : 'apply_cuts';
+    // Names from Auphonic's API docs (help/api/details.html): the cutters and
+    // cut_mode live inside `algorithms`; "export_uncut_audio" detects without cutting.
     const algorithms: Record<string, unknown> = {
-        normloudness: true,
+        cut_mode: opts.detectOnly ? 'export_uncut_audio' : 'apply_cuts',
         loudnesstarget: opts.loudnessTarget ?? -14,
     };
-    if (opts.fillerCutting !== false) algorithms.fillercutting = true;
-    if (opts.silenceCutting !== false) algorithms.silencecutting = true;
-    if (opts.coughCutting) algorithms.coughcutting = true;
-    if (opts.noiseReduction !== false) {
-        algorithms.denoise = true;
-        algorithms.denoiseamount = 50;
-    }
+    if (opts.fillerCutting !== false) algorithms.filler_cutter = true;
+    if (opts.silenceCutting !== false) algorithms.silence_cutter = true;
+    if (opts.coughCutting) algorithms.cough_cutter = true;
+    if (opts.noiseReduction !== false) algorithms.denoise = true;
 
     // Create the production.
     const createBody = {
         algorithms,
-        cut_mode: cutMode,
         output_files: [
             { format: 'aac', bitrate: '192' },
-            { format: 'cut-list', ending: 'cut-list.json' },
+            { format: 'cut-list', ending: 'ReaperRegions.csv' },
         ],
         action: 'start',
     };
@@ -121,7 +118,7 @@ export async function auphonicProcess(
 
     // Download the cleaned audio (AAC output).
     const audioOut = outData.data.find(f => f.filename.endsWith('.m4a') || f.filename.endsWith('.aac'));
-    const cutListOut = outData.data.find(f => f.filename.includes('cut-list'));
+    const cutListOut = outData.data.find(f => /regions\.csv$/i.test(f.filename));
 
     let cleanedAudio = audioPath;
     if (audioOut) {
@@ -132,48 +129,35 @@ export async function auphonicProcess(
         fs.writeFileSync(cleanedAudio, buf);
     }
 
-    // Parse cut regions from the cut-list output.
-    const regions: AuphonicRegion[] = [];
+    // Parse cut regions from the Reaper regions cut list.
+    let regions: AuphonicRegion[] = [];
     if (cutListOut) {
         const dlRes = await fetch(cutListOut.download_url);
-        if (dlRes.ok) {
-            const text = await dlRes.text();
-            try {
-                const parsed = JSON.parse(text);
-                // Auphonic cut-lists contain arrays of [start, end, type] or
-                // objects with start/end/type fields. Handle both shapes.
-                if (Array.isArray(parsed)) {
-                    for (const item of parsed) {
-                        if (Array.isArray(item) && item.length >= 2) {
-                            regions.push({
-                                start: Number(item[0]),
-                                end: Number(item[1]),
-                                type: (item[2] as AuphonicRegion['type']) || 'filler',
-                            });
-                        } else if (item && typeof item === 'object') {
-                            regions.push({
-                                start: Number(item.start ?? item.begin),
-                                end: Number(item.end ?? item.stop),
-                                type: (item.type as AuphonicRegion['type']) || 'filler',
-                            });
-                        }
-                    }
-                }
-            } catch {
-                // If the cut-list isn't JSON, try the CSV format.
-                for (const line of text.split('\n').filter(l => l.trim() && !l.startsWith('#'))) {
-                    const parts = line.split(/[,\t]/).map(Number);
-                    if (parts.length >= 2 && Number.isFinite(parts[0]) && Number.isFinite(parts[1])) {
-                        regions.push({
-                            start: parts[0],
-                            end: parts[1],
-                            type: (parts[2] === 1 ? 'silence' : 'filler') as AuphonicRegion['type'],
-                        });
-                    }
-                }
-            }
-        }
+        if (!dlRes.ok) throw new Error(`Auphonic cut list download failed: ${dlRes.status}`);
+        regions = parseReaperRegions(await dlRes.text());
     }
 
     return { cleanedAudio, regions };
+}
+
+// Reaper times come as plain seconds or as [h:]m:s.ms; returns seconds.
+function reaperSeconds(value: string): number {
+    const parts = value.trim().split(':').map(Number);
+    return parts.reduce((total, part) => total * 60 + part, 0);
+}
+
+// Parses Auphonic's "ReaperRegions.csv" cut list (#,Name,Start,End,Length). The region
+// name says what was detected; anything not silence or a cough counts as a filler.
+export function parseReaperRegions(csv: string): AuphonicRegion[] {
+    const regions: AuphonicRegion[] = [];
+    for (const line of csv.split(/\r?\n/)) {
+        const cols = line.split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+        if (cols.length < 4 || !/^R?\d+$/i.test(cols[0])) continue;
+        const start = reaperSeconds(cols[2]), end = reaperSeconds(cols[3]);
+        if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) continue;
+        const name = cols[1].toLowerCase();
+        const type: AuphonicRegion['type'] = name.includes('silence') ? 'silence' : name.includes('cough') ? 'cough' : 'filler';
+        regions.push({ start, end, type });
+    }
+    return regions;
 }

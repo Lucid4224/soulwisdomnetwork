@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import * as fs from 'fs';
 import * as path from 'path';
 import { spawn } from 'child_process';
-import { keepRanges, editedDuration, type Cut, type EpisodeEdit } from '../../../lib/edit';
+import { keepRanges, editedDuration, editedTime, type Cut, type EpisodeEdit } from '../../../lib/edit';
 import { renderEdit } from './editRender';
 
 function run(cmd: string, args: string[]): Promise<void> {
@@ -36,6 +36,19 @@ function probeStreams(file: string): Promise<{ video: number; audio: number; dur
         child.on('error', reject);
     });
 }
+
+// The average colour of one frame, as [r, g, b].
+function frameColour(file: string, seconds: number): Promise<number[]> {
+    return new Promise((resolve, reject) => {
+        const child = spawn('ffmpeg', ['-v', 'error', '-ss', String(seconds), '-i', file, '-frames:v', '1',
+            '-vf', 'scale=1:1', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], { stdio: ['ignore', 'pipe', 'inherit'] });
+        const chunks: Buffer[] = [];
+        child.stdout.on('data', d => chunks.push(d));
+        child.on('error', reject);
+        child.on('close', () => resolve([...Buffer.concat(chunks)].slice(0, 3)));
+    });
+}
+const isBlue = ([r, g, b]: number[]) => b > 200 && r < 60 && g < 60;
 
 test('render with cuts, teasers, intro, outro, b-roll, and --clean light', async () => {
     const dir = path.join(process.env.TMPDIR || '/tmp', 'edit-render-test');
@@ -118,6 +131,11 @@ test('render with cuts, teasers, intro, outro, b-roll, and --clean light', async
     // Check 48kHz audio.
     assert.equal(probe.audio, 1, 'exactly one audio stream');
     assert.equal(probe.audioRate, 48000, 'audio is 48 kHz');
+
+    // The b-roll (a plain blue still) shows in the middle of its window, on the edited timeline, and not after it.
+    const brollStart = 4 + (editedTime(6000, ranges, true) ?? 0) / 1000; // after the 2 s teaser and 2 s intro
+    assert.ok(isBlue(await frameColour(out, brollStart + 1.5)), 'b-roll visible mid-window');
+    assert.ok(!isBlue(await frameColour(out, brollStart + 3 + 1.5)), 'b-roll gone after its window');
 
     // Check the JSON report exists.
     const reportPath = out.replace(/\.\w+$/, '') + '.report.json';
