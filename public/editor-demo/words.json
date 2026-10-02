@@ -1,0 +1,828 @@
+[
+ {
+  "text": "Welcome",
+  "start": 0,
+  "end": 529,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "to",
+  "start": 599,
+  "end": 861,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "the",
+  "start": 931,
+  "end": 1174,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "show.",
+  "start": 1244,
+  "end": 1617,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "Today",
+  "start": 2067,
+  "end": 2507,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "we",
+  "start": 2577,
+  "end": 2895,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "have",
+  "start": 2965,
+  "end": 3355,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "um",
+  "start": 3425,
+  "end": 3729,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "a",
+  "start": 3799,
+  "end": 4059,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "very",
+  "start": 4129,
+  "end": 4480,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "special",
+  "start": 4550,
+  "end": 5046,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "guest",
+  "start": 5116,
+  "end": 5460,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "with",
+  "start": 5530,
+  "end": 5908,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "us.",
+  "start": 5978,
+  "end": 6255,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "We",
+  "start": 6705,
+  "end": 7022,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "are",
+  "start": 7092,
+  "end": 7400,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "going",
+  "start": 7470,
+  "end": 7846,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "to",
+  "start": 7916,
+  "end": 8179,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "talk",
+  "start": 8249,
+  "end": 8577,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "about",
+  "start": 8647,
+  "end": 9101,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "the",
+  "start": 9171,
+  "end": 9414,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "the",
+  "start": 9484,
+  "end": 9727,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "meaning",
+  "start": 9797,
+  "end": 10211,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "of",
+  "start": 10281,
+  "end": 10558,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "a",
+  "start": 10628,
+  "end": 10888,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "quiet",
+  "start": 10958,
+  "end": 11414,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "mind.",
+  "start": 11484,
+  "end": 11914,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "Thank",
+  "start": 12364,
+  "end": 12830,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "you",
+  "start": 12900,
+  "end": 13229,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "for",
+  "start": 13299,
+  "end": 13684,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "having",
+  "start": 13754,
+  "end": 14269,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "me.",
+  "start": 14339,
+  "end": 14680,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "It",
+  "start": 15130,
+  "end": 15395,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "is",
+  "start": 15465,
+  "end": 15795,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "um",
+  "start": 15865,
+  "end": 16195,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "a",
+  "start": 16265,
+  "end": 16550,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "real",
+  "start": 16620,
+  "end": 16980,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "pleasure",
+  "start": 17050,
+  "end": 17481,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "to",
+  "start": 17551,
+  "end": 17839,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "be",
+  "start": 17909,
+  "end": 18214,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "here.",
+  "start": 18284,
+  "end": 18680,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "So",
+  "start": 21130,
+  "end": 21482,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "tell",
+  "start": 21552,
+  "end": 21865,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "us,",
+  "start": 21935,
+  "end": 22212,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "how",
+  "start": 22282,
+  "end": 22617,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "did",
+  "start": 22687,
+  "end": 22967,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "you",
+  "start": 23037,
+  "end": 23345,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "first",
+  "start": 23415,
+  "end": 23830,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "um",
+  "start": 23900,
+  "end": 24204,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "find",
+  "start": 24274,
+  "end": 24721,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "this",
+  "start": 24791,
+  "end": 25140,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "path?",
+  "start": 25210,
+  "end": 25527,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "It",
+  "start": 25977,
+  "end": 26241,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "started",
+  "start": 26311,
+  "end": 26868,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "with",
+  "start": 26938,
+  "end": 27337,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "a",
+  "start": 27407,
+  "end": 27692,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "long",
+  "start": 27762,
+  "end": 28244,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "walk",
+  "start": 28314,
+  "end": 28694,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "by",
+  "start": 28764,
+  "end": 29116,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "the",
+  "start": 29186,
+  "end": 29490,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "sea.",
+  "start": 29560,
+  "end": 29882,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "I",
+  "start": 30332,
+  "end": 30634,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "sat",
+  "start": 30704,
+  "end": 31082,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "down",
+  "start": 31152,
+  "end": 31528,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "and",
+  "start": 31598,
+  "end": 31967,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "just",
+  "start": 32037,
+  "end": 32388,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "listened.",
+  "start": 32458,
+  "end": 32922,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "And",
+  "start": 33372,
+  "end": 33719,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "what",
+  "start": 33789,
+  "end": 34113,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "did",
+  "start": 34183,
+  "end": 34462,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "you",
+  "start": 34532,
+  "end": 34841,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "hear?",
+  "start": 34911,
+  "end": 35270,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "Mostly",
+  "start": 37720,
+  "end": 38239,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "the",
+  "start": 38309,
+  "end": 38612,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "waves.",
+  "start": 38682,
+  "end": 39195,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "Then",
+  "start": 39645,
+  "end": 40064,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "I",
+  "start": 40134,
+  "end": 40436,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "noticed",
+  "start": 40506,
+  "end": 41028,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "my",
+  "start": 41498,
+  "end": 41897,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "own",
+  "start": 41967,
+  "end": 42330,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "breathing,",
+  "start": 42400,
+  "end": 42860,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "and",
+  "start": 42930,
+  "end": 43299,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "that",
+  "start": 43369,
+  "end": 43750,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "changed",
+  "start": 43820,
+  "end": 44375,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "everything.",
+  "start": 44445,
+  "end": 45110,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "That",
+  "start": 45560,
+  "end": 45913,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "is",
+  "start": 45983,
+  "end": 46291,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "beautiful.",
+  "start": 46361,
+  "end": 46859,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "What",
+  "start": 47309,
+  "end": 47633,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "would",
+  "start": 47703,
+  "end": 48019,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "you",
+  "start": 48089,
+  "end": 48398,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "say",
+  "start": 48468,
+  "end": 48806,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "to",
+  "start": 48876,
+  "end": 49138,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "someone",
+  "start": 49208,
+  "end": 49720,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "just",
+  "start": 50164,
+  "end": 50495,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "starting",
+  "start": 50565,
+  "end": 51118,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "out?",
+  "start": 51188,
+  "end": 51485,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "Start",
+  "start": 51935,
+  "end": 52395,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "small.",
+  "start": 52465,
+  "end": 52920,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "Sit",
+  "start": 53370,
+  "end": 53710,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "for",
+  "start": 53780,
+  "end": 54165,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "five",
+  "start": 54235,
+  "end": 54697,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "minutes",
+  "start": 54767,
+  "end": 55264,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "a",
+  "start": 55334,
+  "end": 55619,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "day",
+  "start": 55689,
+  "end": 55993,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "and",
+  "start": 56063,
+  "end": 56432,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "be",
+  "start": 56902,
+  "end": 57207,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "kind",
+  "start": 57277,
+  "end": 57709,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "to",
+  "start": 57779,
+  "end": 58067,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "yourself.",
+  "start": 58137,
+  "end": 58775,
+  "speaker": "Guest",
+  "clip": false
+ },
+ {
+  "text": "Thank",
+  "start": 59225,
+  "end": 59671,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "you",
+  "start": 59741,
+  "end": 60050,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "so",
+  "start": 60120,
+  "end": 60471,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "much",
+  "start": 60541,
+  "end": 60911,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "for",
+  "start": 60981,
+  "end": 61350,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "joining",
+  "start": 61420,
+  "end": 61875,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "us",
+  "start": 61945,
+  "end": 62222,
+  "speaker": "Host",
+  "clip": false
+ },
+ {
+  "text": "today.",
+  "start": 62292,
+  "end": 62733,
+  "speaker": "Host",
+  "clip": false
+ }
+]
