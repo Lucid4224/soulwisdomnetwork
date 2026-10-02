@@ -2,7 +2,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import {
     keepRanges, editedTime, editedDuration, suggestCuts,
-    applyToChapters, applyToQuotes,
+    applyToChapters, applyToQuotes, editedWords,
     type KeptRange,
 } from './edit';
 import type { SpokenWord } from './showNotes';
@@ -264,5 +264,29 @@ describe('empty edit', () => {
     test('editedTime returns original for no cuts', () => {
         const r = keepRanges(10_000, []);
         assert.equal(editedTime(5000, r), 5000);
+    });
+});
+
+describe('editedWords', () => {
+    const ranges: KeptRange[] = [{ startMs: 0, endMs: 2000 }, { startMs: 3000, endMs: 6000 }];
+    const words = [
+        { text: 'kept', start: 500, end: 900 },
+        { text: 'cut', start: 2200, end: 2700 },
+        { text: 'after', start: 3500, end: 3900 },
+    ];
+
+    test('drops cut words and moves the rest onto the edit', () => {
+        assert.deepEqual(editedWords(words, ranges), [
+            { text: 'kept', start: 500, end: 900 },
+            { text: 'after', start: 2500, end: 2900 },
+        ]);
+    });
+
+    test('applies the offset for what plays before the episode', () => {
+        assert.equal(editedWords(words, ranges, 4000)[1].start, 6500);
+    });
+
+    test('drops a word that straddles a cut', () => {
+        assert.deepEqual(editedWords([{ text: 'split', start: 1800, end: 3200 }], ranges), []);
     });
 });

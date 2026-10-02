@@ -179,3 +179,17 @@ export function applyToQuotes(
         return { ...q, startMs: start ?? 0, endMs: end ?? (start ?? 0) };
     });
 }
+
+// The transcript as it will be heard in the edited episode: words that are fully kept, moved
+// onto the edited timeline and shifted by `offsetMs` (whatever plays before the episode, such
+// as teasers and the intro). Cut words are dropped. This replaces re-transcribing the final cut.
+export function editedWords<W extends { start: number; end: number }>(words: W[], ranges: KeptRange[], offsetMs = 0): W[] {
+    const out: W[] = [];
+    for (const w of words) {
+        const start = editedTime(w.start, ranges);
+        const end = editedTime(w.end, ranges);
+        if (start === null || end === null || end - start !== w.end - w.start) continue;
+        out.push({ ...w, start: start + offsetMs, end: end + offsetMs });
+    }
+    return out;
+}

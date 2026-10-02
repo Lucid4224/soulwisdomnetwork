@@ -7,7 +7,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { spawn } from 'child_process';
-import { keepRanges, editedDuration, editedTime, type EpisodeEdit } from '../../../lib/edit';
+import { keepRanges, editedDuration, editedTime, editedWords, applyToChapters, applyToQuotes, type EpisodeEdit } from '../../../lib/edit';
+import { buildCues, toSrt } from '../../../lib/captions';
 import { kenBurns, normalizeLoudness, probeDuration } from './media';
 
 // ─── helpers ───────────────────────────────────────────────────────────────
@@ -53,6 +54,11 @@ export async function renderEdit(opts: {
     clean?: 'off' | 'light' | 'strong' | 'auphonic';
     detect?: 'auphonic';
     noiseModel?: string;
+    // The accepted transcript and show-note times, when known: their new times are written
+    // next to the output, so the final cut never has to be transcribed again.
+    words?: { text: string; start: number; end: number }[];
+    chapters?: { title: string; startMs: number }[];
+    quotes?: { text: string; speaker: string; startMs: number; endMs: number }[];
 }): Promise<RenderReport> {
     const start = Date.now();
     const clean = opts.clean ?? 'light';
@@ -224,7 +230,24 @@ export async function renderEdit(opts: {
         timeSavedSeconds: Math.max(0, inSeconds - (editedMs / 1000)),
         renderSeconds: (Date.now() - start) / 1000,
     };
-    const reportPath = opts.out.replace(/\.\w+$/, '') + '.report.json';
+    const base = opts.out.replace(/\.\w+$/, '');
+    if (opts.words?.length || opts.chapters?.length || opts.quotes?.length) {
+        // Everything before the episode (teasers, then the intro) pushes its times later.
+        let offsetMs = 0;
+        for (const f of [...(opts.teasers ?? []), ...(opts.intro ? [opts.intro] : [])]) offsetMs += Math.round((await probeDuration(f)) * 1000);
+        const shift = <T extends { startMs: number; endMs?: number }>(x: T): T =>
+            ({ ...x, startMs: x.startMs + offsetMs, ...(x.endMs !== undefined ? { endMs: x.endMs + offsetMs } : {}) });
+        if (opts.words?.length) {
+            const words = editedWords(opts.words, ranges, offsetMs);
+            fs.writeFileSync(`${base}.words.json`, JSON.stringify(words));
+            fs.writeFileSync(`${base}.srt`, toSrt(buildCues(words)));
+        }
+        fs.writeFileSync(`${base}.chapters.json`, JSON.stringify({
+            chapters: applyToChapters(opts.chapters ?? [], ranges).map(shift),
+            quotes: applyToQuotes(opts.quotes ?? [], ranges).map(shift),
+        }, null, 2));
+    }
+    const reportPath = `${base}.report.json`;
     fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
     return report;
 }
@@ -262,13 +285,16 @@ if (require.main === module) {
         console.error('Usage: editRender.ts --video in.mp4 --edit edit.json --out out.mp4 [--teaser a.mp4] [--intro intro.mp4] [--outro outro.mp4] [--broll json] [--clean off|light|strong]');
         process.exit(1);
     }
-    const edit: EpisodeEdit = JSON.parse(fs.readFileSync(args.editPath, 'utf8'));
+    // The edit file may also carry "words", "chapters" and "quotes" for the new times.
+    const edit: EpisodeEdit & Pick<Parameters<typeof renderEdit>[0], 'words' | 'chapters' | 'quotes'> =
+        JSON.parse(fs.readFileSync(args.editPath, 'utf8'));
     renderEdit({
         video: args.video, edit, out: args.out,
         teasers: args.teasers.length ? args.teasers : undefined,
         intro: args.intro, outro: args.outro,
         broll: args.broll.length ? args.broll : undefined,
         clean: args.clean, detect: args.detect, noiseModel: args.noiseModel,
+        words: edit.words, chapters: edit.chapters, quotes: edit.quotes,
     }).then(r => console.log(JSON.stringify(r, null, 2)))
       .catch(e => { console.error('Render failed:', e); process.exit(1); });
 }

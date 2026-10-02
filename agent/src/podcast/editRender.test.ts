@@ -118,6 +118,12 @@ test('render with cuts, teasers, intro, outro, b-roll, and --clean light', async
         outro: intro, // same file
         broll: [{ atMs: 6000, seconds: 3, image: brollImg }],
         clean: 'light',
+        words: [
+            { text: 'before', start: 1000, end: 1400 },
+            { text: 'gone', start: 8300, end: 8700 },
+            { text: 'after', start: 15000, end: 15400 },
+        ],
+        chapters: [{ title: 'Middle', startMs: 10_000 }],
     });
 
     // Check output length.
@@ -136,6 +142,17 @@ test('render with cuts, teasers, intro, outro, b-roll, and --clean light', async
     const brollStart = 4 + (editedTime(6000, ranges, true) ?? 0) / 1000; // after the 2 s teaser and 2 s intro
     assert.ok(isBlue(await frameColour(out, brollStart + 1.5)), 'b-roll visible mid-window');
     assert.ok(!isBlue(await frameColour(out, brollStart + 3 + 1.5)), 'b-roll gone after its window');
+
+    // Times and captions come straight from the edit: the cut word is gone and the word after
+    // the second cut moved by exactly the time removed before it, plus the 4 s teaser and intro.
+    const base = out.replace(/\.\w+$/, '');
+    const words = JSON.parse(fs.readFileSync(`${base}.words.json`, 'utf8')) as { text: string; start: number }[];
+    assert.deepEqual(words.map(w => w.text), ['before', 'after']);
+    const expectedAfter = 4000 + (editedTime(15000, ranges) ?? 0);
+    assert.ok(Math.abs(words[1].start - expectedAfter) < 100, `'after' at ${words[1].start} ms, expected ${expectedAfter}`);
+    assert.ok(fs.readFileSync(`${base}.srt`, 'utf8').startsWith('1'), 'captions file written');
+    const times = JSON.parse(fs.readFileSync(`${base}.chapters.json`, 'utf8'));
+    assert.equal(times.chapters[0].startMs, 4000 + (editedTime(10_000, ranges) ?? 0));
 
     // Check the JSON report exists.
     const reportPath = out.replace(/\.\w+$/, '') + '.report.json';
