@@ -30,6 +30,8 @@ agent/src/    podcast/ingest.ts — spec 005 steps 1-3, runs in GitHub Actions, 
               podcast/youtube.ts — spec 005 step 13 (YouTube upload via podcast/youtubeApi.ts), GitHub Actions only
               podcast/shorts.ts — spec 005 step 14 (Shorts from picked key quotes: titles, draw with ffmpeg + podcast/shortsRender.ts,
               schedule on YouTube), GitHub Actions only; fonts for the burned-in text in agent/assets/fonts
+              podcast/editRender.ts — Editor Light render (docs/specs/015-editor-light.md): cuts from lib/edit.ts,
+              teasers, intro, outro, b-roll, voice cleanup (optionally podcast/auphonic.ts), GitHub Actions only
 scripts/      make_admin.ts
 docs/specs/   numbered specs, 001-017; docs/BACKLOG.md lists features agreed for later
 types/
