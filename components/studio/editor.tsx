@@ -61,6 +61,11 @@ export function Editor({ words, videoUrl, edit, onChange }: {
     const historyRef = useRef<EpisodeEdit[]>([edit]);
     const historyIdx = useRef(0);
     const rafRef = useRef<number>(0);
+    const [currentWord, setCurrentWord] = useState(-1);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchMatches, setSearchMatches] = useState<number[]>([]);
+    const [searchCursor, setSearchCursor] = useState(0);
+    const searchRef = useRef<HTMLInputElement>(null);
 
     const paras = useMemo(() => groupBySpeaker(words), [words]);
     const [videoDuration, setVideoDuration] = useState(0);
@@ -97,11 +102,22 @@ export function Editor({ words, videoUrl, edit, onChange }: {
         }
     }, [onChange]);
 
-    // Keyboard: Delete/Backspace to cut, Ctrl/Cmd+Z for undo/redo.
+    // Keyboard: Delete/Backspace to cut, Ctrl/Cmd+Z for undo/redo, Space to play/pause.
     useEffect(() => {
         const el = containerRef.current;
         if (!el) return;
         const handler = (e: KeyboardEvent) => {
+            // Space plays or pauses the video when the editor has focus
+            // and the focus is not inside a text box (input, textarea).
+            if (e.key === ' ') {
+                const target = e.target as HTMLElement;
+                if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return;
+                e.preventDefault();
+                const video = videoRef.current;
+                if (!video) return;
+                if (video.paused) video.play(); else video.pause();
+                return;
+            }
             if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
                 e.preventDefault();
                 if (e.shiftKey) redo(); else undo();
@@ -130,6 +146,7 @@ export function Editor({ words, videoUrl, edit, onChange }: {
 
     // Video time mapping: skip cut ranges during playback — jump only when
     // the time is outside every kept range (in a cut), to the next kept range.
+    // Also track the word being spoken for the amber underline.
     useEffect(() => {
         const video = videoRef.current;
         if (!video) return;
@@ -140,10 +157,16 @@ export function Editor({ words, videoUrl, edit, onChange }: {
                 const next = ranges.find(r => r.startMs > t);
                 if (next) video.currentTime = next.startMs / 1000;
             }
+            // Find the word being spoken — the last word whose [start, end) contains t.
+            let cw = -1;
+            for (let i = 0; i < words.length; i++) {
+                if (t >= words[i].start && t < words[i].end) { cw = i; break; }
+            }
+            if (cw !== currentWord) setCurrentWord(cw);
         };
         video.addEventListener('timeupdate', onTimeUpdate);
         return () => video.removeEventListener('timeupdate', onTimeUpdate);
-    }, [ranges]);
+    }, [ranges, words, currentWord]);
 
     // RAF loop for more precise cut-skipping.
     useEffect(() => {
@@ -221,6 +244,33 @@ export function Editor({ words, videoUrl, edit, onChange }: {
         updateEdit(prev => ({ ...prev, cuts: prev.cuts.filter(c => c.reason === 'manual') }));
     };
 
+    // Search: typing highlights matching words, Enter jumps to the next match.
+    const onSearchChange = (q: string) => {
+        setSearchQuery(q);
+        if (!q.trim()) {
+            setSearchMatches([]);
+            return;
+        }
+        const lower = q.toLowerCase();
+        const matches: number[] = [];
+        for (let i = 0; i < words.length; i++) {
+            if (words[i].text.toLowerCase().includes(lower)) matches.push(i);
+        }
+        setSearchMatches(matches);
+        setSearchCursor(0);
+    };
+
+    const onSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter' && searchMatches.length > 0) {
+            e.preventDefault();
+            const next = (searchCursor + 1) % searchMatches.length;
+            setSearchCursor(next);
+            const idx = searchMatches[next];
+            setSelectedRange([idx, idx]);
+            seekTo(idx);
+        }
+    };
+
     // Count cuts by reason.
     const reasonCounts = useMemo(() => {
         const counts: Record<string, number> = {};
@@ -252,6 +302,20 @@ export function Editor({ words, videoUrl, edit, onChange }: {
                         {reason}: {count}
                     </span>
                 ))}
+                <input
+                    ref={searchRef}
+                    type="text"
+                    value={searchQuery}
+                    onChange={e => onSearchChange(e.target.value)}
+                    onKeyDown={onSearchKeyDown}
+                    placeholder="Search transcript…"
+                    className="ml-auto px-2 py-1 text-sm rounded bg-white/5 text-gray-200 placeholder-gray-500 outline-none focus:ring-1 ring-amber-400/50"
+                />
+                {searchMatches.length > 0 && (
+                    <span className={hint}>
+                        {searchCursor + 1}/{searchMatches.length}
+                    </span>
+                )}
             </div>
 
             <div className="flex flex-col gap-4 md:flex-row">
@@ -276,6 +340,8 @@ export function Editor({ words, videoUrl, edit, onChange }: {
                                     const cut = isCut(index, words, edit.cuts);
                                     const isSelected = selectedRange &&
                                         index >= selectedRange[0] && index <= selectedRange[1];
+                                    const isCurrent = index === currentWord;
+                                    const isMatch = searchMatches.includes(index);
                                     // The silence before this word, also across a change of speaker. It shows
                                     // as a chip when it is long, or when a cut sits in it (a filler AssemblyAI
                                     // left out of the transcript), so every suggestion can be seen and undone.
@@ -310,7 +376,9 @@ export function Editor({ words, videoUrl, edit, onChange }: {
                                                 className={`cursor-pointer select-none ${
                                                     cut ? 'line-through text-gray-600' :
                                                     isSelected ? 'bg-amber-500/30 rounded' : 'text-gray-200'
-                                                } ${isSelected ? 'ring-1 ring-amber-400/50' : ''}`}
+                                                } ${isSelected ? 'ring-1 ring-amber-400/50' : ''} ${
+                                                    isCurrent && !cut ? 'underline decoration-amber-400 decoration-2 underline-offset-2' : ''
+                                                } ${isMatch && !cut ? 'bg-amber-400/10' : ''}`}
                                                 onClick={(e) => cut
                                                     ? onCutClick(edit.cuts.find(c =>
                                                         word.start >= c.startMs && word.end <= c.endMs)!)
