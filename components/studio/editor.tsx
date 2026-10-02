@@ -276,27 +276,34 @@ export function Editor({ words, videoUrl, edit, onChange }: {
                                     const cut = isCut(index, words, edit.cuts);
                                     const isSelected = selectedRange &&
                                         index >= selectedRange[0] && index <= selectedRange[1];
-                                    const prevGap = wi > 0
-                                        ? word.start - para.words[wi - 1].word.end : 0;
+                                    // The silence before this word, also across a change of speaker. It shows
+                                    // as a chip when it is long, or when a cut sits in it (a filler AssemblyAI
+                                    // left out of the transcript), so every suggestion can be seen and undone.
+                                    const prev = index > 0 ? words[index - 1] : null;
+                                    const prevGap = prev ? word.start - prev.end : 0;
+                                    const gapCuts = prev ? edit.cuts.filter(c =>
+                                        c.startMs >= prev.end - 50 && c.endMs <= word.start + 50) : [];
+                                    const gapCut = gapCuts.length > 0;
                                     return (
                                         <span key={wi}>
-                                            {prevGap > pauseThreshold && (
+                                            {prev && (prevGap > pauseThreshold || gapCut) && (
                                                 <span
-                                                    className="inline-block mx-1 px-1.5 py-0.5 rounded bg-white/5 text-xs text-gray-400 cursor-pointer hover:bg-white/10"
+                                                    title={gapCut ? 'Cut: click to keep it' : 'Click to shorten this pause'}
+                                                    className={`inline-block mx-1 px-1.5 py-0.5 rounded text-xs cursor-pointer ${
+                                                        gapCut ? 'bg-amber-400/10 text-gray-500 line-through ring-1 ring-amber-400/40'
+                                                            : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}
                                                     onClick={(e) => {
                                                         e.stopPropagation();
-                                                        const prevEnd = para.words[wi - 1].word.end;
-                                                        updateEdit(prev => ({
-                                                            ...prev,
-                                                            cuts: [...prev.cuts, {
-                                                                startMs: prevEnd,
+                                                        updateEdit(cur => gapCut
+                                                            ? { ...cur, cuts: cur.cuts.filter(c => !gapCuts.includes(c)) }
+                                                            : { ...cur, cuts: [...cur.cuts, {
+                                                                startMs: prev.end + Math.min(500, prevGap / 2),
                                                                 endMs: word.start,
                                                                 reason: 'pause',
-                                                            }],
-                                                        }));
+                                                            }] });
                                                     }}
                                                 >
-                                                    ⏸ {(prevGap / 1000).toFixed(1)}s
+                                                    {gapCuts.some(c => c.reason === 'filler') ? 'um?' : '⏸'} {(prevGap / 1000).toFixed(1)}s
                                                 </span>
                                             )}
                                             <span
