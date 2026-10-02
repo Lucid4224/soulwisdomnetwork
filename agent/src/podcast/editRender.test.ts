@@ -234,3 +234,36 @@ test('block rendering for long episodes', async () => {
     const vAdiff = Math.abs(probeDetail.videoDur - probeDetail.audioDur);
     assert.ok(vAdiff < 0.050, `video ${probeDetail.videoDur}s vs audio ${probeDetail.audioDur}s differ by ${vAdiff}s`);
 });
+
+test('single-range seek: cut removes the first colour, second colour shows', async () => {
+    const dir = path.join(process.env.TMPDIR || '/tmp', 'edit-render-seek-test');
+    fs.mkdirSync(dir, { recursive: true });
+
+    // A 20 s clip: first 8 s red, last 12 s blue.
+    const video = path.join(dir, 'clip.mp4');
+    await run('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error',
+        '-f', 'lavfi', '-i', 'color=c=red:s=640x360:d=8:r=30',
+        '-f', 'lavfi', '-i', 'color=c=blue:s=640x360:d=12:r=30',
+        '-f', 'lavfi', '-i', 'sine=frequency=440:duration=20',
+        '-filter_complex', '[0][1]concat=n=2:v=1:a=0[v]',
+        '-map', '[v]', '-map', '2:a',
+        '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p',
+        '-c:a', 'aac', '-b:a', '128k', '-shortest',
+        video,
+    ]);
+
+    // Cut the first 8 s (the red part).
+    const edit: EpisodeEdit = { cuts: [{ startMs: 0, endMs: 8000, reason: 'manual' }], version: 1 };
+
+    const out = path.join(dir, 'output.mp4');
+    await renderEdit({ video, edit, out, clean: 'off' });
+
+    // Check output length within 200 ms of 12 s.
+    const probe = await probeStreams(out);
+    const diff = Math.abs(probe.duration - 12);
+    assert.ok(diff < 0.200, `output duration ${probe.duration}s differs from 12s by ${diff}s`);
+
+    // Frame at 1 s should be blue (blue channel greater than red channel).
+    const colour = await frameColour(out, 1);
+    assert.ok(colour[2] > colour[0], `frame at 1s is blue (b=${colour[2]} > r=${colour[0]})`);
+});

@@ -83,7 +83,9 @@ export async function renderEdit(opts: {
     let editedMs = editedDuration(ranges);
     const fadeSecs = 0.015;
 
-    // Auphonic, run once when it detects cuts, cleans the voice, or both.
+    // Auphonic, run once when it detects cuts, cleans the voice, or both. It works in
+    // "export_uncut_audio" mode, so its cleaned audio keeps the original timing and
+    // the cuts above still line up with it.
     let cleanedAudio: string | null = null;
     if (opts.detect === 'auphonic' || clean === 'auphonic') {
         const { auphonicProcess, auphonicCutsToEdit } = await import('./auphonic');
@@ -117,10 +119,11 @@ export async function renderEdit(opts: {
     }
 
     // ── Block rendering ──────────────────────────────────────────────────────
-    // Use blocks whenever there is more than one kept range. Each range gets its
-    // own seeked input; blocks are .mkv with pcm_s16le audio, joined with the
-    // concat demuxer. The joined file feeds the teasers/intro/b-roll/outro/loudness.
-    const useBlocks = ranges.length > 1;
+    // Every render goes through blocks: each range gets its own seeked input,
+    // so even a single-range episode is seeked rather than passed whole.
+    // Blocks are .mkv with pcm_s16le audio, joined with the concat demuxer.
+    // The joined file feeds the teasers/intro/b-roll/outro/loudness.
+    const useBlocks = ranges.length > 0;
     let episodeVideoForAssembly = opts.video;
     let blockDir = '';
 
@@ -135,7 +138,7 @@ export async function renderEdit(opts: {
         let blockMs = 0;
         for (const r of ranges) {
             const rDur = r.endMs - r.startMs;
-            if (blockMs + rDur > blockMinutes * 60 * 1000 && curBlock.ranges.length > 0) {
+            if ((blockMs + rDur > blockMinutes * 60 * 1000 || curBlock.ranges.length >= 20) && curBlock.ranges.length > 0) {
                 blocks.push(curBlock);
                 curBlock = { ranges: [] };
                 blockMs = 0;
@@ -324,6 +327,7 @@ export async function renderEdit(opts: {
         };
         const base = opts.out.replace(/\.\w+$/, '');
         if (opts.words?.length || opts.chapters?.length || opts.quotes?.length) {
+            // Everything before the episode (teasers, then the intro) pushes its times later.
             let offsetMs = 0;
             for (const f of [...(opts.teasers ?? []), ...(opts.intro ? [opts.intro] : [])]) offsetMs += Math.round((await probeDuration(f)) * 1000);
             const shift = <T extends { startMs: number; endMs?: number }>(x: T): T =>
@@ -382,6 +386,7 @@ if (require.main === module) {
         console.error('Usage: editRender.ts --video in.mp4 --edit edit.json --out out.mp4 [--teaser a.mp4] [--intro intro.mp4] [--outro outro.mp4] [--broll json] [--clean off|light|strong] [--block-minutes N]');
         process.exit(1);
     }
+    // The edit file may also carry "words", "chapters" and "quotes" for the new times.
     const edit: EpisodeEdit & Pick<Parameters<typeof renderEdit>[0], 'words' | 'chapters' | 'quotes'> =
         JSON.parse(fs.readFileSync(args.editPath, 'utf8'));
     renderEdit({
