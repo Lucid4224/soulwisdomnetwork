@@ -4,7 +4,8 @@
 // A controlled component with no data fetching: words, video, and edit state
 // come from props. The transcript is grouped by speaker; cut words are
 // struck through and dimmed; long pauses show as chips; the video preview
-// skips cut ranges. Selection, delete, undo/redo, and suggest/clear are wired.
+// skips cut ranges. Selection, delete, undo/redo, suggest/clear, search,
+// review suggestions, and follow-video are wired.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { SpokenWord } from '@/lib/showNotes';
@@ -40,6 +41,12 @@ function isCut(index: number, words: SpokenWord[], cuts: Cut[]): boolean {
     return cuts.some(c => start >= c.startMs && end <= c.endMs);
 }
 
+// Find the cut that covers a word, if any.
+function findCut(index: number, words: SpokenWord[], cuts: Cut[]): Cut | undefined {
+    if (index >= words.length) return undefined;
+    return cuts.find(c => words[index].start >= c.startMs && words[index].end <= c.endMs);
+}
+
 // Format mm:ss from ms.
 function mmss(ms: number): string {
     const totalSec = Math.floor(ms / 1000);
@@ -56,16 +63,26 @@ export function Editor({ words, videoUrl, edit, onChange }: {
 }) {
     const videoRef = useRef<HTMLVideoElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
+    const transcriptRef = useRef<HTMLDivElement>(null);
     const [selectedRange, setSelectedRange] = useState<[number, number] | null>(null);
     const [dragStart, setDragStart] = useState<number | null>(null);
     const historyRef = useRef<EpisodeEdit[]>([edit]);
     const historyIdx = useRef(0);
+    const [canUndo, setCanUndo] = useState(false);
+    const [canRedo, setCanRedo] = useState(false);
     const rafRef = useRef<number>(0);
     const [currentWord, setCurrentWord] = useState(-1);
     const [searchQuery, setSearchQuery] = useState('');
     const [searchMatches, setSearchMatches] = useState<number[]>([]);
     const [searchCursor, setSearchCursor] = useState(0);
     const searchRef = useRef<HTMLInputElement>(null);
+
+    // Review suggestions state.
+    const [reviewIdx, setReviewIdx] = useState(0);
+    const [reviewKind, setReviewKind] = useState<string | null>(null);
+    const wordRefs = useRef<(HTMLSpanElement | null)[]>([]);
+    const chipRefs = useRef<(HTMLSpanElement | null)[]>([]);
+    const autoScrollPauseRef = useRef(0);
 
     const paras = useMemo(() => groupBySpeaker(words), [words]);
     const [videoDuration, setVideoDuration] = useState(0);
@@ -75,6 +92,10 @@ export function Editor({ words, videoUrl, edit, onChange }: {
     ), [videoDuration, words, edit.cuts]);
     const editedMs = useMemo(() => editedDuration(ranges), [ranges]);
 
+    // One total for both numbers: videoDuration || last word end.
+    const totalMs = videoDuration || (words.length > 0 ? words[words.length - 1].end : 0);
+    const timeSavedMs = Math.max(0, totalMs - editedMs);
+
     // Push edit to history when it changes.
     useEffect(() => {
         if (historyRef.current[historyIdx.current] !== edit) {
@@ -82,6 +103,8 @@ export function Editor({ words, videoUrl, edit, onChange }: {
             historyRef.current.push(edit);
             historyIdx.current = historyRef.current.length - 1;
         }
+        setCanUndo(historyIdx.current > 0);
+        setCanRedo(historyIdx.current < historyRef.current.length - 1);
     }, [edit]);
 
     const updateEdit = useCallback((updater: (e: EpisodeEdit) => EpisodeEdit) => {
@@ -92,6 +115,8 @@ export function Editor({ words, videoUrl, edit, onChange }: {
         if (historyIdx.current > 0) {
             historyIdx.current--;
             onChange(historyRef.current[historyIdx.current]);
+            setCanUndo(historyIdx.current > 0);
+            setCanRedo(historyIdx.current < historyRef.current.length - 1);
         }
     }, [onChange]);
 
@@ -99,6 +124,8 @@ export function Editor({ words, videoUrl, edit, onChange }: {
         if (historyIdx.current < historyRef.current.length - 1) {
             historyIdx.current++;
             onChange(historyRef.current[historyIdx.current]);
+            setCanUndo(historyIdx.current > 0);
+            setCanRedo(historyIdx.current < historyRef.current.length - 1);
         }
     }, [onChange]);
 
@@ -112,7 +139,6 @@ export function Editor({ words, videoUrl, edit, onChange }: {
         const handler = (e: KeyboardEvent) => {
             const target = e.target as HTMLElement;
             const inTextBox = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
-            // In a text box, only handle Delete (cut the selected match).
             if (inTextBox) {
                 if (e.key === 'Delete' && selectedRange) {
                     e.preventDefault();
@@ -127,7 +153,6 @@ export function Editor({ words, videoUrl, edit, onChange }: {
                 }
                 return;
             }
-            // Outside a text box, handle all keys.
             if (e.key === ' ') {
                 e.preventDefault();
                 const video = videoRef.current;
@@ -174,7 +199,6 @@ export function Editor({ words, videoUrl, edit, onChange }: {
                 const next = ranges.find(r => r.startMs > t);
                 if (next) video.currentTime = next.startMs / 1000;
             }
-            // Find the word being spoken — the last word whose [start, end) contains t.
             let cw = -1;
             for (let i = 0; i < words.length; i++) {
                 if (t >= words[i].start && t < words[i].end) { cw = i; break; }
@@ -204,6 +228,26 @@ export function Editor({ words, videoUrl, edit, onChange }: {
         return () => cancelAnimationFrame(rafRef.current);
     }, [ranges]);
 
+    // Auto-scroll the spoken word into view while playing, unless the user
+    // scrolled the box by hand (pause auto-scroll for 4 seconds).
+    useEffect(() => {
+        if (currentWord < 0) return;
+        if (Date.now() < autoScrollPauseRef.current) return;
+        const el = wordRefs.current[currentWord];
+        if (el && transcriptRef.current) {
+            el.scrollIntoView({ block: 'nearest' });
+        }
+    }, [currentWord]);
+
+    // Detect manual scroll on the transcript box.
+    useEffect(() => {
+        const box = transcriptRef.current;
+        if (!box) return;
+        const onScroll = () => { autoScrollPauseRef.current = Date.now() + 4000; };
+        box.addEventListener('scroll', onScroll, { passive: true });
+        return () => box.removeEventListener('scroll', onScroll);
+    }, []);
+
     // Seek to a word's time.
     const seekTo = useCallback((index: number) => {
         if (videoRef.current && words[index]) {
@@ -211,19 +255,33 @@ export function Editor({ words, videoUrl, edit, onChange }: {
         }
     }, [words]);
 
-    // Word click: seek. Shift-click: extend selection.
+    // Seek to a time in seconds, pausing first for the review flow.
+    const seekToTime = useCallback((seconds: number) => {
+        const video = videoRef.current;
+        if (!video) return;
+        video.pause();
+        video.currentTime = seconds;
+    }, []);
+
+    // Word click: seek. Shift-click: extend selection. Double-click a cut word: bring it back.
     const onWordClick = (index: number, e: React.MouseEvent) => {
         if (e.shiftKey && selectedRange) {
             const [start] = selectedRange;
             setSelectedRange([Math.min(start, index), Math.max(start, index)]);
         } else {
             setSelectedRange([index, index]);
-            seekTo(index);
+            if (!isCut(index, words, edit.cuts)) seekTo(index);
         }
+    };
+
+    const onWordDoubleClick = (index: number) => {
+        const cut = findCut(index, words, edit.cuts);
+        if (cut) onCutClick(cut);
     };
 
     // Word drag start.
     const onWordMouseDown = (index: number) => {
+        if (isCut(index, words, edit.cuts)) return;
         setDragStart(index);
         setSelectedRange([index, index]);
     };
@@ -243,22 +301,26 @@ export function Editor({ words, videoUrl, edit, onChange }: {
     }, []);
 
     // Click a cut to restore it.
-    const onCutClick = (cut: Cut) => {
+    const onCutClick = useCallback((cut: Cut) => {
         updateEdit(prev => ({
             ...prev,
             cuts: prev.cuts.filter(c => !(c.startMs === cut.startMs && c.endMs === cut.endMs)),
         }));
-    };
+    }, [updateEdit]);
 
     // Suggest filler words and long pauses.
     const onSuggest = () => {
         const suggested = suggestCuts(words);
         updateEdit(prev => ({ ...prev, cuts: [...prev.cuts, ...suggested] }));
+        setReviewIdx(0);
+        setReviewKind(null);
     };
 
     // Clear suggestions (remove all non-manual cuts).
     const onClearSuggestions = () => {
         updateEdit(prev => ({ ...prev, cuts: prev.cuts.filter(c => c.reason === 'manual') }));
+        setReviewIdx(0);
+        setReviewKind(null);
     };
 
     // Search: typing highlights matching words, Enter jumps to the next match.
@@ -274,7 +336,7 @@ export function Editor({ words, videoUrl, edit, onChange }: {
             if (words[i].text.toLowerCase().includes(lower)) matches.push(i);
         }
         setSearchMatches(matches);
-        setSearchCursor(-1); // -1 means "not yet navigated"; first Enter goes to match 0.
+        setSearchCursor(-1);
     };
 
     const onSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -288,7 +350,6 @@ export function Editor({ words, videoUrl, edit, onChange }: {
         }
     };
 
-    // Search matches as a Set for O(1) lookup per word.
     const matchSet = useMemo(() => new Set(searchMatches), [searchMatches]);
 
     // Count cuts by reason.
@@ -298,11 +359,64 @@ export function Editor({ words, videoUrl, edit, onChange }: {
         return counts;
     }, [edit.cuts]);
 
-    const totalDuration = words.length > 0 ? words[words.length - 1].end : 0;
-    const timeSavedMs = totalDuration - editedMs;
+    // Suggested cuts (reason not 'manual'), sorted by start time.
+    const suggestedCuts = useMemo(() =>
+        edit.cuts.filter(c => c.reason !== 'manual').sort((a, b) => a.startMs - b.startMs),
+    [edit.cuts]);
+
+    // Filtered suggestions for the review row.
+    const reviewCuts = useMemo(() =>
+        reviewKind ? suggestedCuts.filter(c => c.reason === reviewKind) : suggestedCuts,
+    [suggestedCuts, reviewKind]);
+
+    // Review navigation: Previous/Next/Keep.
+    const reviewCount = reviewCuts.length;
+
+    const reviewPrev = () => {
+        if (reviewCount === 0) return;
+        const idx = (reviewIdx - 1 + reviewCount) % reviewCount;
+        setReviewIdx(idx);
+        const cut = reviewCuts[idx];
+        seekToTime(Math.max(0, cut.startMs / 1000 - 1));
+    };
+
+    const reviewNext = () => {
+        if (reviewCount === 0) return;
+        const idx = (reviewIdx + 1) % reviewCount;
+        setReviewIdx(idx);
+        const cut = reviewCuts[idx];
+        seekToTime(Math.max(0, cut.startMs / 1000 - 1));
+    };
+
+    const reviewKeep = () => {
+        if (reviewCount === 0) return;
+        const cut = reviewCuts[reviewIdx];
+        onCutClick(cut);
+        // Move to the next suggestion after removing this one.
+        if (reviewCount > 1) setReviewIdx(Math.min(reviewIdx, reviewCount - 2));
+        else setReviewIdx(0);
+    };
+
+    // Scroll the reviewed cut's word or chip into view.
+    useEffect(() => {
+        if (reviewCount === 0) return;
+        const cut = reviewCuts[reviewIdx];
+        if (!cut) return;
+        // Find the word index at the cut start, or the chip just before it.
+        let wordIdx = -1;
+        for (let i = 0; i < words.length; i++) {
+            if (words[i].start >= cut.startMs) { wordIdx = i; break; }
+        }
+        if (wordIdx >= 0 && wordRefs.current[wordIdx]) {
+            wordRefs.current[wordIdx]?.scrollIntoView({ block: 'nearest' });
+        }
+    }, [reviewIdx, reviewCuts, reviewCount, words]);
 
     // Check if a pause between words is long enough to show as a chip.
     const pauseThreshold = 800; // ms
+
+    // The cut highlighted by the review row.
+    const reviewCut = reviewCount > 0 ? reviewCuts[reviewIdx] : null;
 
     return (
         <div ref={containerRef} tabIndex={0} className="flex flex-col gap-4 outline-none">
@@ -314,14 +428,31 @@ export function Editor({ words, videoUrl, edit, onChange }: {
                 <button onClick={onClearSuggestions} className={secondary}>
                     Clear suggestions
                 </button>
+                <button onClick={undo} className={secondary} disabled={!canUndo}>
+                    Undo
+                </button>
+                <button onClick={redo} className={secondary} disabled={!canRedo}>
+                    Redo
+                </button>
                 <span className={hint}>
                     Edited length {mmss(editedMs)} · saves {mmss(timeSavedMs)}
                 </span>
-                {Object.entries(reasonCounts).map(([reason, count]) => (
-                    <span key={reason} className={hint}>
-                        {reason}: {count}
-                    </span>
-                ))}
+                {/* Reason counts as buttons that filter the review. */}
+                {Object.entries(reasonCounts).map(([reason, count]) => {
+                    const label = reason === 'filler' ? 'Fillers' : reason === 'repeat' ? 'Repeats' : reason === 'pause' ? 'Pauses' : reason;
+                    const isChosen = reviewKind === reason;
+                    return (
+                        <button
+                            key={reason}
+                            onClick={() => { setReviewKind(isChosen ? null : reason); setReviewIdx(0); }}
+                            className={isChosen
+                                ? "text-xs px-2 py-0.5 rounded border border-amber-400/60 text-amber-200 bg-amber-500/10"
+                                : `${secondary} px-2 py-0.5`}
+                        >
+                            {label} {count}
+                        </button>
+                    );
+                })}
                 <input
                     ref={searchRef}
                     type="text"
@@ -338,9 +469,29 @@ export function Editor({ words, videoUrl, edit, onChange }: {
                 )}
             </div>
 
+            {/* Hint line */}
+            <div className={hint}>
+                Amber = suggested · Grey = your cuts
+            </div>
+
+            {/* Review suggestions row */}
+            {reviewCount > 0 && (
+                <div className="flex items-center gap-2">
+                    <button onClick={reviewPrev} className={secondary}>◀️ Previous</button>
+                    <span className={hint}>{reviewIdx + 1} of {reviewCount}</span>
+                    <button onClick={reviewNext} className={secondary}>Next ▶️</button>
+                    <button onClick={reviewKeep} className={secondary}>Keep this</button>
+                </div>
+            )}
+
+            {/* Hint line: shortcuts */}
+            <div className={hint}>
+                Space play/pause · Delete cut · Ctrl/Cmd+Z undo · Ctrl/Cmd+Shift+Z redo · Enter in search: next match
+            </div>
+
             <div className="flex flex-col gap-4 md:flex-row">
                 {/* Video preview */}
-                <div className="md:w-1/2">
+                <div className="md:w-1/2 md:sticky md:top-4 self-start">
                     <video
                         ref={videoRef}
                         src={videoUrl}
@@ -351,60 +502,88 @@ export function Editor({ words, videoUrl, edit, onChange }: {
                 </div>
 
                 {/* Transcript */}
-                <div className="md:w-1/2 max-h-[600px] overflow-y-auto rounded-lg bg-[#130b29] p-4">
+                <div ref={transcriptRef} className="md:w-1/2 h-[calc(100vh-220px)] min-h-[400px] overflow-y-auto rounded-lg bg-[#130b29] p-4">
                     {paras.map((para, pi) => (
                         <div key={pi} className="mb-4" style={{ contentVisibility: 'auto' }}>
                             <p className="text-sm font-bold text-amber-400 mb-1">{para.speaker}</p>
                             <p className="text-sm leading-relaxed text-gray-200">
                                 {para.words.map(({ word, index }, wi) => {
-                                    const cut = isCut(index, words, edit.cuts);
+                                    const wordCut = findCut(index, words, edit.cuts);
+                                    const cut = !!wordCut;
+                                    const isManual = wordCut?.reason === 'manual';
                                     const isSelected = selectedRange &&
                                         index >= selectedRange[0] && index <= selectedRange[1];
                                     const isCurrent = index === currentWord;
                                     const isMatch = matchSet.has(index);
-                                    // The silence before this word, also across a change of speaker. It shows
-                                    // as a chip when it is long, or when a cut sits in it (a filler AssemblyAI
-                                    // left out of the transcript), so every suggestion can be seen and undone.
+                                    const isReview = reviewCut && wordCut &&
+                                        wordCut.startMs === reviewCut.startMs &&
+                                        wordCut.endMs === reviewCut.endMs;
+                                    // The silence before this word, also across a change of speaker.
                                     const prev = index > 0 ? words[index - 1] : null;
                                     const prevGap = prev ? word.start - prev.end : 0;
                                     const gapCuts = prev ? edit.cuts.filter(c =>
                                         c.startMs >= prev.end - 50 && c.endMs <= word.start + 50) : [];
                                     const gapCut = gapCuts.length > 0;
+                                    const gapCutIsManual = gapCuts.every(c => c.reason === 'manual');
+                                    const gapCutIsReview = reviewCut && gapCuts.some(c =>
+                                        c.startMs === reviewCut.startMs && c.endMs === reviewCut.endMs);
                                     return (
                                         <span key={wi}>
                                             {prev && (prevGap > pauseThreshold || gapCut) && (
                                                 <span
-                                                    title={gapCut ? 'Cut: click to keep it' : 'Click to shorten this pause'}
+                                                    ref={el => { chipRefs.current[index] = el; }}
+                                                    title={gapCut ? (gapCutIsManual ? 'Double-click to bring back' : 'Double-click to keep it') : 'Click to shorten this pause'}
                                                     className={`inline-block mx-1 px-1.5 py-0.5 rounded text-xs cursor-pointer ${
-                                                        gapCut ? 'bg-amber-400/10 text-gray-500 line-through ring-1 ring-amber-400/40'
-                                                            : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}
+                                                        gapCut
+                                                            ? gapCutIsManual
+                                                                ? 'line-through text-gray-400'
+                                                                : 'line-through decoration-amber-400 text-amber-200/70 bg-amber-400/10'
+                                                            : 'bg-white/5 text-gray-400 hover:bg-white/10'
+                                                    } ${gapCutIsReview ? ' ring-2 ring-amber-400' : ''}`}
+                                                    onDoubleClick={(e) => {
+                                                        if (gapCut) {
+                                                            e.stopPropagation();
+                                                            updateEdit(cur => ({ ...cur, cuts: cur.cuts.filter(c => !gapCuts.includes(c)) }));
+                                                        }
+                                                    }}
                                                     onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        updateEdit(cur => gapCut
-                                                            ? { ...cur, cuts: cur.cuts.filter(c => !gapCuts.includes(c)) }
-                                                            : { ...cur, cuts: [...cur.cuts, {
+                                                        if (!gapCut) {
+                                                            e.stopPropagation();
+                                                            updateEdit(cur => ({ ...cur, cuts: [...cur.cuts, {
                                                                 startMs: prev.end + Math.min(500, prevGap / 2),
                                                                 endMs: word.start,
                                                                 reason: 'pause',
-                                                            }] });
+                                                            }] }));
+                                                        }
                                                     }}
                                                 >
-                                                    {gapCuts.some(c => c.reason === 'filler') ? 'um?' : '⏸'} {(prevGap / 1000).toFixed(1)}s
+                                                    {gapCut
+                                                        ? (gapCuts.some(c => c.reason === 'filler')
+                                                            ? `um · ${(prevGap / 1000).toFixed(1)}s`
+                                                            : `pause ${(prevGap / 1000).toFixed(1)}s → ${((prevGap - (gapCuts[0]?.endMs ?? 0) + (gapCuts[0]?.startMs ?? 0)) / 1000).toFixed(1)}s`)
+                                                        : `pause ${(prevGap / 1000).toFixed(1)}s`}
                                                 </span>
                                             )}
                                             <span
+                                                ref={el => { if (index < words.length) wordRefs.current[index] = el; }}
                                                 className={`cursor-pointer select-none ${
-                                                    cut ? 'line-through text-gray-600' :
-                                                    isSelected ? 'bg-amber-500/30 rounded' : 'text-gray-200'
+                                                    cut
+                                                        ? isManual
+                                                            ? 'line-through text-gray-400'
+                                                            : 'line-through decoration-amber-400 text-amber-200/70'
+                                                        : isSelected
+                                                            ? 'bg-amber-500/30 rounded'
+                                                            : 'text-gray-200'
                                                 } ${isSelected ? 'ring-1 ring-amber-400/50' : ''} ${
                                                     isCurrent && !cut ? 'underline decoration-amber-400 decoration-2 underline-offset-2' : ''
-                                                } ${isMatch && !cut ? 'bg-amber-400/10' : ''}`}
-                                                onClick={(e) => cut
-                                                    ? onCutClick(edit.cuts.find(c =>
-                                                        word.start >= c.startMs && word.end <= c.endMs)!)
-                                                    : onWordClick(index, e)}
-                                                onMouseDown={() => !cut && onWordMouseDown(index)}
-                                                onMouseEnter={() => !cut && onWordMouseEnter(index)}
+                                                } ${isMatch && !cut ? 'bg-amber-400/10' : ''} ${
+                                                    isReview ? ' ring-2 ring-amber-400' : ''
+                                                }`}
+                                                title={cut ? 'Double-click to bring back' : undefined}
+                                                onClick={(e) => onWordClick(index, e)}
+                                                onDoubleClick={() => onWordDoubleClick(index)}
+                                                onMouseDown={() => onWordMouseDown(index)}
+                                                onMouseEnter={() => onWordMouseEnter(index)}
                                             >
                                                 {word.text}
                                             </span>
