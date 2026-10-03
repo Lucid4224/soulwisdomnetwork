@@ -152,7 +152,7 @@ const sameStep = (a: StepState | undefined, b: StepState) => !!a && a.done === b
 function EditorLightStage({ episodeId, words, videoUrl }: { episodeId: string; words: SpokenWord[]; videoUrl: string }) {
     const [edit, setEdit] = useState<EpisodeEdit>({ cuts: [], version: 0 });
     const [loaded, setLoaded] = useState(false);
-    const { change, reset, saveState } = useAutosave<EpisodeEdit>(
+    const { change, reset, saveState, saveError } = useAutosave<EpisodeEdit>(
         async (value, version) => {
             const res = await studioFetch<{ version: number }>(`/api/studio/episodes/${episodeId}/edit`, {
                 method: 'PUT',
@@ -177,7 +177,11 @@ function EditorLightStage({ episodeId, words, videoUrl }: { episodeId: string; w
 
     return (
         <>
-            <p className={small + ' mb-2'}>Save state: {saveState}</p>
+            {/* Save status in plain words, same labels and colours as the show notes autosave. */}
+            <p className={`${small} mb-2 ${saveState === 'error' ? 'text-red-300 font-bold' : saveState === 'saved' ? 'text-green-300' : 'text-gray-400'}`}>
+                {{ saved: '✓ Saved', unsaved: 'Unsaved changes…', saving: 'Saving…', error: 'Not saved' }[saveState]}
+                {saveState === 'error' && `: ${saveError}`}
+            </p>
             <Editor
                 words={words}
                 videoUrl={videoUrl}
