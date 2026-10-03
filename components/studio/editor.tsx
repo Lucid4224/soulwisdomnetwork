@@ -97,6 +97,11 @@ export function Editor({ words, videoUrl, edit, onChange }: {
     const chipRefs = useRef<(HTMLSpanElement | null)[]>([]);
     const autoScrollPauseRef = useRef(0);
 
+    // Play mode: 'edited' skips the cuts, 'original' plays everything, so the producer can compare.
+    const [playMode, setPlayMode] = useState<'edited' | 'original'>('edited');
+    // Hear it: while a preview runs, cuts are played (not skipped) and playback pauses at endMs.
+    const previewRef = useRef<{ endMs: number } | null>(null);
+
     const paras = useMemo(() => groupBySpeaker(words), [words]);
     const [videoDuration, setVideoDuration] = useState(0);
     const ranges = useMemo(() => keepRanges(
@@ -222,7 +227,7 @@ export function Editor({ words, videoUrl, edit, onChange }: {
         const onTimeUpdate = () => {
             const t = video.currentTime * 1000;
             const inKept = ranges.some(r => t >= r.startMs && t < r.endMs);
-            if (!inKept) {
+            if (!inKept && playMode === 'edited' && !previewRef.current) {
                 const next = ranges.find(r => r.startMs > t);
                 if (next) video.currentTime = next.startMs / 1000;
             }
@@ -235,7 +240,7 @@ export function Editor({ words, videoUrl, edit, onChange }: {
         };
         video.addEventListener('timeupdate', onTimeUpdate);
         return () => video.removeEventListener('timeupdate', onTimeUpdate);
-    }, [ranges, words, currentWord]);
+    }, [ranges, words, currentWord, playMode]);
 
     // RAF loop for more precise cut-skipping.
     useEffect(() => {
@@ -245,7 +250,7 @@ export function Editor({ words, videoUrl, edit, onChange }: {
             if (!video.paused) {
                 const t = video.currentTime * 1000;
                 const inKept = ranges.some(r => t >= r.startMs && t < r.endMs);
-                if (!inKept) {
+                if (!inKept && playMode === 'edited' && !previewRef.current) {
                     const next = ranges.find(r => r.startMs > t);
                     if (next) video.currentTime = next.startMs / 1000;
                 }
@@ -254,7 +259,7 @@ export function Editor({ words, videoUrl, edit, onChange }: {
         };
         rafRef.current = requestAnimationFrame(tick);
         return () => cancelAnimationFrame(rafRef.current);
-    }, [ranges]);
+    }, [ranges, playMode]);
 
     // Auto-scroll the spoken word into view while playing, unless the user
     // scrolled the box by hand (pause auto-scroll for 4 seconds).
@@ -581,6 +586,23 @@ export function Editor({ words, videoUrl, edit, onChange }: {
                             ))}
                         </div>
                     )}
+                    {/* Play switch: Edited skips the cuts, Original plays everything. */}
+                    <div className="mt-2 flex items-center gap-2">
+                        <span className={hint}>Play:</span>
+                        {(['edited', 'original'] as const).map(mode => (
+                            <button
+                                key={mode}
+                                type="button"
+                                aria-pressed={playMode === mode}
+                                onClick={() => setPlayMode(mode)}
+                                className={playMode === mode
+                                    ? "text-xs px-2 py-0.5 rounded border border-amber-400/60 text-amber-200 bg-amber-500/10"
+                                    : `${secondary} px-2 py-0.5`}
+                            >
+                                {mode === 'edited' ? 'Edited' : 'Original'}
+                            </button>
+                        ))}
+                    </div>
                 </div>
 
                 {/* Transcript */}
