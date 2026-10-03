@@ -564,13 +564,34 @@ export function Editor({ words, videoUrl, edit, onChange }: {
                         controls
                         onLoadedMetadata={e => setVideoDuration(e.currentTarget.duration * 1000)}
                     />
+                    {/* Cuts map: every cut on one strip under the video; click a mark to jump there. */}
+                    {totalMs > 0 && (
+                        <div aria-label="Cuts map" className="relative mt-2 h-3 w-full rounded bg-white/5">
+                            {edit.cuts.map((c, i) => (
+                                <button
+                                    key={i}
+                                    type="button"
+                                    title={`Cut at ${mmss(c.startMs)}`}
+                                    data-start-ms={c.startMs}
+                                    data-end-ms={c.endMs}
+                                    onClick={() => seekToTime(Math.max(0, c.startMs / 1000 - 1))}
+                                    className={`absolute top-0 h-full rounded-sm ${c.reason === 'manual' ? 'bg-gray-400' : 'bg-amber-400'}`}
+                                    style={{ left: `${(c.startMs / totalMs) * 100}%`, width: `max(2px, ${((c.endMs - c.startMs) / totalMs) * 100}%)` }}
+                                />
+                            ))}
+                        </div>
+                    )}
                 </div>
 
                 {/* Transcript */}
                 <div ref={transcriptRef} className="md:w-1/2 h-[calc(100vh-220px)] min-h-[400px] overflow-y-auto rounded-lg bg-[#130b29] p-4">
                     {paras.map((para, pi) => (
                         <div key={pi} className="mb-4" style={{ contentVisibility: 'auto' }}>
-                            <p className="text-sm font-bold text-amber-400 mb-1">{para.speaker}</p>
+                            <p className="text-sm font-bold text-amber-400 mb-1">
+                                {para.speaker}
+                                {/* Turn start time, so the producer can find a turn by its time. */}
+                                <span className="ml-2 text-xs font-normal text-gray-400">{mmss(para.words[0].word.start)}</span>
+                            </p>
                             <p className="text-sm leading-relaxed text-gray-200">
                                 {para.words.map(({ word, index }, wi) => {
                                     const wordCut = findCut(index, words, edit.cuts);
