@@ -176,6 +176,30 @@ export interface EpisodeFinal {
     warnings?: string[];
 }
 
+// Editor Light render (spec 015): the edit saved in the Studio, rendered by GitHub Actions
+// (agent/src/podcast/editRenderRun.ts) and kept apart from Descript's final cut, which the
+// later steps still use.
+export interface EpisodeEditRender {
+    status: 'queued' | 'downloading' | 'rendering' | 'saving' | 'ready' | 'failed';
+    requestedAt?: unknown;
+    startedAt?: unknown;
+    finishedAt?: unknown;
+    error?: string | null;
+    editVersion?: number;                 // the saved edit it was rendered from
+    videoPath?: string;                   // Cloud Storage
+    wordsPath?: string | null;            // the words on the rendered video's times
+    captionsPath?: string | null;         // .srt
+    chaptersPath?: string | null;         // chapters and quotes on the rendered video's times
+    driveFileId?: string;
+    driveUrl?: string;
+    folderUrl?: string;                   // "04 Final"
+    durationSeconds?: number;
+    cuts?: number;
+    timeSavedSeconds?: number;
+    renderSeconds?: number;
+    warnings?: string[];
+}
+
 // Thumbnail options (spec 005 step 12; docs/specs/011-thumbnails.md). The job makes the raw
 // material: short texts from Claude, frames from the final cut, an AI background. The Studio
 // draws the three options from it and the producer picks one at Checkpoint D.
@@ -302,6 +326,9 @@ export interface Episode {
     package?: EpisodePackage;             // edit package for Descript, spec 005 step 8
     descript?: EpisodeDescript;           // the Descript project made from it
     final?: EpisodeFinal;                 // the finished episode, spec 005 steps 10-11
+    // Editor Light (spec 015): the edit as the edit route saves it (top level), and its render.
+    edit?: EpisodeEdit & { updatedAt?: unknown; updatedBy?: string };
+    editRender?: EpisodeEditRender;
     thumbnails?: EpisodeThumbnails;       // thumbnail options, spec 005 step 12
     approval?: EpisodeApproval;           // Checkpoint D
     youtube?: EpisodeYoutube;             // the upload, spec 005 step 13
