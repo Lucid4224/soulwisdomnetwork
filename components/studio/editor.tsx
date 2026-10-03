@@ -60,7 +60,7 @@ function mmss(ms: number): string {
 function scrollBoxTo(box: HTMLElement, target: HTMLElement) {
     const boxTop = box.scrollTop;
     const boxBottom = boxTop + box.clientHeight;
-    const elTop = target.offsetTop;
+    const elTop = target.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop;
     const elBottom = elTop + target.offsetHeight;
     // If the target is already visible, do nothing.
     if (elTop >= boxTop && elBottom <= boxBottom) return;
