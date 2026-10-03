@@ -1,5 +1,5 @@
 // Starts and watches the Podcast Ingest workflow (.github/workflows/podcast_ingest.yml)
-// and starts Podcast Show Notes, B-roll, Edit Package, Descript, Final Cut, Thumbnails, YouTube and Shorts (podcast_notes, _broll, _package, _descript, _final, _thumbnails, _youtube, _shorts.yml), with GITHUB_ACTIONS_TOKEN: a fine-grained token for this repository, Actions read/write.
+// and starts Podcast Show Notes, B-roll, Edit Package, Descript, Final Cut, Editor Light render, Thumbnails, YouTube and Shorts (podcast_notes, _broll, _package, _descript, _final, _edit_render, _thumbnails, _youtube, _shorts.yml), with GITHUB_ACTIONS_TOKEN: a fine-grained token for this repository, Actions read/write.
 
 const REPO = 'masterytv/soulwisdomnetwork';
 const WORKFLOW = 'podcast_ingest.yml';
@@ -87,6 +87,14 @@ export async function startDescript(episodeId: string) {
 // Publishes the edited episode from Descript and re-times the notes (spec 005 steps 10-11).
 export async function startFinal(episodeId: string) {
     await github('/actions/workflows/podcast_final.yml/dispatches', {
+        method: 'POST',
+        body: JSON.stringify({ ref: 'main', inputs: { episode_id: episodeId } }),
+    });
+}
+
+// Renders the edit saved in the Studio's Editor Light (spec 015).
+export async function startEditRender(episodeId: string) {
+    await github('/actions/workflows/podcast_edit_render.yml/dispatches', {
         method: 'POST',
         body: JSON.stringify({ ref: 'main', inputs: { episode_id: episodeId } }),
     });
