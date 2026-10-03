@@ -1,5 +1,6 @@
-# Editor Light (spec 015): renders the edited episode. Started by hand from the
-# Actions tab with the episode ID. Downloading the real episode is a TODO.
+# Editor Light (spec 015): renders the edit saved in the Studio (agent/src/podcast/editRenderRun.ts).
+# Downloads the episode, teasers, intro and b-roll, renders, and saves to Cloud Storage and
+# "04 Final" in Drive. Started from the show notes page, or by hand from the Actions tab.
 
 name: Podcast Edit Render
 run-name: "Podcast Edit Render · ${{ inputs.episode_id }}"
@@ -21,7 +22,8 @@ permissions:
 jobs:
   render:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # A long episode is encoded three times (blocks, assembly, loudness); GitHub's limit is 360.
+    timeout-minutes: 350
 
     steps:
     - name: Checkout Code
@@ -45,9 +47,9 @@ jobs:
       env:
         EPISODE_ID: ${{ inputs.episode_id }}
         PODCAST_SA_JSON: ${{ secrets.PODCAST_SA_JSON }}
-        # TODO: download the episode file and the edit JSON from Drive/Firestore.
-        # The script itself is complete and tested locally; this workflow needs
-        # the download step wired up before it can run against a real episode.
-      run: |
-        echo "TODO: download episode and edit for $EPISODE_ID"
-        echo "Then: npx tsx agent/src/podcast/editRender.ts --video episode.mp4 --edit edit.json --out output.mp4"
+        RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+        ALERT_EMAIL: ${{ vars.ALERT_EMAIL }}
+        DRIVE_PROCESSED_FOLDER_ID: ${{ vars.DRIVE_PROCESSED_FOLDER_ID }}
+        DRIVE_FINAL_FOLDER_ID: ${{ vars.DRIVE_FINAL_FOLDER_ID }}
+        GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      run: npx tsx agent/src/podcast/editRenderRun.ts
