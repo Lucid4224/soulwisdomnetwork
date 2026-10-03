@@ -390,6 +390,13 @@ export function Editor({ words, videoUrl, edit, onChange }: {
         }
     };
 
+    // Clear search: empties the box and its matches, and keeps focus in the box for a new search.
+    const clearSearch = () => {
+        onSearchChange('');
+        setSearchCursor(-1);
+        searchRef.current?.focus();
+    };
+
     // Search matches as a Set for O(1) lookup per word.
     const matchSet = useMemo(() => new Set(searchMatches), [searchMatches]);
 
@@ -503,15 +510,23 @@ export function Editor({ words, videoUrl, edit, onChange }: {
                         </button>
                     );
                 })}
-                <input
-                    ref={searchRef}
-                    type="text"
-                    value={searchQuery}
-                    onChange={e => onSearchChange(e.target.value)}
-                    onKeyDown={onSearchKeyDown}
-                    placeholder="Search transcript…"
-                    className="ml-auto px-2 py-1 text-sm rounded bg-white/5 text-gray-200 placeholder-gray-500 outline-none focus:ring-1 ring-amber-400/50"
-                />
+                {/* Search box with a clear button that shows once there is text. */}
+                <div className="ml-auto flex items-center gap-1">
+                    <input
+                        ref={searchRef}
+                        type="text"
+                        value={searchQuery}
+                        onChange={e => onSearchChange(e.target.value)}
+                        onKeyDown={onSearchKeyDown}
+                        placeholder="Search transcript…"
+                        className="w-64 px-3 py-1.5 text-sm rounded bg-white/5 text-gray-200 placeholder-gray-500 outline-none focus:ring-1 ring-amber-400/50"
+                    />
+                    {searchQuery && (
+                        <button type="button" onClick={clearSearch} aria-label="Clear search" title="Clear search" className={`${secondary} px-2 py-0.5`}>
+                            ×
+                        </button>
+                    )}
+                </div>
                 {searchMatches.length > 0 && (
                     <span className={hint}>
                         {searchCursor < 0 ? `${searchMatches.length} matches` : `${searchCursor + 1}/${searchMatches.length}`}
