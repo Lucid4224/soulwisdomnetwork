@@ -249,6 +249,11 @@ export function Editor({ words, videoUrl, edit, onChange }: {
         const tick = () => {
             if (!video.paused) {
                 const t = video.currentTime * 1000;
+                // Hear it: stop at the end of the preview window.
+                if (previewRef.current && t >= previewRef.current.endMs) {
+                    video.pause();
+                    previewRef.current = null;
+                }
                 const inKept = ranges.some(r => t >= r.startMs && t < r.endMs);
                 if (!inKept && playMode === 'edited' && !previewRef.current) {
                     const next = ranges.find(r => r.startMs > t);
@@ -260,6 +265,15 @@ export function Editor({ words, videoUrl, edit, onChange }: {
         rafRef.current = requestAnimationFrame(tick);
         return () => cancelAnimationFrame(rafRef.current);
     }, [ranges, playMode]);
+
+    // A pause by any means ends a Hear it preview, so the next play skips cuts again.
+    useEffect(() => {
+        const video = videoRef.current;
+        if (!video) return;
+        const onPause = () => { previewRef.current = null; };
+        video.addEventListener('pause', onPause);
+        return () => video.removeEventListener('pause', onPause);
+    }, []);
 
     // Auto-scroll the spoken word into view while playing, unless the user
     // scrolled the box by hand (pause auto-scroll for 4 seconds).
@@ -476,6 +490,16 @@ export function Editor({ words, videoUrl, edit, onChange }: {
     // The cut highlighted by the review row.
     const reviewCut = reviewCount > 0 ? reviewCuts[clampedReviewIdx] : null;
 
+    // Hear it: play from 2 s before the reviewed mark to 2 s after it, the mark included,
+    // so the producer hears it in context before choosing Keep this or Next.
+    const hearCut = () => {
+        const video = videoRef.current;
+        if (!video || !reviewCut) return;
+        previewRef.current = { endMs: reviewCut.endMs + 2000 };
+        video.currentTime = Math.max(0, reviewCut.startMs - 2000) / 1000;
+        void video.play();
+    };
+
     // The reason button label for 'manual'.
     const reasonLabel = (reason: string): string =>
         reason === 'filler' ? 'Fillers' : reason === 'repeat' ? 'Repeats' : reason === 'pause' ? 'Pauses' : reason === 'manual' ? 'Your cuts' : reason;
@@ -551,6 +575,7 @@ export function Editor({ words, videoUrl, edit, onChange }: {
                     <span className={hint}>{clampedReviewIdx + 1} of {reviewCount}</span>
                     <button onClick={reviewNext} className={secondary}>Next ›</button>
                     <button onClick={reviewKeep} className={secondary}>Keep this</button>
+                    <button onClick={hearCut} className={secondary} data-start-ms={reviewCut?.startMs} data-end-ms={reviewCut?.endMs}>Hear it</button>
                 </div>
             )}
 
