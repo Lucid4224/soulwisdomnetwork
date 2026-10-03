@@ -70,6 +70,8 @@ export async function renderEdit(opts: {
     detect?: 'auphonic';
     noiseModel?: string;
     blockMinutes?: number;
+    // The accepted transcript and show-note times, when known: their new times are written
+    // next to the output, so the final cut never has to be transcribed again.
     words?: { text: string; start: number; end: number }[];
     chapters?: { title: string; startMs: number }[];
     quotes?: { text: string; speaker: string; startMs: number; endMs: number }[];
