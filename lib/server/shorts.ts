@@ -3,6 +3,7 @@
 // it all on the show notes page.
 
 import { finalIsCurrent } from '@/lib/finalCut';
+import { DIRECTION_MAX } from '@/lib/shortPicks';
 import { FieldValue } from 'firebase-admin/firestore';
 import { z } from 'zod';
 import type { TimedWord } from '@/lib/retime';
@@ -24,7 +25,7 @@ const MAX_ITEMS = 40;               // the notes allow up to 40 key quotes
 const MIN_LEAD_MS = 30 * 60_000;    // the first scheduled short, at the earliest
 const MAX_LEAD_MS = 180 * 24 * 60 * 60_000;
 
-type Mode = 'titles' | 'render' | 'upload';
+type Mode = 'pick' | 'titles' | 'render' | 'upload';
 
 function episodeRef(id: string) {
     if (!/^[\w-]{10,}$/.test(id)) throw new HttpError(400, 'Not a valid episode ID');
@@ -61,14 +62,19 @@ const current = (item: ShortItem, shorts: EpisodeShorts, episode: Episode) =>
 const approved = (item: ShortItem, shorts: EpisodeShorts, episode: Episode) =>
     current(item, shorts, episode) && item.approved?.renderedAt === item.render?.renderedAt;
 
-export async function requestShorts(id: string, body: { mode?: unknown; firstAt?: unknown; timeZone?: unknown }) {
+export async function requestShorts(id: string, body: { mode?: unknown; firstAt?: unknown; timeZone?: unknown; direction?: unknown }) {
     const mode = body.mode as Mode;
-    if (!['titles', 'render', 'upload'].includes(mode)) throw new HttpError(400, 'Not a shorts job');
+    if (!['pick', 'titles', 'render', 'upload'].includes(mode)) throw new HttpError(400, 'Not a shorts job');
     const firstAt = Number(body.firstAt);
     if (mode === 'upload' && (!Number.isFinite(firstAt) || firstAt < Date.now() + MIN_LEAD_MS || firstAt > Date.now() + MAX_LEAD_MS)) {
         throw new HttpError(400, 'Pick a time for the first short at least half an hour from now');
     }
     const timeZone = typeof body.timeZone === 'string' && /^[\w/+-]{1,64}$/.test(body.timeZone) ? body.timeZone : 'UTC';
+    const direction = body.direction;
+    if (direction !== undefined && (typeof direction !== 'string' || direction.length > DIRECTION_MAX)) {
+        throw new HttpError(400, `Keep the direction under ${DIRECTION_MAX} characters`);
+    }
+    const directionText = typeof direction === 'string' ? direction.trim() : '';
     const ref = episodeRef(id);
     await adminDb().runTransaction(async tx => {
         const episode = (await tx.get(ref)).data() as Episode | undefined;
@@ -83,7 +89,11 @@ export async function requestShorts(id: string, body: { mode?: unknown; firstAt?
         };
         if (!shorts) Object.assign(update, { 'shorts.aspect': DEFAULT_ASPECT, 'shorts.items': [], 'shorts.version': 0 });
         const items = shorts?.items ?? [];
-        if (!items.length) throw new HttpError(409, 'Pick some key quotes for shorts first');
+        if (mode === 'pick') {
+            update['shorts.direction'] = directionText;
+        } else if (!items.length) {
+            throw new HttpError(409, 'Pick some key quotes for shorts first');
+        }
         if (mode === 'titles' && !items.some(i => !i.youtube && (!i.headline.trim() || !i.title.trim()))) {
             throw new HttpError(409, 'Every short already has a headline and a title; clear one to have it rewritten');
         }
@@ -103,8 +113,9 @@ export async function requestShorts(id: string, body: { mode?: unknown; firstAt?
         tx.update(ref, update);
     });
     try {
-        // Only the titles cost money (Claude); drawing and scheduling do not.
-        await withinDailyLimit('shorts titles', mode === 'titles' ? ESTIMATE_USD.shortsTitles : 0, () => startShorts(id, mode));
+        // Only the titles and picks cost money (Claude); drawing and scheduling do not.
+        const cost = mode === 'titles' ? ESTIMATE_USD.shortsTitles : mode === 'pick' ? ESTIMATE_USD.shortsPick : 0;
+        await withinDailyLimit(mode === 'pick' ? 'shorts picks' : 'shorts titles', cost, () => startShorts(id, mode));
     } catch (error) {
         const message = `Could not start the shorts job: ${(error as Error).message}`;
         await ref.update({ 'shorts.status': 'failed', 'shorts.error': message });
@@ -252,7 +263,7 @@ export async function getShorts(id: string): Promise<ShortsView> {
             error: i.error ?? null,
         };
     }));
-    const labels: Record<string, string> = { titles: 'Writing the headlines and titles', render: 'Making the shorts', upload: 'Scheduling the shorts' };
+    const labels: Record<string, string> = { pick: 'Finding the best moments', titles: 'Writing the headlines and titles', render: 'Making the shorts', upload: 'Scheduling the shorts' };
     return {
         // A request whose run died reads as failed, so the page offers a retry.
         status: lost ? 'failed' : s?.status ?? null,
@@ -269,6 +280,8 @@ export async function getShorts(id: string): Promise<ShortsView> {
             match: quoteMatch(q.text, wordsBetween(words, q.startMs - 2000, q.endMs + 2000)),
         })),
         items,
+        suggestions: ready ? s?.suggestions ?? [] : [],
+        direction: s?.direction ?? '',
         lastSlot: slot,
         warnings: s?.status === 'ready' ? s.warnings ?? [] : [],
         finishedAt: millis(s?.finishedAt),

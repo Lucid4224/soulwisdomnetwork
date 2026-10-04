@@ -120,7 +120,7 @@ export async function startYoutube(episodeId: string) {
 }
 
 // Writes headlines and titles for, draws or schedules the shorts of one episode (spec 005 step 14).
-export async function startShorts(episodeId: string, mode: 'titles' | 'render' | 'upload') {
+export async function startShorts(episodeId: string, mode: 'pick' | 'titles' | 'render' | 'upload') {
     await github('/actions/workflows/podcast_shorts.yml/dispatches', {
         method: 'POST',
         body: JSON.stringify({ ref: 'main', inputs: { episode_id: episodeId, mode } }),

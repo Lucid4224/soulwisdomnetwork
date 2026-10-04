@@ -1,4 +1,5 @@
 import type { BrollStyle } from '../lib/broll';
+import type { ShortSuggestion } from '../lib/shortPicks';
 import type { ShortAspect, ShortEdit, ShortRenderInputs } from '../lib/shorts';
 import type { ShowNotes } from '../lib/showNotes';
 import type { RedraftScope } from '../lib/showNotes';
@@ -279,7 +280,7 @@ export interface ShortItem extends ShortEdit {
 
 export interface EpisodeShorts {
     status: 'queued' | 'working' | 'ready' | 'failed';
-    job: 'titles' | 'render' | 'upload' | 'suggest' | null;   // what was asked for last ('suggest': the first version)
+    job: 'pick' | 'titles' | 'render' | 'upload' | 'suggest' | null;   // what was asked for last ('suggest': the first version)
     requestedAt?: unknown;
     startedAt?: unknown;
     finishedAt?: unknown;
@@ -290,6 +291,8 @@ export interface EpisodeShorts {
     finalAt?: number;                     // unused since shorts come from the key quotes
     timeZone?: string;                    // the producer's, for the times in emails
     warnings?: string[];
+    suggestions?: ShortSuggestion[];      // Claude's picks for Shorts, best first (lib/shortPicks.ts)
+    direction?: string | null;            // the producer's direction for the last picks
 }
 
 export interface Episode {

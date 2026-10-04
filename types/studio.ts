@@ -3,6 +3,7 @@
 import type { BrollStyle } from '@/lib/broll';
 import type { ShowNotes, SpokenWord } from '@/lib/showNotes';
 import type { TimedWord } from '@/lib/retime';
+import type { ShortSuggestion } from '@/lib/shortPicks';
 import type { ShortAspect, ShortEdit, ShortRenderInputs } from '@/lib/shorts';
 import type { ReviewUtterance } from '@/lib/transcript';
 import type { ThumbKind } from '@/lib/thumbnail';
@@ -224,7 +225,9 @@ export interface ShortsView {
     // there; low means the edit cut or changed it.
     quotes: { text: string; speaker: string; startMs: number; endMs: number; match: number }[];
     items: ShortItemView[];
-    lastSlot: number | null;            // the latest time any episode's short is scheduled for
+    suggestions: ShortSuggestion[];       // Claude's picks, best first
+    direction: string;                    // the direction given for them
+    lastSlot: number | null;             // the latest time any episode's short is scheduled for
     warnings: string[];
     finishedAt: number | null;
 }

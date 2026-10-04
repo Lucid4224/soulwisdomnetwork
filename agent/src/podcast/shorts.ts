@@ -1,5 +1,8 @@
 // Spec 005 step 14: Shorts from the key quotes, cut from the final cut (docs/specs/013-shorts.md).
-// Three jobs, picked by SHORTS_MODE:
+// Four jobs, picked by SHORTS_MODE:
+//   pick     Claude reads the final cut and suggests the moments that would make the strongest
+//            YouTube Shorts, best first, each with a score out of 10, a hook and a reason,
+//            following the producer's direction if given
 //   titles   Claude writes a headline and a YouTube title for each short the producer picked
 //            from the key quotes and has not given both yet
 //   render   draws each short that changed: 1080x1920, the episode's picture trimmed at the
@@ -33,13 +36,17 @@ import { describeError, failureSubject, sendEmail } from './notify';
 import { loadSettings, storageBucket } from './settings';
 import { FONTS_DIR, LOGO, shortAss } from './shortsRender';
 import { createYoutube, YoutubeError } from './youtubeApi';
+import {
+    PICK_ASK, PICK_COUNT, pickInstructions, pickingTranscript, rankPicks, ShortPicksSchema, snapPick, speakerFor,
+} from '../../../lib/shortPicks';
+import { randomUUID } from 'node:crypto';
 
 // US dollars per million tokens, for the cost record.
 const TEXTS_USD_PER_MTOK = { input: 4, output: 20 };
 // YouTube needs a scheduled time comfortably in the future.
 const MIN_LEAD_MS = 10 * 60_000;
 
-type Mode = 'titles' | 'render' | 'upload';
+type Mode = 'pick' | 'titles' | 'render' | 'upload';
 
 function required(name: string) {
     const value = process.env[name];
@@ -50,7 +57,7 @@ function required(name: string) {
 const episodeId = required('EPISODE_ID');
 if (!/^[\w-]{10,}$/.test(episodeId)) throw new Error(`Not a valid episode ID: ${episodeId}`);
 const mode = required('SHORTS_MODE') as Mode;
-if (!['titles', 'render', 'upload'].includes(mode)) throw new Error(`Not a shorts job: ${mode}`);
+if (!['pick', 'titles', 'render', 'upload'].includes(mode)) throw new Error(`Not a shorts job: ${mode}`);
 const alert = loadAlert();
 const runUrl = process.env.GITHUB_RUN_URL || '';
 const serviceAccount = JSON.parse(required('PODCAST_SA_JSON'));
@@ -81,6 +88,53 @@ async function updateItem(id: string, change: (item: ShortItem) => ShortItem) {
 }
 
 // The instructions come from the Studio settings (lib/studioSettings.ts shortsSystemPrompt).
+
+// Claude reads the final cut and picks the moments that would make the strongest Shorts.
+async function pickMoments(episode: Episode, words: TimedWord[]) {
+    const notes = episode.notes!.approved!;
+    const quotes = episode.final!.quotes ?? [];
+    const client = new Anthropic({ apiKey: required('ANTHROPIC_API_KEY') });
+    let userMessage = `Episode: ${notes.titles[notes.chosenTitle] ?? episode.title}\n\nSummary:\n${notes.summary}\n\n`;
+    if (quotes.length) {
+        userMessage += 'Key quotes, to tell who is speaking:\n' +
+            quotes.map(q => `[${q.startMs}ms] ${q.speaker}: ${q.text}`).join('\n') + '\n\n';
+    }
+    userMessage += `The final cut, each line starting with its time in milliseconds:\n${pickingTranscript(words)}\n\n` +
+        pickInstructions(PICK_ASK, episode.shorts?.direction ?? '');
+    const response = await client.beta.messages.stream({
+        model: NOTES_MODEL,
+        max_tokens: 32000,
+        betas: ['server-side-fallback-2026-07-01'],
+        fallbacks: 'default',
+        thinking: { type: 'adaptive' },
+        output_config: { effort: NOTES_EFFORT, format: betaZodOutputFormat(ShortPicksSchema) },
+        system: shortsSystemPrompt(settings),
+        messages: [{ role: 'user', content: userMessage }],
+    }).finalMessage();
+    if (response.stop_reason === 'refusal') throw new Error('Claude declined to pick moments for Shorts');
+    if (!response.parsed_output) throw new Error('Claude returned its picks in an unexpected shape');
+    const { input_tokens, output_tokens } = response.usage;
+    const usd = Math.round((input_tokens * TEXTS_USD_PER_MTOK.input + output_tokens * TEXTS_USD_PER_MTOK.output) / 1e4) / 100;
+    // For each pick: snap to clean word ends, drop nulls, and take the speaker from the key quotes.
+    const snapped = response.parsed_output.picks
+        .map(p => {
+            const s = snapPick(words, p.startMs, p.endMs);
+            if (!s) return null;
+            return {
+                startMs: s.startMs,
+                endMs: s.endMs,
+                score: p.score,
+                speaker: speakerFor(quotes, s.startMs, s.endMs, p.speaker),
+                hook: p.hook,
+                reason: p.reason,
+            };
+        })
+        .filter((s): s is NonNullable<typeof s> => !!s);
+    const ranked = rankPicks(snapped, PICK_COUNT);
+    const suggestions = ranked.map(r => ({ ...r, id: randomUUID().slice(0, 8) }));
+    if (!suggestions.length) throw new Error("None of Claude's picks fit a Short (5 seconds to 3 minutes); try again");
+    return { suggestions, usd };
+}
 
 
 // Headlines and titles for the shorts that lack one or the other; the producer picked the moments.
@@ -275,7 +329,7 @@ async function main() {
     if (episode.notes?.status !== 'approved' || !episode.notes.approved) throw new Error('Approve the show notes first');
     const final = episode.final;
     if (final?.status !== 'ready' || !final.videoPath) throw new Error('Get the final cut first (from Descript or the Editor Light render)');
-    if (!episode.shorts?.items.length) throw new Error('Pick some key quotes for shorts first');
+    if (!episode.shorts?.items.length && mode !== 'pick') throw new Error('Pick some key quotes for shorts first');
     fs.mkdirSync(workDir, { recursive: true });
     await ref.update({
         'shorts.status': 'working', 'shorts.startedAt': FieldValue.serverTimestamp(), 'shorts.error': null,
@@ -286,6 +340,20 @@ async function main() {
         'shorts.status': 'ready', 'shorts.finishedAt': FieldValue.serverTimestamp(), 'shorts.error': null,
         updatedAt: FieldValue.serverTimestamp(),
     };
+
+    if (mode === 'pick') {
+        console.log(`🎯 Finding the best moments for ${episode.title}`);
+        const { suggestions, usd } = await withRetry('Claude', () => pickMoments(episode, words), 3);
+        await ref.update({
+            ...done,
+            'shorts.suggestions': suggestions,
+            'shorts.warnings': [],
+            'costs.items': FieldValue.arrayUnion({ item: 'shorts_pick', usd, at: new Date() }),
+            'costs.totalUsd': FieldValue.increment(usd),
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+        return;
+    }
 
     if (mode === 'titles') {
         console.log(`✍️  Headlines and titles for the shorts of ${episode.title}`);
@@ -339,7 +407,7 @@ main().catch(async error => {
         'shorts.status': 'failed', 'shorts.error': message, 'shorts.finishedAt': FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
     }).catch(() => {});
-    const what = { titles: 'Writing the headlines and titles', render: 'Making the shorts', upload: 'Scheduling the shorts' }[mode] ?? 'The shorts job';
+    const what = { pick: 'Finding the best moments', titles: 'Writing the headlines and titles', render: 'Making the shorts', upload: 'Scheduling the shorts' }[mode] ?? 'The shorts job';
     await sendEmail({ alert }, failureSubject(`Shorts failed: ${episodeId}`, message),
         `${what} did not finish.\n\n${describeError(message)}\n\nTry again from the show notes page: ${notesPage}${runUrl ? `\n\nRun log: ${runUrl}` : ''}`);
     process.exit(1);

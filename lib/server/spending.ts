@@ -19,6 +19,7 @@ export const ESTIMATE_USD = {
     brollImage: 0.165,    // one OpenAI image (BROLL_USD_PER_IMAGE)
     thumbnails: 0.25,     // Claude's texts and an AI background
     shortsTitles: 0.05,   // Claude's headlines and titles
+    shortsPick: 0.15,     // Claude reads the final cut and picks moments for Shorts
     finalPerHour: 0.21,   // transcribing the final cut (WORDS_USD_PER_HOUR in agent/src/podcast/final.ts)
 };
 

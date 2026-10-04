@@ -1,9 +1,10 @@
 "use client";
 
-// Shorts and Checkpoint E on the show notes page (docs/specs/013-shorts.md). The producer ticks the
-// key quotes to make into shorts, moves their ends by clicking words, has Claude write headlines
-// and titles (or writes them), previews the cut, has them drawn, watches and approves each one,
-// and schedules the approved ones on YouTube one a day. Edits save as they go.
+// Shorts and Checkpoint E on the show notes page (docs/specs/013-shorts.md). The producer can
+// ask Claude for its picks and add or swap them in, ticks the key quotes to make into shorts,
+// moves their ends by clicking words, has Claude write headlines and titles (or writes them),
+// previews the cut, has them drawn, watches and approves each one, and schedules the approved
+// ones on YouTube one a day. Edits save as they go.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ago } from "@/components/studio/format";
@@ -13,6 +14,7 @@ import {
     DAY_MS, DEFAULT_ASPECT, HEADLINE_MAX_CHARS, publishSlot, QUOTE_MATCH_LOW, renderInputs, sameRender, SHORT_ASPECTS, SHORT_MAX_MS, SHORT_MIN_MS,
     SHORT_TARGET_MS, SHORT_TITLE_MAX, sideCrop, wordBounds, type ShortAspect, type ShortEdit,
 } from "@/lib/shorts";
+import { DIRECTION_MAX, isTaken, suggestionToShort, swapIn, type ShortSuggestion } from "@/lib/shortPicks";
 import { ErrorNote } from "@/components/studio/ErrorNote";
 import { studioFetch } from "@/lib/studioClient";
 import { failure, useStep, type ReportStep } from "@/components/studio/steps";
@@ -21,7 +23,7 @@ import type { ShortItemView, ShortsView } from "@/types/studio";
 
 const input = "bg-black/30 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white w-full";
 
-const WORKING: Record<string, string> = { titles: "Writing headlines and titles…", render: "Making the shorts…", upload: "Scheduling on YouTube…" };
+const WORKING: Record<string, string> = { pick: "Finding the best moments…", titles: "Writing headlines and titles…", render: "Making the shorts…", upload: "Scheduling on YouTube…" };
 
 type Edits = { aspect: ShortAspect; items: ShortEdit[] };
 
@@ -58,6 +60,8 @@ export function Shorts({ episodeId, enabled, report, revision }: { episodeId: st
     const [error, setError] = useState("");
     const [starting, setStarting] = useState(false);
     const [firstAt, setFirstAt] = useState("");
+    // The producer's direction for Claude's picks; null until loaded, then set once from view.direction.
+    const [direction, setDirection] = useState<string | null>(null);
     // Signed links change on every load; keep the first one per render so a playing video is not reset.
     const [urls, setUrls] = useState<Record<string, string>>({});
     const [finalUrl, setFinalUrl] = useState<string | null>(null);
@@ -93,6 +97,7 @@ export function Shorts({ episodeId, enabled, report, revision }: { episodeId: st
                 return out;
             });
             setFirstAt(value => value || localInput(defaultFirstSlot(next.lastSlot)));
+            setDirection(value => value ?? next.direction);
         } catch (e) {
             setError((e as Error).message);
         }
@@ -110,7 +115,7 @@ export function Shorts({ episodeId, enabled, report, revision }: { episodeId: st
         summary: working ? WORKING[view?.job ?? ""] ?? "Working…" : view?.status === "failed" ? failure("The shorts job", view.error)
             : view?.blocker ? "Waiting for the final cut"
                 : view?.items.length ? [`${view.items.length} short${view.items.length === 1 ? "" : "s"}`, approvedCount ? `${approvedCount} approved` : "", scheduled ? `${scheduled} scheduled` : ""].filter(Boolean).join(" · ")
-                    : "No shorts yet: tick key quotes to start",
+                : "No shorts yet: ask Claude for its picks or tick key quotes",
         key: view ? `${view.status}:${view.finishedAt}:${view.blocker}:${scheduled}` : null,
         report, revision, enabled, load,
     });
@@ -164,13 +169,13 @@ export function Shorts({ episodeId, enabled, report, revision }: { episodeId: st
         if (await flush()) await load(true);
     }
 
-    async function start(mode: "titles" | "render" | "upload") {
+    async function start(mode: "pick" | "titles" | "render" | "upload") {
         setStarting(true);
         try {
             if (!(await flush())) throw new Error("Your changes could not be saved; fix that first");
             const body = mode === "upload"
                 ? { mode, firstAt: new Date(firstAt).getTime(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone }
-                : { mode };
+                : mode === "pick" ? { mode, direction: direction ?? "" } : { mode };
             await studioFetch(base, { method: "POST", body: JSON.stringify(body) });
             await load();
         } catch (e) {
@@ -178,6 +183,22 @@ export function Shorts({ episodeId, enabled, report, revision }: { episodeId: st
         } finally {
             setStarting(false);
         }
+    }
+
+    // Adds a Claude pick as a new short, then flushes and reloads as toggle does.
+    async function addPick(s: ShortSuggestion) {
+        update({ ...edits, items: [...edits.items, suggestionToShort(s, crypto.randomUUID().slice(0, 8))] });
+        if (await flush()) await load(true);
+    }
+
+    // Swaps a pick in for a short already chosen, after confirming if it has a render or texts.
+    async function swapPick(targetId: string, s: ShortSuggestion) {
+        const existing = byId.get(targetId);
+        if (existing?.youtube) return;
+        if ((existing?.render || existing?.headline || existing?.title) &&
+            !confirm("Replace this short, with its trim, texts and video, by Claude's pick?")) return;
+        update({ ...edits, items: swapIn(edits.items, targetId, s) });
+        if (await flush()) await load(true);
     }
 
     async function approve(id: string, approved: boolean) {
@@ -267,6 +288,67 @@ export function Shorts({ episodeId, enabled, report, revision }: { episodeId: st
                         <p>The shaded sides are left out. 13:9 makes people larger; check nobody is cut at the edge.</p>
                         {previewing && <p className="text-amber-300">Previewing a short on the final cut</p>}
                     </div>
+                </div>
+            )}
+
+            {!view?.blocker && (
+                <div className="flex flex-col gap-2">
+                    <p className="text-sm text-gray-300">
+                        Claude&apos;s picks <span className="text-xs text-gray-400">(the moments it would make into Shorts, best first, each with a score out of 10 and why)</span>
+                    </p>
+                    <textarea value={direction ?? ""} maxLength={DIRECTION_MAX} rows={2}
+                        aria-label="Direction for Claude's picks"
+                        placeholder="Optional: e.g. favour moments about decisions, or keep them under 45 seconds"
+                        disabled={working}
+                        onChange={e => setDirection(e.target.value)}
+                        className={input} />
+                    <button onClick={() => start("pick")} disabled={working || starting} className={secondary}>
+                        {working && view?.job === "pick" ? WORKING.pick
+                            : view?.suggestions.length ? "Find moments again" : "Find the best moments"}
+                    </button>
+                    {!!view?.suggestions.length && (
+                        <ul className="flex flex-col gap-1 max-h-96 overflow-y-auto pr-1">
+                            {view.suggestions.map(s => {
+                                const taken = isTaken(s, edits.items);
+                                const swapOptions = edits.items.filter(i => !byId.get(i.id)?.youtube);
+                                return (
+                                    <li key={s.id} className={`flex flex-col gap-1 text-xs rounded-lg px-2 py-1.5 ${taken ? "bg-amber-500/10" : "hover:bg-white/5"}`}>
+                                        <div className="flex items-start gap-2">
+                                            <span className="text-amber-300 font-medium">{s.score}/10</span>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-gray-400">
+                                                    {mmss(s.startMs)}–{mmss(s.endMs)} · {Math.round((s.endMs - s.startMs) / 1000)}s · {s.speaker}
+                                                </p>
+                                                <p className="text-gray-200">&ldquo;{s.hook}&rdquo;</p>
+                                                <p className="text-gray-400">{s.reason}</p>
+                                            </div>
+                                            <button onClick={() => preview({ id: s.id, startMs: s.startMs, endMs: s.endMs })} className={secondary}>▶ Preview</button>
+                                        </div>
+                                        <div className="flex items-center gap-2 pl-6">
+                                            <button onClick={() => addPick(s)} disabled={taken || working}
+                                                className={taken ? `${secondary} opacity-50` : secondary}>
+                                                {taken ? "Added" : "Add as a short"}
+                                            </button>
+                                            {!taken && swapOptions.length > 0 && (
+                                                <select aria-label="Swap for a short"
+                                                    disabled={working}
+                                                    value=""
+                                                    onChange={e => { const v = e.target.value; if (v) swapPick(v, s); }}
+                                                    className="bg-black/30 border border-white/10 rounded-lg px-2 py-1 text-xs text-gray-200">
+                                                    <option value="">Swap for…</option>
+                                                    {swapOptions.map((i, n) => (
+                                                        <option key={i.id} value={i.id}>
+                                                            #{n + 1} {byId.get(i.id)?.headline || byId.get(i.id)?.title || mmss(i.startMs)}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            )}
+                                        </div>
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                    )}
                 </div>
             )}
 
@@ -392,6 +474,11 @@ function ShortCard({ n, item, view, url, drawnAsIs, saved, working, count, onCha
                         </>
                     )}
                 </div>
+                <label className="text-xs text-gray-400 flex flex-col gap-1">
+                    <span>Name shown on the short</span>
+                    <input value={item.speaker} maxLength={100} disabled={locked}
+                        onChange={e => onChange({ speaker: e.target.value })} className={input} />
+                </label>
                 <label className="text-xs text-gray-400 flex flex-col gap-1">
                     <span>Headline on the short <span className="text-gray-500">(*asterisks* make words gold)</span></span>
                     <input value={item.headline} maxLength={HEADLINE_MAX_CHARS} disabled={locked}
