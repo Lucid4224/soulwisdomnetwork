@@ -3,7 +3,7 @@
 
 import { FieldValue } from 'firebase-admin/firestore';
 import type { Episode, EpisodeEditRender } from '@/types/episode';
-import { adminDb } from './firebaseAdmin';
+import { adminBucket, adminDb } from './firebaseAdmin';
 import { startEditRender } from './github';
 import { HttpError } from './staff';
 
@@ -18,6 +18,7 @@ export interface EditRenderView {
     canStart: boolean;
     stale: boolean;                   // the edit changed after this render was made
     driveUrl: string | null;
+    videoUrl: string | null;          // a short-lived link to watch or download the render
     durationSeconds: number | null;
     cuts: number | null;
     warnings: string[];
@@ -75,6 +76,9 @@ export async function getEditRender(id: string): Promise<EditRenderView> {
         canStart: !!episode.edit && !!episode.media?.sourcePath && !busy(r),
         stale: ready && r.editVersion !== episode.edit?.version,
         driveUrl: ready ? r.driveUrl ?? null : null,
+        videoUrl: ready && r.videoPath
+            ? await adminBucket().file(r.videoPath).getSignedUrl({ action: 'read', expires: Date.now() + 60 * 60_000 }).then(([u]) => u).catch(() => null)
+            : null,
         durationSeconds: ready ? r.durationSeconds ?? null : null,
         cuts: ready ? r.cuts ?? null : null,
         warnings: ready ? r.warnings ?? [] : [],

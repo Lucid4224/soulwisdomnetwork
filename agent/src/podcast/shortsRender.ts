@@ -6,6 +6,7 @@
 import * as path from 'path';
 import { captionChunks, SHORT_HEIGHT, SHORT_WIDTH, shortLayout, type ShortAspect } from '../../../lib/shorts';
 import type { TimedWord } from '../../../lib/retime';
+import { assColor, type StudioSettings } from '../../../lib/studioSettings';
 import { hookWords } from '../../../lib/thumbnail';
 
 export const FONTS_DIR = path.resolve('agent/assets/fonts');
@@ -26,13 +27,17 @@ export function time(ms: number) {
 }
 
 // `words` are the final cut's words inside the short, times in the final cut; `startMs` is where the short begins.
-export function shortAss(o: { headline: string; speaker: string; words: TimedWord[]; startMs: number; durationMs: number; aspect: ShortAspect }) {
+// `colors` are the Studio settings' brand colours; by default the gold and deep violet above.
+export function shortAss(o: { headline: string; speaker: string; words: TimedWord[]; startMs: number; durationMs: number; aspect: ShortAspect;
+    colors?: StudioSettings['colors'] }) {
     const l = shortLayout(o.aspect);
+    const gold = o.colors ? assColor(o.colors.accent) : GOLD;
+    const ink = o.colors ? assColor(o.colors.background) : INK;
     const events: string[] = [];
     const add = (style: string, from: number, to: number, text: string) =>
         events.push(`Dialogue: 0,${time(from)},${time(to)},${style},,0,0,0,,${text}`);
 
-    const headline = hookWords(o.headline).map(w => `{\\c${w.gold ? GOLD : WHITE}}${safe(w.text)}`).join(' ');
+    const headline = hookWords(o.headline).map(w => `{\\c${w.gold ? gold : WHITE}}${safe(w.text)}`).join(' ');
     if (headline) add('Headline', 0, o.durationMs, `{\\an5\\pos(${SHORT_WIDTH / 2},${l.headline.centerY})}${headline}`);
     if (o.speaker) add('Speaker', 0, o.durationMs, `{\\an8\\pos(${SHORT_WIDTH / 2},${l.speakerTop})}${safe(o.speaker).toUpperCase()}`);
 
@@ -42,7 +47,7 @@ export function shortAss(o: { headline: string; speaker: string; words: TimedWor
             const from = i === 0 ? chunk.startMs : w.start;
             const to = i + 1 < chunk.words.length ? chunk.words[i + 1].start : chunk.endMs;
             if (to <= from) return;
-            const text = chunk.words.map((x, j) => `{\\c${j === i ? GOLD : WHITE}}${x.text}`).join(' ');
+            const text = chunk.words.map((x, j) => `{\\c${j === i ? gold : WHITE}}${x.text}`).join(' ');
             add('Caption', Math.max(0, from), Math.min(o.durationMs, to), `{\\an8\\pos(${SHORT_WIDTH / 2},${l.captionsTop})}${text}`);
         });
     }
@@ -58,9 +63,9 @@ export function shortAss(o: { headline: string; speaker: string; words: TimedWor
         '',
         '[V4+ Styles]',
         'Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding',
-        `Style: Headline,Outfit Black,88,${WHITE},${WHITE},${INK},&H64000000&,0,0,0,0,100,100,0,0,1,4,3,5,${l.headline.marginX},${l.headline.marginX},0,1`,
-        `Style: Speaker,Outfit SemiBold,36,${GOLD},${GOLD},${INK},&H00000000&,0,0,0,0,100,100,6,0,1,0,0,8,60,60,0,1`,
-        `Style: Caption,Outfit Black,78,${WHITE},${WHITE},${INK},&H64000000&,0,0,0,0,100,100,0,0,1,6,3,8,${l.captionsMarginX},${l.captionsMarginX},0,1`,
+        `Style: Headline,Outfit Black,88,${WHITE},${WHITE},${ink},&H64000000&,0,0,0,0,100,100,0,0,1,4,3,5,${l.headline.marginX},${l.headline.marginX},0,1`,
+        `Style: Speaker,Outfit SemiBold,36,${gold},${gold},${ink},&H00000000&,0,0,0,0,100,100,6,0,1,0,0,8,60,60,0,1`,
+        `Style: Caption,Outfit Black,78,${WHITE},${WHITE},${ink},&H64000000&,0,0,0,0,100,100,0,0,1,6,3,8,${l.captionsMarginX},${l.captionsMarginX},0,1`,
         '',
         '[Events]',
         'Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text',

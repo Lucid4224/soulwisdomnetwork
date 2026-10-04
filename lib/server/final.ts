@@ -5,7 +5,9 @@
 import { FieldValue } from 'firebase-admin/firestore';
 import type { Episode, EpisodeFinal } from '@/types/episode';
 import type { FinalView } from '@/types/studio';
-import { adminDb } from './firebaseAdmin';
+import { finalIsCurrent } from '@/lib/finalCut';
+import { adminBucket, adminDb } from './firebaseAdmin';
+import { getSettings } from './studioSettings';
 import { startFinal } from './github';
 import { ESTIMATE_USD, withinDailyLimit } from './spending';
 import { HttpError } from './staff';
@@ -38,6 +40,9 @@ function descriptBusy(episode: Episode) {
 // Publishes whatever is in the Descript project now; running it again picks up later edits.
 export async function requestFinal(id: string) {
     const ref = episodeRef(id);
+    if ((await getSettings()).finalSource === 'editorLight') {
+        throw new HttpError(409, 'The Studio settings make the final cut from the Editor Light render: use "Render this edit"');
+    }
     let hours = 1;
     await adminDb().runTransaction(async tx => {
         const episode = (await tx.get(ref)).data() as Episode | undefined;
@@ -68,13 +73,20 @@ export async function getFinal(id: string): Promise<FinalView> {
     const f = episode.final;
     const lost = !!f && WORKING.includes(f.status) && !busy(f);
     const ready = f?.status === 'ready';
+    // The Studio settings choose who makes the final cut; Editor Light makes it from its render.
+    const source = (await getSettings()).finalSource;
     return {
         // A request whose run died reads as failed, so the page offers a retry.
         status: lost ? 'failed' : f?.status ?? null,
         error: f?.error ?? (lost ? 'The final cut did not finish. Check the Podcast Final Cut run in GitHub Actions, then try again.' : null),
-        canStart: episode.notes?.status === 'approved' && episode.descript?.status === 'ready' && !!episode.descript.projectId,
-        stale: ready && (f.projectId !== episode.descript?.projectId || f.notesVersion !== episode.notes?.approvedVersion),
+        source,
+        canStart: source === 'descript' && episode.notes?.status === 'approved' && episode.descript?.status === 'ready' && !!episode.descript.projectId,
+        // Out of date: made from an earlier Descript project (or saved edit) or earlier notes (lib/finalCut.ts).
+        stale: ready && !finalIsCurrent(episode),
         driveUrl: f?.driveUrl ?? null,
+        videoUrl: ready && !f.driveUrl && f.videoPath
+            ? await adminBucket().file(f.videoPath).getSignedUrl({ action: 'read', expires: Date.now() + 60 * 60_000 }).then(([u]) => u).catch(() => null)
+            : null,
         folderUrl: f?.folderUrl ?? null,
         shareUrl: f?.shareUrl ?? null,
         durationSeconds: f?.durationSeconds ?? null,

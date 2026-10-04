@@ -10,10 +10,9 @@ import { getStorage } from 'firebase-admin/storage';
 import { mmss } from '../../../lib/showNotes';
 import type { Episode } from '../../../types/episode';
 import { loadAlert } from './config';
-import { draftNotes, type ReviewedLine } from './notesDraft';
+import { draftNotes, NOTES_EFFORT, NOTES_MODEL, type ReviewedLine } from './notesDraft';
 import { describeError, failureSubject, sendEmail } from './notify';
-
-const SITE = 'https://soulwisdomcollective.com';
+import { loadSettings, storageBucket } from './settings';
 
 function required(name: string) {
     const value = process.env[name];
@@ -25,10 +24,8 @@ const episodeId = required('EPISODE_ID');
 if (!/^[\w-]{10,}$/.test(episodeId)) throw new Error(`Not a valid episode ID: ${episodeId}`);
 const alert = loadAlert();
 const runUrl = process.env.GITHUB_RUN_URL || '';
-initializeApp({
-    credential: cert(JSON.parse(required('PODCAST_SA_JSON'))),
-    storageBucket: process.env.PODCAST_STORAGE_BUCKET || 'soulwisdomnetwork.firebasestorage.app',
-});
+const serviceAccount = JSON.parse(required('PODCAST_SA_JSON'));
+initializeApp({ credential: cert(serviceAccount), storageBucket: storageBucket(serviceAccount) });
 const ref = getFirestore().collection('episodes').doc(episodeId);
 let approved = false;   // never overwrite approved notes, even to record a failure
 
@@ -54,7 +51,10 @@ async function main() {
     console.log(`📝 ${episode.title}: ${lines.length} lines`);
 
     const client = new Anthropic({ apiKey: required('ANTHROPIC_API_KEY') });
-    const { notes, unverified, model, inputTokens, outputTokens, usd } = await draftNotes(client, episode, lines);
+    // The Studio settings choose the kind of recording and the writing (lib/studioSettings.ts).
+    const settings = await loadSettings(getFirestore());
+    const SITE = settings.studioUrl;
+    const { notes, unverified, model, inputTokens, outputTokens, usd } = await draftNotes(client, episode, lines, NOTES_MODEL, NOTES_EFFORT, settings);
     console.log(`✅ ${model}: ${inputTokens} in, ${outputTokens} out, ~$${usd}; ${unverified.length} quote(s) not found verbatim`);
 
     await ref.update({

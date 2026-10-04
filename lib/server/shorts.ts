@@ -2,6 +2,7 @@
 // titles for, draw or schedule the shorts the producer picked from the key quotes, keep the producer's edits, record which drawn short was approved, and show
 // it all on the show notes page.
 
+import { finalIsCurrent } from '@/lib/finalCut';
 import { FieldValue } from 'firebase-admin/firestore';
 import { z } from 'zod';
 import type { TimedWord } from '@/lib/retime';
@@ -46,8 +47,9 @@ const finalAt = (episode: Episode) => millis(episode.final?.finishedAt) ?? 0;
 function finalProblem(episode: Episode) {
     const f = episode.final;
     if (episode.notes?.status !== 'approved') return 'Approve the show notes first';
-    if (f?.status !== 'ready' || !f.wordsPath) return 'Get the final cut from Descript first';
-    if (f.projectId !== episode.descript?.projectId || f.notesVersion !== episode.notes.approvedVersion) {
+    if (f?.status !== 'ready' || !f.wordsPath) return 'Get the final cut first (from Descript or the Editor Light render)';
+    // Current: from the Descript project or saved edit, and notes, as they are now (lib/finalCut.ts).
+    if (!finalIsCurrent(episode)) {
         return 'The final cut is out of date; get it again first';
     }
     if (!f.quotes?.length) return 'The final cut has no key quotes';
@@ -126,7 +128,7 @@ export async function saveShorts(id: string, body: unknown) {
     return adminDb().runTransaction(async tx => {
         const episode = (await tx.get(ref)).data() as Episode | undefined;
         if (!episode) throw new HttpError(404, 'Episode not found');
-        if (episode.final?.status !== 'ready') throw new HttpError(409, 'Get the final cut from Descript first');
+        if (episode.final?.status !== 'ready') throw new HttpError(409, 'Get the final cut first (from Descript or the Editor Light render)');
         const shorts = episode.shorts;
         if ((shorts?.version ?? 0) !== version) throw new HttpError(409, 'The shorts were changed elsewhere (or Claude just wrote their titles). Reload the page.');
         const durationMs = (episode.final.durationSeconds ?? 0) * 1000;

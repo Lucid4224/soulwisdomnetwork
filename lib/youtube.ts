@@ -3,6 +3,7 @@
 // show notes page, which previews exactly this.
 
 import { youtubeDescription, type ShowNotes } from './showNotes';
+import type { DescriptionLinks } from './studioSettings';
 import type { Episode } from '../types/episode';
 
 export const YOUTUBE_CATEGORY = '27';            // Education (decided 28 Sept 2026)
@@ -48,14 +49,15 @@ function fitBytes(text: string, max: number) {
 }
 
 // The approved notes with the final cut's chapter times, which is what the video shows.
-export function youtubeMetadata(episode: Episode): YoutubeMetadata | null {
+// `links` are the Studio settings' description lines (the Soul Wisdom ones when left out).
+export function youtubeMetadata(episode: Episode, links?: DescriptionLinks): YoutubeMetadata | null {
     const notes = episode.notes?.status === 'approved' ? episode.notes.approved : undefined;
     const final = episode.final?.status === 'ready' ? episode.final : undefined;
     if (!notes || !final) return null;
     const chapters = (final.chapters ?? []).map(c => ({ title: c.title, startMs: c.startMs })) as ShowNotes['chapters'];
     return {
         title: clean(notes.titles[notes.chosenTitle] ?? episode.title).trim().slice(0, TITLE_MAX),
-        description: fitBytes(clean(youtubeDescription({ ...notes, chapters })), DESCRIPTION_MAX_BYTES),
+        description: fitBytes(clean(youtubeDescription({ ...notes, chapters }, links)), DESCRIPTION_MAX_BYTES),
         tags: fitTags(notes.tags),
         categoryId: YOUTUBE_CATEGORY,
         privacyStatus: YOUTUBE_PRIVACY,

@@ -22,7 +22,7 @@ import {
     SHORT_WIDTH, shortLayout, shortMetadata, ShortTextsSchema, wordsBetween,
     HEADLINE_MAX_CHARS, type ShortAspect,
 } from '../../../lib/shorts';
-import { SITE_URL } from '../../../lib/showNotes';
+import { shortsSystemPrompt, type StudioSettings } from '../../../lib/studioSettings';
 import { YOUTUBE_CATEGORY } from '../../../lib/youtube';
 import type { Episode, ShortItem } from '../../../types/episode';
 import { loadAlert } from './config';
@@ -30,6 +30,7 @@ import { withRetry } from './errors';
 import { renderShort, shortBackground } from './media';
 import { NOTES_EFFORT, NOTES_MODEL } from './notesDraft';
 import { describeError, failureSubject, sendEmail } from './notify';
+import { loadSettings, storageBucket } from './settings';
 import { FONTS_DIR, LOGO, shortAss } from './shortsRender';
 import { createYoutube, YoutubeError } from './youtubeApi';
 
@@ -52,15 +53,15 @@ const mode = required('SHORTS_MODE') as Mode;
 if (!['titles', 'render', 'upload'].includes(mode)) throw new Error(`Not a shorts job: ${mode}`);
 const alert = loadAlert();
 const runUrl = process.env.GITHUB_RUN_URL || '';
-initializeApp({
-    credential: cert(JSON.parse(required('PODCAST_SA_JSON'))),
-    storageBucket: process.env.PODCAST_STORAGE_BUCKET || 'soulwisdomnetwork.firebasestorage.app',
-});
+const serviceAccount = JSON.parse(required('PODCAST_SA_JSON'));
+initializeApp({ credential: cert(serviceAccount), storageBucket: storageBucket(serviceAccount) });
 const db = getFirestore();
 const ref = db.collection('episodes').doc(episodeId);
 const bucket = getStorage().bucket();
 const workDir = path.join(process.env.RUNNER_TEMP || '/tmp', 'shorts', episodeId);
-const notesPage = `${SITE_URL}/admin/podcast/${episodeId}/notes#shorts`;
+// The Studio settings (lib/studioSettings.ts): writing, brand colours, logo, links. Loaded first in main().
+let settings: StudioSettings;
+let notesPage = `https://soulwisdomcollective.com/admin/podcast/${episodeId}/notes#shorts`;
 
 const finalAtOf = (episode: Episode) => (episode.final?.finishedAt as Timestamp | undefined)?.toMillis?.() ?? 0;
 
@@ -79,10 +80,8 @@ async function updateItem(id: string, change: (item: ShortItem) => ShortItem) {
     });
 }
 
-const SYSTEM = 'You pick moments from the Soul Wisdom Collective podcast for YouTube Shorts. The podcast explores near-death ' +
-    'experiences, consciousness and the meaning of life with warmth and curiosity. A good Short grabs attention in its first ' +
-    'two seconds, makes sense to someone who has never seen the episode, and ends on a complete thought or a line that lands. ' +
-    'Never state as fact what a guest offered as belief or experience.';
+// The instructions come from the Studio settings (lib/studioSettings.ts shortsSystemPrompt).
+
 
 // Headlines and titles for the shorts that lack one or the other; the producer picked the moments.
 // Shorts are numbered for Claude (random ids are easy to copy wrong); any it leaves out are asked
@@ -106,7 +105,7 @@ async function writeTexts(episode: Episode, words: TimedWord[]) {
             fallbacks: 'default',
             thinking: { type: 'adaptive' },
             output_config: { effort: NOTES_EFFORT, format: betaZodOutputFormat(ShortTextsSchema) },
-            system: SYSTEM,
+            system: shortsSystemPrompt(settings),
             messages: [{
                 role: 'user',
                 content: `Episode: ${notes.titles[notes.chosenTitle] ?? episode.title}\n\nSummary:\n${notes.summary}\n\n` +
@@ -144,9 +143,15 @@ async function render(episode: Episode, words: TimedWord[]) {
     if (!todo.length) throw new Error('Every short is already made; change one first');
     const l = shortLayout(aspect);
     const background = path.join(workDir, 'background.png');
-    await shortBackground(LOGO, background, {
+    // The settings' logo when one is uploaded, the site's logo otherwise.
+    let logo = LOGO;
+    if (settings.logoPath) {
+        logo = path.join(workDir, `logo${path.extname(settings.logoPath)}`);
+        await withRetry('Storage download', () => bucket.file(settings.logoPath!).download({ destination: logo }));
+    }
+    await shortBackground(logo, background, {
         width: SHORT_WIDTH, height: SHORT_HEIGHT, logoSize: l.logo.size, logoTop: l.logo.top, videoTop: l.video.top, videoHeight: l.video.height,
-    });
+    }, settings.colors);
     // ffmpeg reads the final cut straight from Storage, only around each short.
     const [url] = await bucket.file(episode.final!.videoPath!).getSignedUrl({ action: 'read', expires: Date.now() + 3 * 60 * 60_000 });
     const warnings: string[] = [];
@@ -161,7 +166,7 @@ async function render(episode: Episode, words: TimedWord[]) {
         const ass = path.join(workDir, `${item.id}.ass`);
         fs.writeFileSync(ass, shortAss({
             headline: inputs.headline, speaker: inputs.speaker, words: wordsBetween(words, inputs.startMs, inputs.endMs),
-            startMs: inputs.startMs, durationMs, aspect,
+            startMs: inputs.startMs, durationMs, aspect, colors: settings.colors,
         }));
         const local = path.join(workDir, `${item.id}.mp4`);
         await withRetry('Render', () => renderShort(url, local, {
@@ -188,7 +193,7 @@ async function upload(episode: Episode, words: TimedWord[]) {
     const playlistId = process.env.YOUTUBE_PLAYLIST_ID?.trim();
     const link = episode.youtube?.url ? { url: episode.youtube.url, linkText: 'Watch the full conversation' }
         : playlistId ? { url: `https://www.youtube.com/playlist?list=${playlistId}`, linkText: 'Full episodes' }
-            : { url: SITE_URL, linkText: 'Full episodes' };
+            : { url: settings.siteUrl, linkText: 'Full episodes' };
     const youtube = createYoutube({
         clientId: required('YOUTUBE_CLIENT_ID'),
         clientSecret: required('YOUTUBE_CLIENT_SECRET'),
@@ -263,11 +268,13 @@ function when(ms: number, timeZone = 'UTC') {
 }
 
 async function main() {
+    settings = await loadSettings(db);
+    notesPage = `${settings.studioUrl}/admin/podcast/${episodeId}/notes#shorts`;
     const episode = (await ref.get()).data() as Episode | undefined;
     if (!episode) throw new Error(`Episode ${episodeId} not found`);
     if (episode.notes?.status !== 'approved' || !episode.notes.approved) throw new Error('Approve the show notes first');
     const final = episode.final;
-    if (final?.status !== 'ready' || !final.videoPath) throw new Error('Get the final cut from Descript first');
+    if (final?.status !== 'ready' || !final.videoPath) throw new Error('Get the final cut first (from Descript or the Editor Light render)');
     if (!episode.shorts?.items.length) throw new Error('Pick some key quotes for shorts first');
     fs.mkdirSync(workDir, { recursive: true });
     await ref.update({

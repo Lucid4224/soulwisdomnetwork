@@ -58,21 +58,31 @@ export function FinalCut({ episodeId, enabled, report, revision }: { episodeId: 
     }
 
     const ready = view?.status === "ready";
+    // Studio settings: the Editor Light render makes the final cut, so there is nothing to get from Descript here.
+    const editorLight = view?.source === "editorLight";
     useStep({
         step: "final", failed: view?.status === "failed", done: ready && !view.stale, working,
         summary: working ? LABEL[view!.status as keyof typeof LABEL] : view?.status === "failed" ? failure("Getting the final cut", view.error)
             : ready ? [view.stale ? "Out of date: get it again" : `Made ${ago(view.finishedAt)}`, view.durationSeconds ? mmss(view.durationSeconds * 1000) : "", view.loudness ? `${view.loudness.afterLufs} LUFS` : ""].filter(Boolean).join(" · ")
-                : view?.canStart ? "Ready when the Descript edit is finished" : "Waiting for the Descript project",
-        link: view?.driveUrl ? { label: "Final cut", href: view.driveUrl } : null,
+                : editorLight ? "Made by “Render this edit” (Editor Light)"
+                    : view?.canStart ? "Ready when the Descript edit is finished" : "Waiting for the Descript project",
+        link: view?.driveUrl ? { label: "Final cut", href: view.driveUrl } : view?.videoUrl ? { label: "Final cut", href: view.videoUrl } : null,
         key: view ? `${view.status}:${view.finishedAt}` : null, report, revision, enabled, load,
     });
     return (
         <div className="flex flex-col gap-2">
             {view?.status === "failed" && <ErrorNote title="Getting the final cut failed" message={view.error} />}
             <div className="flex flex-wrap items-center gap-3">
-                <button onClick={start} disabled={!view?.canStart || working || starting} className={ready ? secondary : primary}>
-                    {working ? LABEL[view!.status as keyof typeof LABEL] : ready ? "Get the final cut again" : "Get the final cut from Descript"}
-                </button>
+                {!editorLight && (
+                    <button onClick={start} disabled={!view?.canStart || working || starting} className={ready ? secondary : primary}>
+                        {working ? LABEL[view!.status as keyof typeof LABEL] : ready ? "Get the final cut again" : "Get the final cut from Descript"}
+                    </button>
+                )}
+                {!view?.driveUrl && view?.videoUrl && (
+                    <a href={view.videoUrl} target="_blank" rel="noreferrer" className="text-sm text-amber-300 hover:underline">
+                        Watch or download the final cut ↗
+                    </a>
+                )}
                 {view?.driveUrl && (
                     <a href={view.driveUrl} target="_blank" rel="noreferrer" className="text-sm text-amber-300 hover:underline">
                         Open the final cut ↗
@@ -85,7 +95,11 @@ export function FinalCut({ episodeId, enabled, report, revision }: { episodeId: 
                 )}
             </div>
             <p className="text-xs text-gray-400">
-                {working
+                {editorLight
+                    ? ready
+                        ? `Made by the Editor Light render ${view.finishedAt ? ago(view.finishedAt) : ""}${view.durationSeconds ? ` · ${mmss(view.durationSeconds * 1000)}` : ""}. After more edits, use “Render this edit” again.`
+                        : "The Studio settings make the final cut from the Editor Light render: edit in “Edit here instead”, then press “Render this edit”."
+                    : working
                     ? "Descript renders the “Episode” timeline, then it is downloaded, set to broadcast loudness and transcribed to move the chapter times. Allow about as long as the episode; this page updates by itself and you get an email."
                     : !view?.canStart
                         ? "Send the episode to Descript and finish the edit there first."
@@ -94,7 +108,9 @@ export function FinalCut({ episodeId, enabled, report, revision }: { episodeId: 
                             : "When the edit in Descript is finished: renders the “Episode” timeline at 1080p, sets it to -14 LUFS (what YouTube and Spotify play at), saves it to Drive and moves the chapter and quote times onto it."}
             </p>
             {ready && view.stale && (
-                <p className="text-sm text-amber-300">This final cut came from an earlier Descript project or earlier notes. Get it again to match.</p>
+                <p className="text-sm text-amber-300">{editorLight
+                    ? "This final cut came from an earlier edit or earlier notes. Render the edit again to match."
+                    : "This final cut came from an earlier Descript project or earlier notes. Get it again to match."}</p>
             )}
             {ready && view.chapters.length > 0 && (
                 <div className="text-xs text-gray-400">

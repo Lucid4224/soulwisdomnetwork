@@ -2,6 +2,7 @@
 // episode, or update the video already there, and show where it stands on the notes page.
 
 import { FieldValue } from 'firebase-admin/firestore';
+import { getSettings } from './studioSettings';
 import { youtubeMetadata } from '@/lib/youtube';
 import type { Episode, EpisodeYoutube } from '@/types/episode';
 import type { YoutubeView } from '@/types/studio';
@@ -32,7 +33,7 @@ function busy(y: EpisodeYoutube | undefined) {
 // Uploading needs a current Checkpoint D approval.
 function blocker(episode: Episode) {
     const a = episode.approval;
-    if (episode.final?.status !== 'ready') return 'Get the final cut from Descript first';
+    if (episode.final?.status !== 'ready') return 'Get the final cut first (from Descript or the Editor Light render)';
     if (!a) return 'Approve the episode first (Checkpoint D)';
     if (a.notesVersion !== episode.notes?.approvedVersion || a.finalAt !== (millis(episode.final.finishedAt) ?? 0)) {
         return 'The notes or the final cut changed after the approval; approve the episode again';
@@ -95,6 +96,7 @@ export async function getYoutube(id: string): Promise<YoutubeView> {
         // The video file is from an earlier final cut, or the details from an earlier approval.
         finalOutdated: !!y?.videoId && y.finalAt !== finalAt,
         detailsOutdated: y?.status === 'ready' && !!y.videoId && y.approvalAt !== approvalAt,
-        preview: youtubeMetadata(episode),
+        // Exactly what the upload will send, with the Studio settings' description lines.
+        preview: youtubeMetadata(episode, await getSettings()),
     };
 }

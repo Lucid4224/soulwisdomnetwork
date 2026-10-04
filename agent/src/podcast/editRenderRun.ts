@@ -14,7 +14,9 @@ import { createDrive, ensureFolder, parentOf, putFile } from './drive';
 import { renderEdit } from './editRender';
 import { runEditRender } from './editRenderJob';
 import { withRetry } from './errors';
+import { cutClip } from './media';
 import { describeError, failureSubject, sendEmail } from './notify';
+import { loadSettings, storageBucket } from './settings';
 
 function required(name: string) {
     const value = process.env[name];
@@ -27,10 +29,7 @@ if (!/^[\w-]{10,}$/.test(episodeId)) throw new Error(`Not a valid episode ID: ${
 const alert = loadAlert();
 const runUrl = process.env.GITHUB_RUN_URL || '';
 const serviceAccount = JSON.parse(required('PODCAST_SA_JSON'));
-initializeApp({
-    credential: cert(serviceAccount),
-    storageBucket: process.env.PODCAST_STORAGE_BUCKET || 'soulwisdomnetwork.firebasestorage.app',
-});
+initializeApp({ credential: cert(serviceAccount), storageBucket: storageBucket(serviceAccount) });
 const ref = getFirestore().collection('episodes').doc(episodeId);
 const bucket = getStorage().bucket();
 const drive = createDrive(serviceAccount);
@@ -46,7 +45,9 @@ async function main() {
             await withRetry('Storage upload', () => bucket.upload(local, { destination: storagePath, resumable: true, metadata: { contentType } }));
         },
         // "04 Final" sits beside "02 Processed" unless a folder is set explicitly, as in final.ts.
+        // With no Drive folders set up, the video stays in Cloud Storage only.
         saveToDrive: async (local, name) => {
+            if (!process.env.DRIVE_FINAL_FOLDER_ID && !process.env.DRIVE_PROCESSED_FOLDER_ID) return null;
             const folderId = process.env.DRIVE_FINAL_FOLDER_ID
                 || await ensureFolder(drive, await parentOf(drive, required('DRIVE_PROCESSED_FOLDER_ID')), '04 Final');
             const fileId = await putFile(drive, folderId, name, 'video/mp4', local);
@@ -55,13 +56,17 @@ async function main() {
         update: async fields => { await ref.update(fields); },
         render: renderEdit,
         now: () => FieldValue.serverTimestamp(),
+        // The Studio settings: intro, teasers, and whether this becomes the final cut.
+        settings: await loadSettings(getFirestore()),
+        showIntro: path.resolve('assets/podcast/intro.mp4'),
+        cutClip: async (input, output, start, seconds) => { await cutClip(input, output, start, seconds, true); },
     }, workDir);
     const episode = (await ref.get()).data() as Episode;
     console.log(`✅ Rendered ${mmss(result.durationSeconds * 1000)}, ${result.cuts} cuts: ${result.driveUrl}`);
     await sendEmail({ alert }, `Editor Light render ready: ${episode.title}`, [
         `The Editor Light render of "${episode.title}" is saved (${mmss(result.durationSeconds * 1000)}, ` +
             `${result.cuts} cuts, ${mmss(result.timeSavedSeconds * 1000)} shorter):`,
-        result.driveUrl,
+        result.driveUrl ?? '(saved in Cloud Storage; open it from the show notes page)',
         ...(result.warnings.length ? ['', 'Check:', ...result.warnings.map(w => `  - ${w}`)] : []),
     ].join('\n'));
 }

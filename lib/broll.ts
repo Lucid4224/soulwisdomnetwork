@@ -41,6 +41,9 @@ export const IMAGE_RULES = 'No text, letters, captions, logos or watermarks. Peo
 
 const RULES = `${IMAGE_RULES} Landscape composition with the subject away from the edges, suitable for a slow pan and zoom.`;
 
-export function brollPrompt(idea: string, style: BrollStyle) {
-    return `${BROLL_STYLES[style].prompt} ${PALETTE}\n\nSubject: ${idea.trim()}.\n\n${RULES}`;
+// `customStyle` is the Studio settings' image style (lib/studioSettings.ts); when it is set it
+// takes the place of the built-in brand style and palette.
+export function brollPrompt(idea: string, style: BrollStyle, customStyle = '') {
+    const look = customStyle.trim() || `${BROLL_STYLES[style].prompt} ${PALETTE}`;
+    return `${look}\n\nSubject: ${idea.trim()}.\n\n${RULES}`;
 }

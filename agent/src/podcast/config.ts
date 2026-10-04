@@ -1,7 +1,9 @@
 import * as dotenv from 'dotenv';
+import { storageBucket } from './settings';
 dotenv.config({ path: '.env.local' });
 
-// Always offered to AssemblyAI as candidate names. Guests are named at Checkpoint A.
+// Always offered to AssemblyAI as candidate names. Guests are named at Checkpoint A. These are
+// the defaults; the Studio settings' speaker names (lib/studioSettings.ts) take their place.
 export const HOSTS = ['Daniel Endy', 'Tom Wood'];
 
 // AssemblyAI: $0.21 transcription + $0.02 diarization + $0.02 speaker ID per audio hour
@@ -36,12 +38,14 @@ export function loadAlert() {
 }
 
 export function loadConfig() {
+    const serviceAccountJson = required('PODCAST_SA_JSON');
     return {
-        serviceAccountJson: required('PODCAST_SA_JSON'),
+        serviceAccountJson,
         assemblyAiKey: required('ASSEMBLYAI_API_KEY'),
-        toProcessFolderId: required('DRIVE_TO_PROCESS_FOLDER_ID'),
-        processedFolderId: required('DRIVE_PROCESSED_FOLDER_ID'),
-        bucket: process.env.PODCAST_STORAGE_BUCKET || 'soulwisdomnetwork.firebasestorage.app',
+        // The Drive inbox is optional: without these, only recordings uploaded in the Studio are processed.
+        toProcessFolderId: process.env.DRIVE_TO_PROCESS_FOLDER_ID || '',
+        processedFolderId: process.env.DRIVE_PROCESSED_FOLDER_ID || '',
+        bucket: storageBucket(JSON.parse(serviceAccountJson)),
         speechModels: speechModels(),
         costCapUsd: Number(process.env.PODCAST_EPISODE_COST_CAP_USD || 5),
         workDir: process.env.RUNNER_TEMP || '/tmp',

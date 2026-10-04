@@ -3,10 +3,27 @@
 // approved and uploaded. Type: Outfit Black, the site's heading font; gold for *marked* words.
 
 import { hookWords, THUMB_HEIGHT as H, THUMB_WIDTH as W, type ThumbKind } from "@/lib/thumbnail";
+import { DEFAULT_SETTINGS, lighten, type StudioSettings } from "@/lib/studioSettings";
 
-const INK = "#140a2e";          // deep violet, the logo's ground
-const GOLD = "#f7c65b";
+// The brand colours: the Studio settings' (lib/studioSettings.ts), set by drawThumbnail before
+// each drawing. By default the deep violet of the logo's ground and the gold.
+let INK = "#140a2e";
+let GOLD = "#f7c65b";
+let GLOW = ["#4a2f9c", "#23145a"];
+let INK_RGB = "20, 10, 46";
+let GOLD_RGB = "247, 198, 91";
 const WHITE = "#ffffff";
+
+const rgbList = (hex: string) => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16)).join(", ");
+
+function applyPalette(colors: StudioSettings["colors"]) {
+    const d = DEFAULT_SETTINGS.colors;
+    INK = colors.background;
+    GOLD = colors.accent;
+    GLOW = colors.background === d.background ? ["#4a2f9c", "#23145a"] : [lighten(colors.background, 0.25), lighten(colors.background, 0.08)];
+    INK_RGB = rgbList(colors.background);
+    GOLD_RGB = rgbList(colors.accent);
+}
 
 export interface ThumbImages {
     frame: ImageBitmap | null;
@@ -93,7 +110,9 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
     ctx.roundRect(x, y, w, h, r);
 }
 
-export function drawThumbnail(ctx: CanvasRenderingContext2D, kind: ThumbKind, text: string, images: ThumbImages, family: string) {
+export function drawThumbnail(ctx: CanvasRenderingContext2D, kind: ThumbKind, text: string, images: ThumbImages, family: string,
+    colors: StudioSettings["colors"] = DEFAULT_SETTINGS.colors) {
+    applyPalette(colors);
     const words = hookWords(text);
     ctx.clearRect(0, 0, W, H);
     ctx.fillStyle = INK;
@@ -103,8 +122,8 @@ export function drawThumbnail(ctx: CanvasRenderingContext2D, kind: ThumbKind, te
         // The face fills the picture; the text sits along the bottom.
         if (images.frame) cover(ctx, images.frame, 0, 0, W, H);
         const shade = ctx.createLinearGradient(0, H * 0.4, 0, H);
-        shade.addColorStop(0, "rgba(20, 10, 46, 0)");
-        shade.addColorStop(1, "rgba(20, 10, 46, 0.92)");
+        shade.addColorStop(0, `rgba(${INK_RGB}, 0)`);
+        shade.addColorStop(1, `rgba(${INK_RGB}, 0.92)`);
         ctx.fillStyle = shade;
         ctx.fillRect(0, H * 0.4, W, H * 0.6);
         const { size, lines } = fit(ctx, words, family, W - 128, 2, 150, 56);
@@ -117,8 +136,8 @@ export function drawThumbnail(ctx: CanvasRenderingContext2D, kind: ThumbKind, te
         // The picture's subject is on the right; the text in the calm left third.
         if (images.ai) cover(ctx, images.ai, 0, 0, W, H, 0.55);
         const shade = ctx.createLinearGradient(0, 0, W * 0.62, 0);
-        shade.addColorStop(0, "rgba(20, 10, 46, 0.88)");
-        shade.addColorStop(1, "rgba(20, 10, 46, 0)");
+        shade.addColorStop(0, `rgba(${INK_RGB}, 0.88)`);
+        shade.addColorStop(1, `rgba(${INK_RGB}, 0)`);
         ctx.fillStyle = shade;
         ctx.fillRect(0, 0, W * 0.62, H);
         const { size, lines } = fit(ctx, words, family, 590, 4, 140, 52);
@@ -130,18 +149,18 @@ export function drawThumbnail(ctx: CanvasRenderingContext2D, kind: ThumbKind, te
     } else {
         // The same layout every episode, so the channel reads as one series.
         const glow = ctx.createRadialGradient(W * 0.72, H * 0.5, 40, W * 0.72, H * 0.5, W * 0.7);
-        glow.addColorStop(0, "#4a2f9c");
-        glow.addColorStop(0.55, "#23145a");
+        glow.addColorStop(0, GLOW[0]);
+        glow.addColorStop(0.55, GLOW[1]);
         glow.addColorStop(1, INK);
         ctx.fillStyle = glow;
         ctx.fillRect(0, 0, W, H);
-        ctx.strokeStyle = "rgba(247, 198, 91, 0.55)";
+        ctx.strokeStyle = `rgba(${GOLD_RGB}, 0.55)`;
         ctx.lineWidth = 3;
         ctx.strokeRect(18, 18, W - 36, H - 36);
 
         const px = 668, py = 96, pw = 548, ph = 528;
         ctx.save();
-        ctx.shadowColor = "rgba(247, 198, 91, 0.45)";
+        ctx.shadowColor = `rgba(${GOLD_RGB}, 0.45)`;
         ctx.shadowBlur = 40;
         roundRect(ctx, px, py, pw, ph, 28);
         ctx.fillStyle = INK;

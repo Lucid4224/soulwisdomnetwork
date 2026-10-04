@@ -1,6 +1,7 @@
 // Checks every service the Podcast Studio depends on, so setup problems show up as one
 // clear line each instead of a broken page later.
 
+import { getSettings } from '@/lib/server/studioSettings';
 import { checkFolderAccess, isVideo, listFolderFiles } from '@/agent/src/podcast/drive';
 import { DRIVE_FOLDERS, studioDrive } from '@/lib/server/drive';
 import { adminBucket, adminDb } from '@/lib/server/firebaseAdmin';
@@ -35,6 +36,8 @@ export const GET = handle(async request => {
             return 'Bucket readable, video links can be signed';
         }),
         check(async () => {
+            // Drive is optional (Studio settings); without it the Studio works from uploads only.
+            if (!(await getSettings()).useDrive) return 'Not used: recordings are uploaded in the Studio';
             const d = studioDrive();
             const parts: string[] = [];
             for (const [label, id] of Object.entries(DRIVE_FOLDERS)) {

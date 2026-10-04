@@ -20,6 +20,7 @@ import type { Episode } from '../../../types/episode';
 import { loadAlert } from './config';
 import { withRetry } from './errors';
 import { describeError, failureSubject, sendEmail } from './notify';
+import { loadSettings, storageBucket } from './settings';
 import { postUsageReport } from './usageReport';
 import { createYoutube, type VideoResource } from './youtubeApi';
 
@@ -37,10 +38,8 @@ const episodeId = required('EPISODE_ID');
 if (!/^[\w-]{10,}$/.test(episodeId)) throw new Error(`Not a valid episode ID: ${episodeId}`);
 const alert = loadAlert();
 const runUrl = process.env.GITHUB_RUN_URL || '';
-initializeApp({
-    credential: cert(JSON.parse(required('PODCAST_SA_JSON'))),
-    storageBucket: process.env.PODCAST_STORAGE_BUCKET || 'soulwisdomnetwork.firebasestorage.app',
-});
+const serviceAccount = JSON.parse(required('PODCAST_SA_JSON'));
+initializeApp({ credential: cert(serviceAccount), storageBucket: storageBucket(serviceAccount) });
 const ref = getFirestore().collection('episodes').doc(episodeId);
 const bucket = getStorage().bucket();
 const workDir = path.join(process.env.RUNNER_TEMP || '/tmp', 'youtube', episodeId);
@@ -56,13 +55,14 @@ async function main() {
     if (!episode) throw new Error(`Episode ${episodeId} not found`);
     const final = episode.final;
     const approval = episode.approval;
-    if (final?.status !== 'ready' || !final.videoPath) throw new Error('Get the final cut from Descript first');
+    if (final?.status !== 'ready' || !final.videoPath) throw new Error('Get the final cut first (from Descript or the Editor Light render)');
     const finalAt = (final.finishedAt as Timestamp | undefined)?.toMillis?.() ?? 0;
     if (!approval) throw new Error('Approve the episode first (Checkpoint D)');
     if (approval.notesVersion !== episode.notes?.approvedVersion || approval.finalAt !== finalAt) {
         throw new Error('The notes or the final cut changed after the approval; approve the episode again');
     }
-    const meta = youtubeMetadata(episode);
+    // The description's link and subscribe lines come from the Studio settings.
+    const meta = youtubeMetadata(episode, await loadSettings(getFirestore()));
     if (!meta) throw new Error('Approve the show notes first');
     fs.mkdirSync(workDir, { recursive: true });
     const warnings: string[] = [];

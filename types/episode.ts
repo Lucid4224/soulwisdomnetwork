@@ -156,6 +156,10 @@ export interface EpisodeDescript {
 // notes' chapter and quote times moved onto it.
 export interface EpisodeFinal {
     status: 'queued' | 'publishing' | 'mastering' | 'retiming' | 'ready' | 'failed';
+    // Editor Light (spec 015): who made it. Missing means Descript; 'editorLight' means the
+    // Editor Light render, when the Studio settings choose it, with the edit version it used.
+    source?: 'descript' | 'editorLight';
+    editVersion?: number;
     requestedAt?: unknown;
     startedAt?: unknown;
     finishedAt?: unknown;
@@ -190,9 +194,9 @@ export interface EpisodeEditRender {
     wordsPath?: string | null;            // the words on the rendered video's times
     captionsPath?: string | null;         // .srt
     chaptersPath?: string | null;         // chapters and quotes on the rendered video's times
-    driveFileId?: string;
-    driveUrl?: string;
-    folderUrl?: string;                   // "04 Final"
+    driveFileId?: string | null;          // null when no Drive folder is set up
+    driveUrl?: string | null;
+    folderUrl?: string | null;            // "04 Final"
     durationSeconds?: number;
     cuts?: number;
     timeSavedSeconds?: number;
@@ -297,6 +301,9 @@ export interface Episode {
         sizeBytes: number;
     };
     candidateSpeakers: string[];          // names offered to AssemblyAI (the hosts)
+    // How the recording came in: missing or 'drive' is the Drive inbox; 'upload' was uploaded in
+    // the Studio, already in Cloud Storage, and has no Drive file (drive.fileId is the episode ID).
+    source?: 'drive' | 'upload';
     media?: {
         sourcePath?: string;              // Cloud Storage object paths
         proxyPath?: string;               // 720p H.264

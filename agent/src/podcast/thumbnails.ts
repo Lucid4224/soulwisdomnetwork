@@ -18,7 +18,7 @@ import { cert, initializeApp } from 'firebase-admin/app';
 import { FieldValue, getFirestore, type Timestamp } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import { BROLL_MODEL, BROLL_QUALITY, BROLL_SIZE, BROLL_USD_PER_IMAGE, type BrollStyle } from '../../../lib/broll';
-import { SITE_URL } from '../../../lib/showNotes';
+import { thumbnailsSystemPrompt, type StudioSettings } from '../../../lib/studioSettings';
 import { FRAME_CANDIDATES, HOOK_MAX_CHARS, HooksSchema, thumbnailImagePrompt } from '../../../lib/thumbnail';
 import type { Episode, EpisodeThumbnails, ThumbnailFrame } from '../../../types/episode';
 import { loadAlert } from './config';
@@ -26,6 +26,7 @@ import { withRetry } from './errors';
 import { grabFrame } from './media';
 import { NOTES_EFFORT, NOTES_MODEL } from './notesDraft';
 import { describeError, failureSubject, sendEmail } from './notify';
+import { loadSettings, storageBucket } from './settings';
 
 // US dollars per million tokens, for the cost record.
 const HOOKS_USD_PER_MTOK = { input: 4, output: 20 };
@@ -43,17 +44,14 @@ if (!/^[\w-]{10,}$/.test(episodeId)) throw new Error(`Not a valid episode ID: ${
 const onlyImage = process.env.THUMB_ONLY === 'image';
 const alert = loadAlert();
 const runUrl = process.env.GITHUB_RUN_URL || '';
-initializeApp({
-    credential: cert(JSON.parse(required('PODCAST_SA_JSON'))),
-    storageBucket: process.env.PODCAST_STORAGE_BUCKET || 'soulwisdomnetwork.firebasestorage.app',
-});
+const serviceAccount = JSON.parse(required('PODCAST_SA_JSON'));
+initializeApp({ credential: cert(serviceAccount), storageBucket: storageBucket(serviceAccount) });
 const ref = getFirestore().collection('episodes').doc(episodeId);
 const bucket = getStorage().bucket();
 const workDir = path.join(process.env.RUNNER_TEMP || '/tmp', 'thumbnails', episodeId);
 
-const SYSTEM = 'You write the text for YouTube thumbnails for the Soul Wisdom Collective podcast, which explores near-death ' +
-    'experiences, consciousness and the meaning of life with warmth and curiosity. The text is a few large words on the image, ' +
-    'read in a second on a phone. Never state as fact what a guest offered as belief or experience.';
+// The Studio settings (lib/studioSettings.ts): the writing and image style. Loaded first in main().
+let settings: StudioSettings;
 
 async function draftHooks(episode: Episode) {
     const notes = episode.notes!.approved!;
@@ -65,7 +63,7 @@ async function draftHooks(episode: Episode) {
         fallbacks: 'default',
         thinking: { type: 'adaptive' },
         output_config: { effort: NOTES_EFFORT, format: betaZodOutputFormat(HooksSchema) },
-        system: SYSTEM,
+        system: thumbnailsSystemPrompt(settings),
         messages: [{
             role: 'user',
             content: `YouTube title: ${notes.titles[notes.chosenTitle] ?? episode.title}\n\n` +
@@ -124,7 +122,7 @@ async function grabFrames(episode: Episode, stamp: number): Promise<ThumbnailFra
 
 async function makeImage(idea: string, style: BrollStyle, stamp: number): Promise<NonNullable<EpisodeThumbnails['image']>> {
     const openai = new OpenAI({ apiKey: required('OPENAI_API_KEY') });
-    const prompt = thumbnailImagePrompt(idea, style);
+    const prompt = thumbnailImagePrompt(idea, style, settings.imageStyle);
     const result = await openai.images.generate({
         model: BROLL_MODEL, prompt, size: BROLL_SIZE, quality: BROLL_QUALITY, output_format: 'png', n: 1,
     });
@@ -137,11 +135,12 @@ async function makeImage(idea: string, style: BrollStyle, stamp: number): Promis
 }
 
 async function main() {
+    settings = await loadSettings(getFirestore());
     const episode = (await ref.get()).data() as Episode | undefined;
     if (!episode) throw new Error(`Episode ${episodeId} not found`);
     if (episode.notes?.status !== 'approved' || !episode.notes.approved) throw new Error('Approve the show notes first');
     const final = episode.final;
-    if (final?.status !== 'ready' || !final.videoPath) throw new Error('Get the final cut from Descript first');
+    if (final?.status !== 'ready' || !final.videoPath) throw new Error('Get the final cut first (from Descript or the Editor Light render)');
     fs.mkdirSync(workDir, { recursive: true });
     const stamp = Date.now();
     await ref.update({
@@ -204,7 +203,7 @@ async function main() {
 
     await sendEmail({ alert }, `Thumbnail options ready: ${episode.title}`, [
         `Three thumbnail options for "${episode.title}" are ready to pick from (Checkpoint D):`,
-        `${SITE_URL}/admin/podcast/${episodeId}/notes#thumbnail`,
+        `${settings.studioUrl}/admin/podcast/${episodeId}/notes#thumbnail`,
         '',
         'Suggested texts:',
         ...hooks.hooks.map(h => `  ${h.replace(/\*/g, '')}`),

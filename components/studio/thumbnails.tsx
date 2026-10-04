@@ -7,6 +7,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ago } from "@/components/studio/format";
 import { canvasJpeg, drawThumbnail, type ThumbImages } from "@/components/studio/thumbnailCanvas";
+import { DEFAULT_SETTINGS, type StudioSettings } from "@/lib/studioSettings";
+import type { SettingsView } from "@/lib/server/studioSettings";
 import { BROLL_STYLE_IDS, BROLL_STYLES, type BrollStyle } from "@/lib/broll";
 import { auth } from "@/lib/firebase/config";
 import { mmss } from "@/lib/showNotes";
@@ -43,6 +45,7 @@ export function Thumbnails({ episodeId, enabled, report, revision }: { episodeId
     const [style, setStyle] = useState<BrollStyle>("digital");
     const [images, setImages] = useState<Record<string, Loaded>>({});
     const [logo, setLogo] = useState<ImageBitmap | null>(null);
+    const [colors, setColors] = useState<StudioSettings["colors"]>(DEFAULT_SETTINGS.colors);
     const [family, setFamily] = useState("");
     const canvases = useRef<Partial<Record<ThumbKind, HTMLCanvasElement | null>>>({});
     const textTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -98,7 +101,11 @@ export function Thumbnails({ episodeId, enabled, report, revision }: { episodeId
         let cancelled = false;
         const outfit = getComputedStyle(document.body).getPropertyValue("--font-outfit").trim() || "sans-serif";
         document.fonts.load(`900 100px ${outfit}`).catch(() => []).then(() => { if (!cancelled) setFamily(outfit); });
-        fetch("/logo.png").then(r => r.blob()).then(b => createImageBitmap(b)).then(b => { if (!cancelled) setLogo(b); }).catch(() => {});
+        // The Studio settings' colours and uploaded logo (lib/studioSettings.ts); the site's logo otherwise.
+        studioFetch<SettingsView>("/api/studio/settings")
+            .then(v => { if (!cancelled) setColors(v.settings.colors); return v.logoUrl ?? "/logo.png"; })
+            .catch(() => "/logo.png")
+            .then(src => fetch(src)).then(r => r.blob()).then(b => createImageBitmap(b)).then(b => { if (!cancelled) setLogo(b); }).catch(() => {});
         return () => { cancelled = true; };
     }, []);
 
@@ -128,9 +135,9 @@ export function Thumbnails({ episodeId, enabled, report, revision }: { episodeId
         const set: ThumbImages = { frame: frameImage?.bitmap ?? null, ai: aiImage?.bitmap ?? null, logo };
         for (const kind of THUMB_KINDS) {
             const ctx = canvases.current[kind]?.getContext("2d");
-            if (ctx) drawThumbnail(ctx, kind, text, set, family);
+            if (ctx) drawThumbnail(ctx, kind, text, set, family, colors);
         }
-    }, [family, text, frameImage, aiImage, logo, view?.frames.length]);
+    }, [family, text, frameImage, aiImage, logo, colors, view?.frames.length]);
 
     const save = useCallback(async (picks: { text?: string; frame?: number; choice?: ThumbKind | null }) => {
         try {
@@ -203,7 +210,7 @@ export function Thumbnails({ episodeId, enabled, report, revision }: { episodeId
                 {working
                     ? "Claude writes short texts, frames are taken from the final cut at the strongest quotes, and an AI background is made. A few minutes; this page updates by itself and you get an email."
                     : !view?.canStart
-                        ? "Get the final cut from Descript first: the frames come from it."
+                        ? "Get the final cut first (from Descript or the Editor Light render): the frames come from it."
                         : ready
                             ? "Pick a text and a frame, then the option you like. “Make new options” replaces the texts, frames and AI image (about $0.20)."
                             : "Makes three options: a frame from the episode, an AI image and the brand template, all with a short text. About $0.20."}

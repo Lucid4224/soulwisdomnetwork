@@ -8,8 +8,10 @@ import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 
-const PROJECT_ID = 'soulwisdomnetwork';
-const BUCKET = process.env.PODCAST_STORAGE_BUCKET || 'soulwisdomnetwork.firebasestorage.app';
+// Another Firebase project (someone else's copy of the Studio) is picked up from the site's own
+// Firebase settings; with none, the Soul Wisdom project as before.
+const PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'soulwisdomnetwork';
+const BUCKET = process.env.PODCAST_STORAGE_BUCKET || process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'soulwisdomnetwork.firebasestorage.app';
 
 function app(): App {
     return getApps()[0] ?? initializeApp({ projectId: PROJECT_ID, storageBucket: BUCKET });

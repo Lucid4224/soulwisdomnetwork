@@ -1,4 +1,5 @@
 import { spawn } from 'child_process';
+import { DEFAULT_SETTINGS, gradientExpr, type StudioSettings } from '../../../lib/studioSettings';
 import { PermanentError } from './errors';
 
 function run(cmd: string, args: string[]): Promise<string> {
@@ -210,13 +211,15 @@ export async function normalizeLoudness(input: string, output: string) {
 }
 
 // A short's still backdrop (docs/specs/013-shorts.md): the brand's deep violet, the logo at the
-// top and a thin gold rule above and below where the video goes.
-export function shortBackground(logo: string, output: string, l: { width: number; height: number; logoSize: number; logoTop: number; videoTop: number; videoHeight: number }) {
-    const rule = (y: number) => `drawbox=x=0:y=${y}:w=iw:h=4:color=0xf7c65b@0.85:t=fill`;
+// top and a thin gold rule above and below where the video goes. `colors` are the Studio
+// settings' brand colours (lib/studioSettings.ts); the defaults are the violet and gold.
+export function shortBackground(logo: string, output: string, l: { width: number; height: number; logoSize: number; logoTop: number; videoTop: number; videoHeight: number },
+    colors: StudioSettings['colors'] = DEFAULT_SETTINGS.colors) {
+    const rule = (y: number) => `drawbox=x=0:y=${y}:w=iw:h=4:color=0x${colors.accent.slice(1).toLowerCase()}@0.85:t=fill`;
     return run('ffmpeg', [
         '-y', '-hide_banner', '-loglevel', 'error',
-        // #140a2e at the top to #2a1552 at the bottom.
-        '-f', 'lavfi', '-i', `color=c=black:s=${l.width}x${l.height}:d=1,format=rgb24,geq=r='20+22*Y/H':g='10+11*Y/H':b='46+36*Y/H'`,
+        // The background colour at the top to the bottom colour (#140a2e to #2a1552 by default).
+        '-f', 'lavfi', '-i', `color=c=black:s=${l.width}x${l.height}:d=1,format=rgb24,geq=${gradientExpr(colors.background, colors.backgroundBottom)}`,
         '-i', logo,
         '-filter_complex',
         `[1:v]scale=${l.logoSize}:${l.logoSize}:flags=lanczos[logo];` +

@@ -9,6 +9,7 @@ import { adminDb } from './firebaseAdmin';
 import { latestIngestRuns } from './github';
 import { DAILY_LIMIT_USD, spentToday } from './spending';
 import { HttpError } from './staff';
+import { getSettings } from './studioSettings';
 
 const STUCK_MS = 24 * 60 * 60_000;
 const BACKLOG_ORDER = () => adminDb().collection('studio').doc('backlog');
@@ -76,9 +77,15 @@ function summarise(id: string, e: Episode): EpisodeSummary {
 }
 
 export async function getPipeline(): Promise<Pipeline> {
+    // Drive is optional (Studio settings): without it, or when it cannot be read, the page still
+    // works for recordings uploaded in the Studio.
+    const { useDrive } = await getSettings();
+    let driveProblem: string | null = null;
+    const fromDrive = (folderId: string | undefined) => (useDrive && folderId ? listVideos(folderId) : Promise.resolve([]))
+        .catch((e: Error) => { driveProblem = `Drive could not be read: ${e.message}`; return [] as DriveVideo[]; });
     const [backlog, toProcess, order, episodesSnap, runs, dayCostUsd] = await Promise.all([
-        DRIVE_FOLDERS.backlog ? listVideos(DRIVE_FOLDERS.backlog) : Promise.resolve([]),
-        listVideos(DRIVE_FOLDERS.toProcess),
+        fromDrive(DRIVE_FOLDERS.backlog),
+        fromDrive(DRIVE_FOLDERS.toProcess),
         savedOrder(),
         adminDb().collection('episodes').get(),
         latestIngestRuns(5).catch(() => []),
@@ -96,7 +103,9 @@ export async function getPipeline(): Promise<Pipeline> {
         .filter(e => (e.createdAt ?? 0) >= monthStart.getTime())
         .reduce((sum, e) => sum + e.costUsd, 0);
 
-    return { backlog: ordered(backlog, order), toProcess, episodes, runs, monthCostUsd, dayCostUsd, dailyLimitUsd: DAILY_LIMIT_USD };
+    return {
+        backlog: ordered(backlog, order), toProcess, useDrive, driveProblem, episodes, runs, monthCostUsd, dayCostUsd, dailyLimitUsd: DAILY_LIMIT_USD,
+    };
 }
 
 export async function saveBacklogOrder(order: string[]) {

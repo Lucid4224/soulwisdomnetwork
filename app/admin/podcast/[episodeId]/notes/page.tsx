@@ -31,6 +31,8 @@ import { Editor } from "@/components/studio/editor";
 import type { EpisodeEdit } from "@/lib/edit";
 import type { SpokenWord } from "@/lib/showNotes";
 import type { EditRenderView } from "@/lib/server/editRender";
+import type { SettingsView } from "@/lib/server/studioSettings";
+import type { StudioSettings } from "@/lib/studioSettings";
 
 type NotesView = NonNullable<EpisodeNotesView["notes"]>;
 
@@ -223,10 +225,13 @@ function EditorLightStage({ episodeId, words, videoUrl }: { episodeId: string; w
                     {render?.status === 'ready' ? 'Render this edit again' : 'Render this edit'}
                 </button>
                 {rendering && <span className={small}>Rendering ({render?.status})… this can take a few hours for a long episode.</span>}
-                {render?.status === 'ready' && render.driveUrl && (
+                {render?.status === 'ready' && (render.driveUrl || render.videoUrl) && (
                     <span className={small}>
                         Rendered{render.durationSeconds !== null && ` (${mmss(render.durationSeconds * 1000)}, ${render.cuts ?? 0} cuts)`}:{' '}
-                        <a href={render.driveUrl} target="_blank" rel="noreferrer" className="text-amber-300 underline">open in Drive</a>
+                        {/* Drive when it is set up; otherwise a short-lived link to the video in Cloud Storage. */}
+                        <a href={render.driveUrl ?? render.videoUrl ?? undefined} target="_blank" rel="noreferrer" className="text-amber-300 underline">
+                            {render.driveUrl ? 'open in Drive' : 'watch or download'}
+                        </a>
                         {render.stale && ' · the edit has changed since; render again to include the changes'}
                     </span>
                 )}
@@ -249,6 +254,11 @@ export default function ShowNotesPage() {
 
     const [view, setView] = useState<EpisodeNotesView | null>(null);
     const [notes, setNotes] = useState<ShowNotes | null>(null);
+    // Studio settings (lib/studioSettings.ts): the description lines, and whether Editor Light makes the final cut.
+    const [settings, setSettings] = useState<StudioSettings | null>(null);
+    useEffect(() => {
+        studioFetch<SettingsView>("/api/studio/settings").then(v => setSettings(v.settings)).catch(() => {});
+    }, []);
     const [loadedAt, setLoadedAt] = useState(0);   // remounts free-text list fields after a reload
     const [error, setError] = useState("");
     const [notice, setNotice] = useState("");
@@ -582,7 +592,7 @@ export default function ShowNotesPage() {
 
     const copyDescription = () => {
         if (!notes) return;
-        void navigator.clipboard.writeText(youtubeDescription(notes));
+        void navigator.clipboard.writeText(youtubeDescription(notes, settings ?? undefined));
         setNotice("Full description copied.");
     };
 
@@ -802,7 +812,7 @@ export default function ShowNotesPage() {
                                             </label>
                                             <details className="text-sm">
                                                 <summary className="cursor-pointer text-gray-300">Preview the full description as it goes on YouTube</summary>
-                                                <pre className="mt-2 whitespace-pre-wrap font-sans text-gray-300 bg-[#130b29] border border-white/5 rounded-lg p-3">{youtubeDescription(notes)}</pre>
+                                                <pre className="mt-2 whitespace-pre-wrap font-sans text-gray-300 bg-[#130b29] border border-white/5 rounded-lg p-3">{youtubeDescription(notes, settings ?? undefined)}</pre>
                                             </details>
                                             <div className="flex items-center gap-3">
                                                 <p className={small}>{words(notes.description)} words, plus the site link, chapters, subscribe line and hashtags</p>
@@ -990,7 +1000,8 @@ export default function ShowNotesPage() {
                                         <NeedsApproval what="build the edit package" approved={!!approved} busy={busy || drafting} onApprove={approve} onDiscard={discard} />
                                     )}
                                     <EditPackage episodeId={episodeId} enabled={on} upToDate={upToDate} report={report} revision={revision} />
-                                    {process.env.NEXT_PUBLIC_EDITOR_LIGHT === '1' && view && (
+                                    {/* Shown with the preview switch on, or when the Studio settings make Editor Light the final cut. */}
+                                    {(process.env.NEXT_PUBLIC_EDITOR_LIGHT === '1' || settings?.finalSource === 'editorLight') && view && (
                                         <Part title="Edit here instead (preview)">
                                             <EditorLightStage
                                                 episodeId={episodeId}

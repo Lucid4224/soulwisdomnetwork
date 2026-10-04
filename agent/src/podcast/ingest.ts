@@ -1,5 +1,7 @@
 // Spec 005 steps 1-3: pick up new recordings from Drive, copy them to Cloud Storage, make
 // a 720p proxy and an audio-only file, and transcribe with candidate speaker names.
+// Recordings uploaded in the Studio (lib/server/uploads.ts) are already in Cloud Storage; they
+// go through the same steps without Drive, which is optional when only uploads are used.
 // Runs in GitHub Actions (.github/workflows/podcast_ingest.yml), NOT on App Hosting.
 //
 // Every step records its output on the episode document before moving on, so a failed or
@@ -12,7 +14,7 @@ import { getStorage } from 'firebase-admin/storage';
 import * as fs from 'fs';
 import * as path from 'path';
 import type { DetectedSpeaker, Episode, EpisodeStage } from '../../../types/episode';
-import { ASSEMBLYAI_USD_PER_HOUR, HOSTS, MAX_ATTEMPTS, SETTLE_MINUTES, loadConfig } from './config';
+import { ASSEMBLYAI_USD_PER_HOUR, MAX_ATTEMPTS, SETTLE_MINUTES, loadConfig } from './config';
 import {
     checkFolderAccess, createDrive, createGoogleDoc, downloadFile, isVideo, listFolderFiles, listSubfolders, moveItem, type DriveFile,
 } from './drive';
@@ -22,6 +24,7 @@ import { episodeTitle, recordedAt } from './naming';
 import { sendEmail, sendFailureAlert, type Failure } from './notify';
 import { postUsageReport } from './usageReport';
 import { readableTranscript, speakerSummary } from './readable';
+import { loadSettings } from './settings';
 import { createAssemblyAI, hasFailed, submitTranscription, summariseSpeakers, waitForTranscript } from './transcribe';
 
 const config = loadConfig();
@@ -31,6 +34,8 @@ initializeApp({ credential: cert(serviceAccount), storageBucket: config.bucket }
 const db = getFirestore();
 const bucket = getStorage().bucket();
 const drive = createDrive(serviceAccount);
+// The Drive inbox is used when its folders are set and the Studio settings have not turned it off.
+const driveFolders = !!(config.toProcessFolderId && config.processedFolderId);
 const assembly = createAssemblyAI(config.assemblyAiKey);
 
 async function storageHas(objectPath: string | undefined) {
@@ -66,7 +71,7 @@ async function publishReview(ref: DocumentReference, episode: Episode, speakers:
         await touch(ref, { 'review.transcriptTextPath': review.transcriptTextPath });
     }
 
-    if (!review.docUrl) {
+    if (!review.docUrl && config.processedFolderId) {
         try {
             review.docUrl = await createGoogleDoc(drive, config.processedFolderId, `${episode.title} — transcript`, text);
             await touch(ref, { 'review.docUrl': review.docUrl });
@@ -123,7 +128,9 @@ async function catchUpReviews() {
     }
 }
 
-async function processEpisode(video: DriveFile): Promise<Failure | null> {
+// `uploaded`: the recording was uploaded in the Studio; its original is already in Cloud
+// Storage, so it is read from there and there is no Drive file to move.
+async function processEpisode(video: DriveFile, candidates: string[], uploaded = false): Promise<Failure | null> {
     const fileId = video.id!;
     const fileName = video.name ?? fileId;
     const title = episodeTitle(fileName);
@@ -142,15 +149,15 @@ async function processEpisode(video: DriveFile): Promise<Failure | null> {
         console.log(`⛔ ${title}: failed permanently at "${existing.error.stage}" — skipping until retried.`);
         return null;
     }
-    if (existing?.status === 'awaiting_speaker_review') {
+    if (existing?.status === 'awaiting_speaker_review' && !uploaded) {
         // Finished on an earlier run but the Drive move did not happen.
         await moveItem(drive, fileId, config.toProcessFolderId, config.processedFolderId);
         console.log(`📁 ${title}: already transcribed, moved to Processed.`);
         return null;
     }
 
-    // Guests are not known up front; they are named at Checkpoint A.
-    const candidates = HOSTS;
+    // Guests are not known up front; they are named at Checkpoint A. `candidates` are the
+    // Studio settings' speaker names (the hosts by default).
 
     if (config.dryRun) {
         console.log(`🔎 [dry run] "${title}": would ingest "${fileName}" (${video.mimeType}, ${video.size} bytes)` +
@@ -189,7 +196,11 @@ async function processEpisode(video: DriveFile): Promise<Failure | null> {
     let stage: EpisodeStage = existing?.stage ?? 'copy';
 
     const ensureLocalSource = async () => {
-        if (!fs.existsSync(localSource)) {
+        if (fs.existsSync(localSource)) return;
+        if (uploaded) {
+            console.log(`  ⬇️ Downloading "${fileName}" from Cloud Storage`);
+            await withRetry('Storage download', () => bucket.file(existing!.media!.sourcePath!).download({ destination: localSource }));
+        } else {
             console.log(`  ⬇️ Downloading "${fileName}" from Drive`);
             await downloadFile(drive, fileId, localSource);
         }
@@ -270,7 +281,7 @@ async function processEpisode(video: DriveFile): Promise<Failure | null> {
             'transcription.speakerMapping': speakerId?.mapping ?? {},
             'transcription.speakers': speakers,
         });
-        await moveItem(drive, fileId, config.toProcessFolderId, config.processedFolderId);
+        if (!uploaded) await moveItem(drive, fileId, config.toProcessFolderId, config.processedFolderId);
         console.log(`  ✅ ${title}: ${speakers.length} speaker(s) detected, ready for speaker review.`);
         try {
             await publishReview(ref, (await ref.get()).data() as Episode, speakers, transcript);
@@ -309,27 +320,54 @@ async function main() {
     }
 
     console.log(`🔑 Using service account ${serviceAccount.client_email}`);
-    const inboxName = await checkFolderAccess(drive, config.toProcessFolderId, 'To Process');
-    const doneName = await checkFolderAccess(drive, config.processedFolderId, 'Processed');
-    console.log(`🔑 Drive access OK: "${inboxName}" and "${doneName}"`);
+    const settings = await loadSettings(db);
+    const candidates = settings.hosts;
+    const failures: Failure[] = [];
 
-    // One video file = one episode. Anything else in the inbox is left alone.
-    const videos = (await listFolderFiles(drive, config.toProcessFolderId)).filter(isVideo);
-    console.log(`📂 ${videos.length} video(s) in "${inboxName}"`);
-    for (const sub of await listSubfolders(drive, config.toProcessFolderId)) {
-        console.warn(`⚠️ Subfolder "${sub.name}" is ignored — drop video files straight into "${inboxName}".`);
+    if (driveFolders && settings.useDrive) {
+        const inboxName = await checkFolderAccess(drive, config.toProcessFolderId, 'To Process');
+        const doneName = await checkFolderAccess(drive, config.processedFolderId, 'Processed');
+        console.log(`🔑 Drive access OK: "${inboxName}" and "${doneName}"`);
+
+        // One video file = one episode. Anything else in the inbox is left alone.
+        const videos = (await listFolderFiles(drive, config.toProcessFolderId)).filter(isVideo);
+        console.log(`📂 ${videos.length} video(s) in "${inboxName}"`);
+        for (const sub of await listSubfolders(drive, config.toProcessFolderId)) {
+            console.warn(`⚠️ Subfolder "${sub.name}" is ignored — drop video files straight into "${inboxName}".`);
+        }
+
+        for (const video of videos) {
+            try {
+                const failure = await processEpisode(video, candidates);
+                if (failure) failures.push(failure);
+            } catch (error) {
+                // Failed before an episode document existed (e.g. Drive unreachable).
+                const message = error instanceof Error ? error.message : String(error);
+                console.error(`❌ ${video.name}: ${message}`);
+                failures.push({ episode: video.name ?? video.id!, stage: 'copy', message, fileId: video.id! });
+            }
+        }
+    } else {
+        console.log('📂 No Drive inbox set up; processing Studio uploads only.');
     }
 
-    const failures: Failure[] = [];
-    for (const video of videos) {
+    // Recordings uploaded in the Studio that are not through yet (a failure that is not
+    // permanent is tried again, as a Drive file still in the inbox would be).
+    const uploads = (await db.collection('episodes').where('source', '==', 'upload').get()).docs
+        .filter(d => {
+            const e = d.data() as Episode;
+            return e.status === 'ingesting' || e.status === 'transcribing' || (e.status === 'failed' && !e.error?.permanent);
+        });
+    console.log(`⬆️ ${uploads.length} uploaded recording(s) to process`);
+    for (const doc of uploads) {
+        const e = doc.data() as Episode;
         try {
-            const failure = await processEpisode(video);
+            const failure = await processEpisode({ id: doc.id, name: e.drive.fileName, mimeType: e.drive.mimeType, size: String(e.drive.sizeBytes) }, candidates, true);
             if (failure) failures.push(failure);
         } catch (error) {
-            // Failed before an episode document existed (e.g. Drive unreachable).
             const message = error instanceof Error ? error.message : String(error);
-            console.error(`❌ ${video.name}: ${message}`);
-            failures.push({ episode: video.name ?? video.id!, stage: 'copy', message, fileId: video.id! });
+            console.error(`❌ ${e.title}: ${message}`);
+            failures.push({ episode: e.title, stage: 'copy', message, fileId: doc.id });
         }
     }
 

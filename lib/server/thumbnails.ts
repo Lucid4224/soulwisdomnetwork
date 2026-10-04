@@ -2,6 +2,7 @@
 // material, keep the producer's picks, serve the images to the Studio (which draws the options
 // in the browser), and record the approved thumbnail and the approval of the episode.
 
+import { finalIsCurrent } from '@/lib/finalCut';
 import { FieldValue } from 'firebase-admin/firestore';
 import { BROLL_STYLE_IDS, type BrollStyle } from '@/lib/broll';
 import { THUMB_KINDS, THUMB_MAX_BYTES, type ThumbKind } from '@/lib/thumbnail';
@@ -32,12 +33,13 @@ function busy(t: EpisodeThumbnails | undefined) {
     return Date.now() - since < STALE_MS;
 }
 
-// The final cut is current when it came from the Descript project and notes as they are now.
+// The final cut is current when it came from the Descript project (or, with Editor Light, the
+// saved edit) and notes as they are now (lib/finalCut.ts).
 function finalProblem(episode: Episode) {
     const f = episode.final;
     if (episode.notes?.status !== 'approved') return 'Approve the show notes first';
-    if (f?.status !== 'ready') return 'Get the final cut from Descript first';
-    if (f.projectId !== episode.descript?.projectId || f.notesVersion !== episode.notes.approvedVersion) {
+    if (f?.status !== 'ready') return 'Get the final cut first (from Descript or the Editor Light render)';
+    if (!finalIsCurrent(episode)) {
         return 'The final cut is out of date; get it again first';
     }
     return null;

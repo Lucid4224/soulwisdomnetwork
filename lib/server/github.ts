@@ -1,13 +1,16 @@
 // Starts and watches the Podcast Ingest workflow (.github/workflows/podcast_ingest.yml)
 // and starts Podcast Show Notes, B-roll, Edit Package, Descript, Final Cut, Editor Light render, Thumbnails, YouTube and Shorts (podcast_notes, _broll, _package, _descript, _final, _edit_render, _thumbnails, _youtube, _shorts.yml), with GITHUB_ACTIONS_TOKEN: a fine-grained token for this repository, Actions read/write.
 
-const REPO = 'masterytv/soulwisdomnetwork';
+import { getSettings } from './studioSettings';
+
 const WORKFLOW = 'podcast_ingest.yml';
 
 async function github(path: string, init: RequestInit = {}) {
     const token = process.env.GITHUB_ACTIONS_TOKEN;
     if (!token) throw new Error('GITHUB_ACTIONS_TOKEN is not set');
-    const res = await fetch(`https://api.github.com/repos/${REPO}${path}`, {
+    // The repository whose workflows run the jobs: a Studio setting, Tom's repository by default.
+    const repo = (await getSettings()).githubRepo;
+    const res = await fetch(`https://api.github.com/repos/${repo}${path}`, {
         ...init,
         headers: {
             Authorization: `Bearer ${token}`,

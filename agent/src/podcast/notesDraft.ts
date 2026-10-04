@@ -4,9 +4,9 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
-import { anchorToTranscript, mmss, parseShowNotes, ShowNotesSchema, SITE_URL, type ShowNotes, type SpokenWord } from '../../../lib/showNotes';
+import { anchorToTranscript, mmss, parseShowNotes, ShowNotesSchema, type ShowNotes, type SpokenWord } from '../../../lib/showNotes';
+import { DEFAULT_SETTINGS, notesSystemPrompt, type StudioSettings } from '../../../lib/studioSettings';
 import type { Episode } from '../../../types/episode';
-import { HOSTS } from './config';
 
 // Chosen by a side-by-side run (compareNotes.ts; docs/specs/007-show-notes.md). Effort is set
 // explicitly because Opus 5.5 defaults to 'medium'.
@@ -42,27 +42,9 @@ function speakerList(lines: ReviewedLine[]) {
     return [...seen].map(([name, clip]) => (clip ? `${name} (guest, heard in a recording played during the episode)` : name)).join(', ');
 }
 
-const SYSTEM = `You write show notes for the Soul Wisdom Collective podcast, hosted by ${HOSTS.join(' and ')}. \
-The show explores near-death experiences, consciousness and the meaning of life with warmth and curiosity, \
-for listeners who are spiritually open but not dogmatic.
+// The instructions come from the Studio settings (lib/studioSettings.ts notesSystemPrompt); with
+// the default settings they are word for word the Soul Wisdom Collective prompt this always sent.
 
-Write in plain, warm, specific language. Avoid hype, clickbait and clichés ("delve", "journey", "unlock"). \
-Never claim as fact what a speaker offered as belief or experience; attribute it ("Daniel describes…").
-
-Timestamps: every paragraph of the transcript starts with its time in milliseconds, e.g. [65000ms 1:05]. \
-Use those numbers for startMs. Chapters and b-roll must start at a paragraph's time; quotes at the paragraph they come from.
-
-Quotes and teaser clips must be copied exactly from the transcript, with the speaker name exactly as the \
-transcript gives it. Lines marked "(clip played during the episode)" are recordings of guests played during the \
-show; they are part of the story, so quote them and use them in the teaser like anyone else. Every guest, \
-whether in the room or in a recording, should have at least one or two quotes.
-
-Quotes are raw material for shorts: give up to twenty, from a single striking sentence to a passage of up to two \
-minutes that stands on its own. Producers find it easier to delete than to add, so err towards more.
-
-The YouTube description is written to be found and clicked: front-load the hook and keywords in the first two lines, \
-because only those show before "more". The site link (${SITE_URL}), chapters, subscribe line and hashtags are added \
-automatically, so do not write them yourself.`;
 
 export interface Draft {
     notes: ShowNotes;
@@ -75,7 +57,7 @@ export interface Draft {
 }
 
 export async function draftNotes(client: Anthropic, episode: Episode, lines: ReviewedLine[],
-    model = NOTES_MODEL, effort = NOTES_EFFORT): Promise<Draft> {
+    model = NOTES_MODEL, effort = NOTES_EFFORT, settings: StudioSettings = DEFAULT_SETTINGS): Promise<Draft> {
     const transcript = transcriptForPrompt(lines);
     const started = Date.now();
     // Streamed: twenty long quotes need more output than a single non-streamed request allows.
@@ -86,7 +68,7 @@ export async function draftNotes(client: Anthropic, episode: Episode, lines: Rev
         fallbacks: 'default',
         thinking: { type: 'adaptive' },
         output_config: { effort, format: betaZodOutputFormat(ShowNotesSchema) },
-        system: SYSTEM,
+        system: notesSystemPrompt(settings),
         messages: [{
             role: 'user',
             content: `Episode: "${episode.title}"${episode.recordedAt ? `, recorded ${episode.recordedAt.slice(0, 10)}` : ''}.\n` +

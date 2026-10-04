@@ -37,8 +37,10 @@ export const HooksSchema = z.object({
 });
 export type Hooks = z.infer<typeof HooksSchema>;
 
-export function thumbnailImagePrompt(idea: string, style: BrollStyle) {
-    return `${BROLL_STYLES[style].prompt} ${PALETTE}\n\nSubject: ${idea.trim()}.\n\n` +
+// `customStyle`: the Studio settings' image style, in place of the built-in brand style when set.
+export function thumbnailImagePrompt(idea: string, style: BrollStyle, customStyle = '') {
+    const look = customStyle.trim() || `${BROLL_STYLES[style].prompt} ${PALETTE}`;
+    return `${look}\n\nSubject: ${idea.trim()}.\n\n` +
         'This is the background of a YouTube thumbnail: one bold, simple subject with a clear focal point and strong contrast, ' +
         'so it reads at a glance even when small. Place the subject in the right half of the frame and keep the left third calm, ' +
         `darker and uncluttered, because the title goes there. ${IMAGE_RULES}`;

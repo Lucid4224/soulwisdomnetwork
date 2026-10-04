@@ -4,6 +4,7 @@
 
 import { z } from 'zod';
 import { BROLL_STYLE_IDS } from './broll';
+import type { DescriptionLinks } from './studioSettings';
 
 const ms = z.number().int().describe('Milliseconds from the start of the episode');
 
@@ -185,13 +186,16 @@ export function chapterList(notes: ShowNotes) {
 }
 
 // The whole description as pasted into YouTube. The site link sits straight after the text,
-// as high as it can go, and is always there whatever the text says.
-export function youtubeDescription(notes: ShowNotes) {
+// as high as it can go, and is always there whatever the text says. `links` comes from the
+// Studio settings (lib/studioSettings.ts); without it, the Soul Wisdom Collective lines.
+export function youtubeDescription(notes: ShowNotes, links?: DescriptionLinks) {
+    const siteLine = links ? (links.siteUrl ? `${links.siteLinkText} ${links.siteUrl}`.trim() : '')
+        : `🌐 Full episodes, transcripts and the Soul Wisdom community: ${SITE_URL}`;
     return [
         notes.description.trim(),
-        `🌐 Full episodes, transcripts and the Soul Wisdom community: ${SITE_URL}`,
+        siteLine,
         notes.chapters.length ? `Chapters\n${chapterList(notes)}` : '',
-        DESCRIPTION_FOOTER,
+        links ? links.subscribeLine : DESCRIPTION_FOOTER,
         notes.hashtags.join(' '),
     ].filter(Boolean).join('\n\n');
 }

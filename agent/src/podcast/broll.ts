@@ -13,6 +13,7 @@ import { BROLL_MODEL, BROLL_QUALITY, BROLL_SIZE, BROLL_USD_PER_IMAGE, brollPromp
 import type { BrollImage, Episode } from '../../../types/episode';
 import { loadAlert } from './config';
 import { describeError, failureSubject, sendEmail } from './notify';
+import { loadSettings, storageBucket } from './settings';
 
 // Images at once; each takes up to a minute or two.
 const PARALLEL = 3;
@@ -27,10 +28,8 @@ const episodeId = required('EPISODE_ID');
 if (!/^[\w-]{10,}$/.test(episodeId)) throw new Error(`Not a valid episode ID: ${episodeId}`);
 const only = process.env.BROLL_INDEX ? Number(process.env.BROLL_INDEX) : null;
 if (only !== null && !(Number.isInteger(only) && only >= 0)) throw new Error(`Not a valid b-roll index: ${process.env.BROLL_INDEX}`);
-initializeApp({
-    credential: cert(JSON.parse(required('PODCAST_SA_JSON'))),
-    storageBucket: process.env.PODCAST_STORAGE_BUCKET || 'soulwisdomnetwork.firebasestorage.app',
-});
+const serviceAccount = JSON.parse(required('PODCAST_SA_JSON'));
+initializeApp({ credential: cert(serviceAccount), storageBucket: storageBucket(serviceAccount) });
 const ref = getFirestore().collection('episodes').doc(episodeId);
 const alert = loadAlert();
 const runUrl = process.env.GITHUB_RUN_URL || '';
@@ -39,6 +38,8 @@ const failureEmail = (message: string, what: string) => sendEmail({ alert }, fai
     `${what}\n\n${describeError(message)}\n\nTry again from the show notes page.${runUrl ? `\n\nRun log: ${runUrl}` : ''}`);
 
 async function main() {
+    // The Studio settings' image style, in place of the built-in brand style when set.
+    const { imageStyle } = await loadSettings(getFirestore());
     const episode = (await ref.get()).data() as Episode | undefined;
     if (!episode) throw new Error(`Episode ${episodeId} not found`);
     const ideas = episode.notes?.status === 'approved' ? episode.notes.approved?.broll ?? [] : [];
@@ -68,7 +69,7 @@ async function main() {
     async function generate(i: number) {
         const idea = ideas[i];
         const style = styleOf(i);
-        const prompt = brollPrompt(idea.idea, style);
+        const prompt = brollPrompt(idea.idea, style, imageStyle);
         try {
             const result = await openai.images.generate({
                 model: BROLL_MODEL, prompt, size: BROLL_SIZE, quality: BROLL_QUALITY, output_format: 'png', n: 1,

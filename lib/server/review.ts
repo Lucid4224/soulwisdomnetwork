@@ -3,7 +3,7 @@
 
 import type { Transcript } from 'assemblyai';
 import { FieldValue } from 'firebase-admin/firestore';
-import { HOSTS } from '@/agent/src/podcast/config';
+import { getSettings } from './studioSettings';
 import { labelResolver } from '@/agent/src/podcast/transcribe';
 import {
     buildLines, emptyCorrections, isNamed, parseCorrections, reviewedText, speakerName,
@@ -56,10 +56,10 @@ function millis(t: unknown) {
     return t && typeof (t as { toMillis?: unknown }).toMillis === 'function' ? (t as { toMillis: () => number }).toMillis() : 0;
 }
 
-// Names confirmed on earlier episodes, for the rename list. The people directory (PR 4)
-// will replace this.
+// Names confirmed on earlier episodes, for the rename list, with the Studio settings' speaker
+// names (the hosts by default). The people directory (PR 4) will replace this.
 async function knownNames() {
-    const names = new Set(HOSTS);
+    const names = new Set((await getSettings()).hosts);
     const done = await adminDb().collection('episodes').where('status', '==', 'speakers_confirmed').get();
     for (const d of done.docs) {
         for (const s of Object.values((d.data() as Episode).corrections?.speakers ?? {})) {

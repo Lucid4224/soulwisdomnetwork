@@ -48,6 +48,8 @@ export interface IngestRun {
 export interface Pipeline {
     backlog: DriveVideo[];         // in the saved drag-and-drop order
     toProcess: DriveVideo[];
+    useDrive: boolean;             // Studio settings: recordings also come in through Drive
+    driveProblem: string | null;   // Drive could not be read; uploads still work
     episodes: EpisodeSummary[];
     runs: IngestRun[];
     monthCostUsd: number;
@@ -144,9 +146,12 @@ export interface PackageView {
 export interface FinalView {
     status: EpisodeFinal['status'] | null;
     error: string | null;
+    // Who makes the final cut (Studio settings): Descript, or the Editor Light render.
+    source: 'descript' | 'editorLight';
     canStart: boolean;                  // there is a finished Descript project to publish
     stale: boolean;                     // published from an earlier Descript project or notes
     driveUrl: string | null;
+    videoUrl: string | null;            // a short-lived link to the video, when it is not in Drive
     folderUrl: string | null;
     shareUrl: string | null;
     durationSeconds: number | null;

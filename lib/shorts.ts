@@ -168,7 +168,8 @@ export function shortMetadata(item: { title: string; speaker: string; synthetic:
     const hashtags = [...episode.hashtags.map(h => (h.startsWith('#') ? h : `#${h}`)).slice(0, 2), '#shorts'];
     return {
         title: TITLE_CLEAN(item.title).slice(0, SHORT_TITLE_MAX),
-        description: TITLE_CLEAN(`“${quote}” — ${item.speaker}`) + `\n\n${episode.linkText}: ${episode.url}\n\n${hashtags.join(' ')}`,
+        // No link line when there is nowhere to send people (no video yet, no playlist, no website).
+        description: TITLE_CLEAN(`“${quote}” — ${item.speaker}`) + (episode.url ? `\n\n${episode.linkText}: ${episode.url}` : '') + `\n\n${hashtags.join(' ')}`,
         tags: episode.tags.slice(0, 15),
         containsSyntheticMedia: item.synthetic,
     };

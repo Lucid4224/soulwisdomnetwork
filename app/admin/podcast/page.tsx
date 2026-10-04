@@ -8,6 +8,7 @@ import Link from "next/link";
 import AuthGuard from "@/components/auth/AuthGuard";
 import SetupCheck from "@/components/studio/SetupCheck";
 import { ErrorNote } from "@/components/studio/ErrorNote";
+import { UploadRecording } from "@/components/studio/upload";
 import { ago, megabytes, minutes, STAGE_LABEL, usd } from "@/components/studio/format";
 import { useAuth } from "@/context/AuthContext";
 import { studioFetch } from "@/lib/studioClient";
@@ -26,12 +27,12 @@ const NOTES_LABEL: Record<NonNullable<EpisodeSummary["notesStatus"]>, { text: st
     approved: { text: "approved", tone: "text-green-300" },
 };
 
-function Column({ title, count, hint, children }: { title: string; count: number; hint?: string; children: React.ReactNode }) {
+function Column({ title, count, hint, children }: { title: string; count?: number; hint?: string; children: React.ReactNode }) {
     return (
         <section className="bg-[#1E1035]/30 border border-white/5 rounded-2xl p-4 flex flex-col gap-3 min-w-0">
             <header>
                 <h2 className="font-semibold text-gray-100">
-                    {title} <span className="text-gray-500 font-normal">{count}</span>
+                    {title} {count !== undefined && <span className="text-gray-500 font-normal">{count}</span>}
                 </h2>
                 {hint && <p className="text-xs text-gray-500 mt-0.5">{hint}</p>}
             </header>
@@ -201,6 +202,7 @@ export default function PodcastStudioPage() {
                         </div>
                         <div className="flex items-center gap-2">
                             <button onClick={load} className={secondary}>Refresh</button>
+                            <Link href="/admin/podcast/settings" className="text-sm text-gray-400 hover:text-white ml-2">Settings</Link>
                             {profile?.role === "admin" && (
                                 <>
                                     <Link href="/admin/usage" className="text-sm text-gray-400 hover:text-white ml-2">Usage</Link>
@@ -217,7 +219,15 @@ export default function PodcastStudioPage() {
                         </p>
                     )}
 
+                    {data?.driveProblem && <ErrorNote title="Google Drive" message={data.driveProblem} />}
+
                     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                        {/* Any recording, straight from the computer (lib/server/uploads.ts); no Drive needed. */}
+                        <Column title="Upload a recording" hint="A video file, such as a Zoom recording. It is processed straight away and appears under Processing.">
+                            <UploadRecording onDone={message => { setNotice(message); void load(); }} />
+                        </Column>
+
+                        {data?.useDrive !== false && (<>
                         <Column title="Backlog" count={data?.backlog.length ?? 0} hint="Drag to set the order. The top one goes next.">
                             <button
                                 onClick={() => queue()}
@@ -271,6 +281,7 @@ export default function PodcastStudioPage() {
                                 </div>
                             ))}
                         </Column>
+                        </>)}
 
                         <Column title="Processing" count={processing.length} hint="Copying, making the preview, transcribing. About 5–20 minutes each.">
                             {!processing.length && <Empty>Nothing processing.</Empty>}
