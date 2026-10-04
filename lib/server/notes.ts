@@ -2,7 +2,7 @@
 // them, load and save a producer's edits, and approve them (Checkpoint B).
 
 import { FieldValue } from 'firebase-admin/firestore';
-import { fillMissingEnds, parseShowNotes, sameNotes, StoredShowNotesSchema, type ShowNotes, type SpokenWord } from '@/lib/showNotes';
+import { fillMissingEnds, parseShowNotes, sameNotes, StoredShowNotesSchema, type ShowNotes, type SpokenWord, type RedraftScope } from '@/lib/showNotes';
 import type { Episode, EpisodeNotes, NotesApproval } from '@/types/episode';
 import type { EpisodeNotesView } from '@/types/studio';
 import { adminBucket, adminDb } from './firebaseAdmin';
@@ -35,7 +35,8 @@ function busy(notes: EpisodeNotes | undefined) {
 }
 
 // Starts the Podcast Show Notes workflow. Approved notes are only redrafted when `force`.
-export async function requestNotes(id: string, { force = false } = {}) {
+// `redraft` stores the producer's direction and what to replace, read by the notes job.
+export async function requestNotes(id: string, { force = false, redraft = null }: { force?: boolean; redraft?: { instruction: string; only: RedraftScope } | null } = {}) {
     const ref = episodeRef(id);
     await adminDb().runTransaction(async tx => {
         const episode = (await tx.get(ref)).data() as Episode | undefined;
@@ -47,6 +48,7 @@ export async function requestNotes(id: string, { force = false } = {}) {
             'notes.status': 'queued',
             'notes.requestedAt': FieldValue.serverTimestamp(),
             'notes.error': null,
+            'notes.redraft': redraft,  // what the producer asked to change
             updatedAt: FieldValue.serverTimestamp(),
         });
     });

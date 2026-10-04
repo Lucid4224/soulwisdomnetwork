@@ -4,7 +4,7 @@
 
 import { z } from 'zod';
 import { BROLL_STYLE_IDS } from './broll';
-import type { DescriptionLinks } from './studioSettings';
+import type { DescriptionLinks, StudioSettings } from './studioSettings';
 
 const ms = z.number().int().describe('Milliseconds from the start of the episode');
 
@@ -61,8 +61,68 @@ export const ShowNotesSchema = z.object({
 });
 
 // What is stored and edited. Notes drafted before teaser clips and hashtags existed still load.
+// An action item from a meeting: what to do, who does it, and when, as said in the transcript.
+const actionItem = z.object({
+    task: z.string().describe('What is to be done, as said in the meeting'),
+    owner: z.string().describe('Who does it, the name as the transcript gives it; empty if nobody was named'),
+    due: z.string().describe('When, as said (e.g. "Friday"); empty if no date was given'),
+});
+export type ActionItem = z.infer<typeof actionItem>;
+
+// Builds the notes schema for the kind of recording and the description choices. When the
+// format is 'podcast' with no extra descriptions, returns ShowNotesSchema itself, so Tom's
+// request is unchanged; other formats replace the podcast's examples with neutral wording;
+// meetings add decisions and action items; extra choices add descriptionOptions.
+export function notesSchemaFor(s: StudioSettings) {
+    if (s.format === 'podcast' && s.descriptionChoices <= 1) return ShowNotesSchema;
+    let schema = ShowNotesSchema as z.ZodObject<z.ZodRawShape>;
+    if (s.format !== 'podcast') {
+        schema = schema.extend({
+            description: z.string().describe(
+                'YouTube description, 150-300 words, plain text. The first two lines (about 150 characters) show above "more": ' +
+                'open with a hook that names the main subject and keywords, then say who is in it. Short paragraphs, ' +
+                'natural keywords, and end with one question inviting comments. ' +
+                'Do not add chapters, links, hashtags or a subscribe line: those are appended automatically.'),
+            hashtags: z.array(z.string()).describe('Exactly three hashtags for the end of the description, e.g. "#Leadership"'),
+            quotes: z.array(clip.extend({
+                text: z.string().describe('Copied word for word from the transcript; a sentence up to a passage of two minutes (about 300 words)'),
+            })).describe(
+                'Up to twenty quotable moments for shorts and social posts, in order. ' +
+                'Every speaker who says something worth keeping gets at least one. Each should stand on its own without context.'),
+            teaserClips: z.array(clip).describe(
+                'The "In this episode" cold open: three or four short clips from the recording played in order under an ' +
+                '"In this episode" title, 20-40 seconds in total. Pick striking lines that make people want to watch; ' +
+                'at least one should end on an unanswered question or cut off just before the answer (for example ' +
+                '"The one thing we changed was..."). Never give away the conclusion.'),
+            themes: z.array(z.string()).describe('Three to five broad themes'),
+            broll: z.array(ShowNotesSchema.shape.broll.element.extend({ style: z.enum(BROLL_STYLE_IDS).describe(
+                '"photo" (photorealistic) for most ideas; "digital" (luminous digital painting) for abstract ideas') })
+            ).describe('Six still-image b-roll ideas that illustrate what is being said.'),
+        });
+    }
+    if (s.descriptionChoices > 1) {
+        schema = schema.extend({
+            descriptionOptions: z.array(z.string()).describe(`${s.descriptionChoices - 1} more YouTube descriptions, ` +
+                'each following the same rules as "description" but taking a clearly different angle or hook, so the ' +
+                'producer can choose.'),
+        });
+    }
+    if (s.format === 'meeting') {
+        schema = schema.extend({
+            decisions: z.array(z.string()).describe('Every decision made in the meeting, one short sentence each, in order'),
+            actionItems: z.array(actionItem).describe('Every task someone agreed to do, with who and when as said'),
+        });
+    }
+    return schema;
+}
+
+// What is stored and edited. Notes drafted before teaser clips and hashtags existed still load.
 export const StoredShowNotesSchema = ShowNotesSchema.extend({
     // Quotes had no end time before they could be long; -1 means "work it out from the transcript".
+    // New fields added by Part A: extra descriptions, meeting decisions and action items.
+    descriptionOptions: z.array(z.string()).default([]),
+    decisions: z.array(z.string()).default([]),
+    actionItems: z.array(actionItem).default([]),
     quotes: z.array(clip.extend({ endMs: ms.default(-1) })),
     hashtags: z.array(z.string()).default([]),
     teaserClips: z.array(clip).default([]),
@@ -72,6 +132,38 @@ export const StoredShowNotesSchema = ShowNotesSchema.extend({
 
 export type ShowNotes = z.infer<typeof StoredShowNotesSchema>;
 export type TeaserClip = ShowNotes['teaserClips'][number];
+
+// Swaps descriptionOptions[index] into description and the old description into its place.
+export function chooseDescription(notes: ShowNotes, index: number): ShowNotes {
+    const options = notes.descriptionOptions ?? [];
+    if (index < 0 || index >= options.length) throw new Error(`No description option at index ${index}`);
+    const old = notes.description;
+    const next = [...options];
+    next[index] = old;
+    return { ...notes, description: options[index], descriptionOptions: next };
+}
+
+// What a redraft replaces: everything, only the description, or only the titles.
+export type RedraftScope = 'all' | 'description' | 'titles';
+
+// Merges a fresh draft into the current notes, replacing only the chosen part. 'description'
+// takes the description and its options; 'titles' takes the titles and resets chosenTitle; 'all'
+// takes everything.
+export function mergeRedraft(current: ShowNotes, fresh: ShowNotes, only: RedraftScope): ShowNotes {
+    if (only === 'all') return fresh;
+    if (only === 'description') return { ...current, description: fresh.description, descriptionOptions: fresh.descriptionOptions ?? [] };
+    return { ...current, titles: fresh.titles, chosenTitle: 0 };
+}
+
+// Turns a redraft request into the direction line appended to the prompt. Empty when there
+// is no request or the instruction is blank; otherwise names the part to focus on.
+export function redraftDirection(r: { instruction: string; only: RedraftScope } | null | undefined): string {
+    if (!r || !r.instruction.trim()) return '';
+    const lines = [`The producer asked for a new draft with this direction:\n${r.instruction.trim()}`];
+    if (r.only === 'description') lines.push('This draft is for the YouTube description: put the most care there.');
+    if (r.only === 'titles') lines.push('This draft is for the titles: put the most care there.');
+    return lines.join('\n');
+}
 
 export function parseShowNotes(input: unknown): ShowNotes {
     const notes = StoredShowNotesSchema.parse(input);

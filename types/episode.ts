@@ -1,6 +1,7 @@
 import type { BrollStyle } from '../lib/broll';
 import type { ShortAspect, ShortEdit, ShortRenderInputs } from '../lib/shorts';
 import type { ShowNotes } from '../lib/showNotes';
+import type { RedraftScope } from '../lib/showNotes';
 import type { ThumbKind } from '../lib/thumbnail';
 import type { EpisodeEdit } from '../lib/edit';
 
@@ -68,6 +69,8 @@ export interface EpisodeNotes {
     approvedBy?: { uid: string; name: string };
     approvedAt?: unknown;
     approvedVersion?: number;             // the draft version approved; later steps record which one they used
+    // A producer's request to draft again with direction, replacing only one part.
+    redraft?: { instruction: string; only: RedraftScope } | null;
     // Editor Light (spec 015): the transcript edit, behind NEXT_PUBLIC_EDITOR_LIGHT.
     edit?: EpisodeEdit & { updatedAt?: unknown; updatedBy?: string };
 }

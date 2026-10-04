@@ -4,7 +4,7 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
-import { anchorToTranscript, mmss, parseShowNotes, ShowNotesSchema, type ShowNotes, type SpokenWord } from '../../../lib/showNotes';
+import { anchorToTranscript, mmss, notesSchemaFor, parseShowNotes, type ShowNotes, type SpokenWord } from '../../../lib/showNotes';
 import { DEFAULT_SETTINGS, notesSystemPrompt, type StudioSettings } from '../../../lib/studioSettings';
 import type { Episode } from '../../../types/episode';
 
@@ -57,7 +57,7 @@ export interface Draft {
 }
 
 export async function draftNotes(client: Anthropic, episode: Episode, lines: ReviewedLine[],
-    model = NOTES_MODEL, effort = NOTES_EFFORT, settings: StudioSettings = DEFAULT_SETTINGS): Promise<Draft> {
+    model = NOTES_MODEL, effort = NOTES_EFFORT, settings: StudioSettings = DEFAULT_SETTINGS, direction = ''): Promise<Draft> {
     const transcript = transcriptForPrompt(lines);
     const started = Date.now();
     // Streamed: twenty long quotes need more output than a single non-streamed request allows.
@@ -67,13 +67,13 @@ export async function draftNotes(client: Anthropic, episode: Episode, lines: Rev
         betas: ['server-side-fallback-2026-07-01'],
         fallbacks: 'default',
         thinking: { type: 'adaptive' },
-        output_config: { effort, format: betaZodOutputFormat(ShowNotesSchema) },
+        output_config: { effort, format: betaZodOutputFormat(notesSchemaFor(settings)) },  // schema follows the format and choices
         system: notesSystemPrompt(settings),
         messages: [{
             role: 'user',
             content: `Episode: "${episode.title}"${episode.recordedAt ? `, recorded ${episode.recordedAt.slice(0, 10)}` : ''}.\n` +
                 `Speakers: ${speakerList(lines)}.\n\n` +
-                `<transcript>\n${transcript}\n</transcript>\n\nWrite the show notes.`,
+                `<transcript>\n${transcript}\n</transcript>\n\nWrite the show notes.` + (direction ? `\n\n${direction}` : ''),
         }],
     }).finalMessage();
 

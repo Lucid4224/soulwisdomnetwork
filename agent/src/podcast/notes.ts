@@ -7,7 +7,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { cert, initializeApp } from 'firebase-admin/app';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
-import { mmss } from '../../../lib/showNotes';
+import { mmss, mergeRedraft, parseShowNotes, redraftDirection } from '../../../lib/showNotes';
 import type { Episode } from '../../../types/episode';
 import { loadAlert } from './config';
 import { draftNotes, NOTES_EFFORT, NOTES_MODEL, type ReviewedLine } from './notesDraft';
@@ -54,18 +54,26 @@ async function main() {
     // The Studio settings choose the kind of recording and the writing (lib/studioSettings.ts).
     const settings = await loadSettings(getFirestore());
     const SITE = settings.studioUrl;
-    const { notes, unverified, model, inputTokens, outputTokens, usd } = await draftNotes(client, episode, lines, NOTES_MODEL, NOTES_EFFORT, settings);
+    // A redraft request from the producer: the direction goes into the prompt, and only the
+    // chosen part is replaced.
+    const redraft = episode.notes?.redraft ?? null;
+    const direction = redraftDirection(redraft);
+    const { notes, unverified, model, inputTokens, outputTokens, usd } = await draftNotes(client, episode, lines, NOTES_MODEL, NOTES_EFFORT, settings, direction);
+    // When only one part is redrafted, the saved draft keeps the rest as the producer left it.
+    const merged = redraft && redraft.only !== 'all' && episode.notes?.draft
+        ? mergeRedraft(parseShowNotes(episode.notes.draft), notes, redraft.only) : notes;
     console.log(`✅ ${model}: ${inputTokens} in, ${outputTokens} out, ~$${usd}; ${unverified.length} quote(s) not found verbatim`);
 
     await ref.update({
         'notes.status': 'ready',
         'notes.generated': notes,
-        'notes.draft': notes,
+        'notes.draft': merged,
         'notes.version': FieldValue.increment(1),
         'notes.model': model,
         'notes.unverifiedQuotes': unverified,
         'notes.generatedAt': FieldValue.serverTimestamp(),
         'notes.error': null,
+        'notes.redraft': null,
         'costs.items': FieldValue.arrayUnion({ item: 'show_notes', usd, at: new Date() }),
         'costs.totalUsd': FieldValue.increment(usd),
         updatedAt: FieldValue.serverTimestamp(),

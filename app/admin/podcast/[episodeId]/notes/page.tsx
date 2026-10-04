@@ -24,7 +24,8 @@ import { field, hint as small, primary, secondary } from "@/components/studio/ui
 import { useAutosave } from "@/components/studio/useAutosave";
 import { useAuth } from "@/context/AuthContext";
 import { BROLL_STYLE_IDS, BROLL_STYLES, BROLL_USD_PER_IMAGE, type BrollStyle } from "@/lib/broll";
-import { locate, mmss, notesChanges, sameNotes, youtubeDescription, type ShowNotes, type TeaserClip } from "@/lib/showNotes";
+import { chooseDescription, locate, mmss, notesChanges, sameNotes, youtubeDescription, type ShowNotes, type TeaserClip } from "@/lib/showNotes";
+import { meetingDocx } from "@/lib/meetingDoc";
 import { studioFetch } from "@/lib/studioClient";
 import type { EpisodeNotesView } from "@/types/studio";
 import { Editor } from "@/components/studio/editor";
@@ -263,6 +264,8 @@ export default function ShowNotesPage() {
     const [error, setError] = useState("");
     const [notice, setNotice] = useState("");
     const [busy, setBusy] = useState(false);
+    const [redraftDirection, setRedraftDirection] = useState("");
+    const [redraftOnly, setRedraftOnly] = useState<"all" | "description" | "titles">("all");
     const video = useRef<HTMLVideoElement>(null);
 
     const save = useCallback(async (value: ShowNotes, version: number) => {
@@ -627,6 +630,9 @@ export default function ShowNotesPage() {
         ["notes-teaser", "In this episode", `${notes.teaserClips.length} · ${teaserSeconds}s`],
         ["notes-description", "Description"],
         ["notes-summary", "Summary"],
+        ...(settings?.format === "meeting" || (notes.decisions?.length ?? 0) > 0 || (notes.actionItems?.length ?? 0) > 0
+            ? [["notes-meeting", "Decisions and actions", `${notes.actionItems?.length ?? 0}`] as [string, string, string?]]
+            : []),
         ["notes-chapters", "Chapters", `${notes.chapters.length}`],
         ["notes-quotes", "Key quotes", `${notes.quotes.length}`],
         ["notes-tags", "Tags"],
@@ -798,6 +804,19 @@ export default function ShowNotesPage() {
 
                                         <Part id="notes-description" title="YouTube description" hint="Hook and keywords in the first two lines: that is all YouTube shows before “more”.">
                                             <textarea value={notes.description} onChange={e => edit(n => ({ ...n, description: e.target.value }))} rows={8} className={field} />
+                                            {notes.descriptionOptions?.length > 0 && (
+                                                <details open className="text-sm">
+                                                    <summary className="cursor-pointer text-gray-300">Other descriptions to choose from ({notes.descriptionOptions.length})</summary>
+                                                    <div className="mt-2 flex flex-col gap-2">
+                                                        {notes.descriptionOptions.map((opt, i) => (
+                                                            <div key={i} className="flex flex-col gap-1 border border-white/5 rounded p-2">
+                                                                <p className="text-gray-300 whitespace-pre-wrap">{opt}</p>
+                                                                <button onClick={() => edit(n => chooseDescription(n, i))} className={`${secondary} self-start`}>Use this one</button>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </details>
+                                            )}
                                             <label className="flex flex-col gap-1">
                                                 <span className="text-xs text-gray-400">Hashtags (three; YouTube shows them above the title)</span>
                                                 <input
@@ -823,6 +842,80 @@ export default function ShowNotesPage() {
                                         <Part id="notes-summary" title="Summary" hint="For the episode page on the website.">
                                             <textarea value={notes.summary} onChange={e => edit(n => ({ ...n, summary: e.target.value }))} rows={6} className={field} />
                                         </Part>
+
+                                        {(settings?.format === "meeting" || (notes.decisions?.length ?? 0) > 0 || (notes.actionItems?.length ?? 0) > 0) && (
+                                            <Part id="notes-meeting" title="Decisions and action items" hint="What was decided, and who does what by when.">
+                                                <label className="flex flex-col gap-1">
+                                                    <span className="text-xs text-gray-400">Decisions, one per line</span>
+                                                    <textarea
+                                                        key={loadedAt}
+                                                        defaultValue={(notes.decisions ?? []).join("\n")}
+                                                        onChange={e => {
+                                                            const list = e.target.value.split("\n").map(d => d.trim()).filter(Boolean);
+                                                            edit(n => ({ ...n, decisions: list }));
+                                                        }}
+                                                        rows={Math.max(2, (notes.decisions ?? []).length)}
+                                                        className={field}
+                                                    />
+                                                </label>
+                                                <div className="flex flex-col gap-2">
+                                                    <span className="text-xs text-gray-400">Action items</span>
+                                                    {(notes.actionItems ?? []).map((item, i) => (
+                                                        <div key={i} className="flex flex-wrap items-center gap-2">
+                                                            <input
+                                                                aria-label="Task"
+                                                                value={item.task}
+                                                                onChange={e => edit(n => ({ ...n, actionItems: (n.actionItems ?? []).map((a, j) => j === i ? { ...a, task: e.target.value } : a) }))}
+                                                                className={field}
+                                                                placeholder="What to do"
+                                                            />
+                                                            <input
+                                                                aria-label="Owner"
+                                                                value={item.owner}
+                                                                onChange={e => edit(n => ({ ...n, actionItems: (n.actionItems ?? []).map((a, j) => j === i ? { ...a, owner: e.target.value } : a) }))}
+                                                                className={`${field} w-32`}
+                                                                placeholder="Owner"
+                                                            />
+                                                            <input
+                                                                aria-label="Due"
+                                                                value={item.due}
+                                                                onChange={e => edit(n => ({ ...n, actionItems: (n.actionItems ?? []).map((a, j) => j === i ? { ...a, due: e.target.value } : a) }))}
+                                                                className={`${field} w-32`}
+                                                                placeholder="Due"
+                                                            />
+                                                            <button
+                                                                onClick={() => edit(n => ({ ...n, actionItems: (n.actionItems ?? []).filter((_, j) => j !== i) }))}
+                                                                className="text-gray-500 hover:text-red-300"
+                                                                aria-label="Remove action item"
+                                                            >✕</button>
+                                                        </div>
+                                                    ))}
+                                                    <div className="flex flex-wrap items-center gap-3">
+                                                        <button onClick={() => edit(n => ({ ...n, actionItems: [...(n.actionItems ?? []), { task: "", owner: "", due: "" }] }))} className={`${secondary} self-start`}>+ Add an action item</button>
+                                                        <button
+                                                            onClick={() => {
+                                                                if (!view) return;
+                                                                const title = notes.titles[notes.chosenTitle] ?? view.title;
+                                                                const date = view.recordedAt ? view.recordedAt.slice(0, 10) : null;
+                                                                const bytes = meetingDocx({
+                                                                    title, date, summary: notes.summary,
+                                                                    decisions: notes.decisions ?? [], actionItems: notes.actionItems ?? [],
+                                                                    chapters: notes.chapters,
+                                                                });
+                                                                const blob = new Blob([new Uint8Array(bytes)], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+                                                                const url = URL.createObjectURL(blob);
+                                                                const a = document.createElement("a");
+                                                                a.href = url;
+                                                                a.download = `${title.replace(/[\\/:*?"<>|]/g, "-")} - meeting notes.docx`;
+                                                                a.click();
+                                                                URL.revokeObjectURL(url);
+                                                            }}
+                                                            className={secondary}
+                                                        >Download meeting notes (Word)</button>
+                                                    </div>
+                                                </div>
+                                            </Part>
+                                        )}
 
                                         <Part id="notes-chapters" title="Chapters" hint="YouTube needs the first at 0:00, at least three, each 10 seconds or longer.">
                                             {notes.chapters.map((c, i) => (
@@ -906,9 +999,54 @@ export default function ShowNotesPage() {
                                             <span className="font-semibold text-gray-200">Changing the notes after sending to Descript?</span> Say, more &ldquo;In this episode&rdquo; clips:
                                             edit them here, approve the changes, rebuild the edit package, then send to Descript again.
                                         </p>
-                                        <div className="flex flex-wrap items-center gap-3">
-                                            <button onClick={() => draft(true)} disabled={busy || drafting} className={secondary}>Draft again with Claude</button>
-                                            <span className={small}>Starts over: Claude&rsquo;s new draft replaces everything in this stage, including your edits.</span>
+                                        <div className="flex flex-col gap-2">
+                                            <label className="text-sm text-gray-200">Draft again with Claude</label>
+                                            <textarea
+                                                aria-label="Direction for Claude"
+                                                maxLength={1000}
+                                                rows={2}
+                                                value={redraftDirection}
+                                                onChange={e => setRedraftDirection(e.target.value)}
+                                                className={field}
+                                                placeholder={'Your direction (optional), e.g. \u201CWarmer and shorter, and lead with the budget decision.\u201D'}
+                                            />
+                                            <select
+                                                aria-label="What to draft again"
+                                                value={redraftOnly}
+                                                onChange={e => setRedraftOnly(e.target.value as "all" | "description" | "titles")}
+                                                className={`${field} w-48`}
+                                            >
+                                                <option value="all">Everything</option>
+                                                <option value="description">Only the description</option>
+                                                <option value="titles">Only the titles</option>
+                                            </select>
+                                            <div className="flex flex-wrap items-center gap-3">
+                                                <button
+                                                    onClick={() => {
+                                                        if (redraftOnly === "all" && view?.notes?.draft &&
+                                                            !confirm("Draft everything again? Claude's new draft replaces everything in this stage, including your edits.")) return;
+                                                        void run(async () => {
+                                                            await flush();
+                                                            await studioFetch(`/api/studio/episodes/${episodeId}/notes/generate`, {
+                                                                method: "POST",
+                                                                body: JSON.stringify({ force: true, instruction: redraftDirection, only: redraftOnly }),
+                                                            });
+                                                            setRedraftDirection("");
+                                                            await load();
+                                                            return redraftOnly === "all"
+                                                                ? "Claude is drafting the show notes again. This usually takes two to five minutes."
+                                                                : `Claude is rewriting the ${redraftOnly === "description" ? "description" : "titles"}. Everything else stays as it is. This usually takes two to five minutes.`;
+                                                        });
+                                                    }}
+                                                    disabled={busy || drafting}
+                                                    className={secondary}
+                                                >Draft again</button>
+                                                <span className={small}>
+                                                    {redraftOnly === "all"
+                                                        ? "Everything is replaced: Claude's new draft replaces everything in this stage, including your edits."
+                                                        : `Only the ${redraftOnly === "description" ? "description" : "titles"} is replaced; everything else stays as you left it.`}
+                                                </span>
+                                            </div>
                                         </div>
                                     </div>
                                 </Stage>

@@ -29,6 +29,7 @@ export const StudioSettingsSchema = z.object({
     hosts: z.array(z.string().trim().min(1).max(60)).max(10),
     format: z.enum(FORMATS),
     extraInstructions: z.string().trim().max(3000),
+    descriptionChoices: z.number().int().min(1).max(5),  // YouTube descriptions Claude writes to choose from
     studioUrl: url,                               // where this Studio runs, for links in emails
     siteUrl: url,                                 // the website named in descriptions; empty leaves it out
     siteLinkText: z.string().trim().max(120),
@@ -54,6 +55,7 @@ export const DEFAULT_SETTINGS: StudioSettings = {
     hosts: ['Daniel Endy', 'Tom Wood'],
     format: 'podcast',
     extraInstructions: '',
+    descriptionChoices: 1,
     studioUrl: 'https://soulwisdomcollective.com',
     siteUrl: 'https://soulwisdomcollective.com',
     siteLinkText: '🌐 Full episodes, transcripts and the Soul Wisdom community:',
