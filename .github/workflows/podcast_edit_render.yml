@@ -22,7 +22,7 @@ permissions:
 jobs:
   render:
     runs-on: ubuntu-latest
-    # A long episode is encoded three times (blocks, assembly, loudness); GitHub's limit is 360.
+    # A long episode's picture is encoded twice (blocks, then assembly; loudness copies it). GitHub's limit is 360.
     timeout-minutes: 350
 
     steps:
