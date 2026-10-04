@@ -191,9 +191,10 @@ export async function renderEdit(opts: {
             blockFiles.push(blockFile);
         }
 
-        // Join the blocks with the concat demuxer.
+        // Join the blocks with the concat demuxer. Full paths, because it reads each path
+        // relative to the list file, which breaks when the output folder is relative.
         const concatList = path.join(blockDir, 'concat.txt');
-        fs.writeFileSync(concatList, blockFiles.map(f => `file '${f}'`).join('\n') + '\n');
+        fs.writeFileSync(concatList, blockFiles.map(f => `file '${path.resolve(f)}'`).join('\n') + '\n');
         const joinedFile = path.join(blockDir, 'joined.mkv');
         await run('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error',
             '-f', 'concat', '-safe', '0', '-i', concatList,
