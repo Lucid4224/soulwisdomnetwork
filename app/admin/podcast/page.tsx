@@ -13,6 +13,8 @@ import { ago, megabytes, minutes, STAGE_LABEL, usd } from "@/components/studio/f
 import { useAuth } from "@/context/AuthContext";
 import { studioFetch } from "@/lib/studioClient";
 import type { DriveVideo, EpisodeSummary, Pipeline } from "@/types/studio";
+import { JOURNEY } from "@/components/studio/steps";
+import { Journey } from "@/components/studio/Journey";
 
 const card = "bg-[#1E1035]/60 border border-white/5 rounded-xl p-3";
 const button = "text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 disabled:cursor-not-allowed";
@@ -178,6 +180,8 @@ export default function PodcastStudioPage() {
     const finished = by("speakers_confirmed").filter(e => e.finished).sort((a, b) => b.finished!.at - a.finished!.at);
     const failed = by("failed");
     const lastRun = data?.runs[0];
+    // Nothing anywhere yet: the page opens with how to start.
+    const empty = !!data && !processing.length && !review.length && !accepted.length && !finished.length && !failed.length && !data.backlog.length && !data.toProcess.length;
 
     return (
         <AuthGuard>
@@ -202,7 +206,7 @@ export default function PodcastStudioPage() {
                         </div>
                         <div className="flex items-center gap-2">
                             <button onClick={load} className={secondary}>Refresh</button>
-                            <Link href="/admin/podcast/settings" className="text-sm text-gray-400 hover:text-white ml-2">Settings</Link>
+                            <Link href="/admin/podcast/settings" className={secondary}>Studio settings</Link>
                             {profile?.role === "admin" && (
                                 <>
                                     <Link href="/admin/usage" className="text-sm text-gray-400 hover:text-white ml-2">Usage</Link>
@@ -220,6 +224,18 @@ export default function PodcastStudioPage() {
                     )}
 
                     {data?.driveProblem && <ErrorNote title="Google Drive" message={data.driveProblem} />}
+
+                    {empty && (
+                        <div className="rounded-2xl border border-amber-400/40 bg-amber-500/5 p-5 flex flex-col gap-2">
+                            <h2 className="text-amber-300 font-semibold">Start here</h2>
+                            <p className="text-sm text-gray-200">
+                                Upload a recording below. The Studio transcribes it, then each episode goes through {JOURNEY.join(" → ")}.
+                            </p>
+                            <p className="text-xs text-gray-400">
+                                Set up the <Link href="/admin/podcast/settings" className="text-amber-300 hover:underline">Studio settings</Link> first, so Claude writes for your show, meeting or talk.
+                            </p>
+                        </div>
+                    )}
 
                     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                         {/* Any recording, straight from the computer (lib/server/uploads.ts); no Drive needed. */}
@@ -309,6 +325,7 @@ export default function PodcastStudioPage() {
                             {!accepted.length && <Empty>None yet.</Empty>}
                             {accepted.map(e => (
                                 <EpisodeCard key={e.id} e={e}>
+                                    <div className="mt-2"><Journey episodeId={e.id} source={data?.finalSource} state={{ accepted: true, ...e.progress }} /></div>
                                     {e.notesStatus && (
                                         <p className={`text-xs mt-2 ${NOTES_LABEL[e.notesStatus].tone}`}>Show notes: {NOTES_LABEL[e.notesStatus].text}</p>
                                     )}
@@ -316,7 +333,7 @@ export default function PodcastStudioPage() {
                                         <ErrorNote key={s.step} title={`${s.step} failed`} message={s.message} className="mt-2" />
                                     ))}
                                     <div className="flex flex-wrap gap-2 mt-2">
-                                        <Link href={`/admin/podcast/${e.id}/notes`} className={e.notesStatus === "ready" ? primary : secondary}>Show notes</Link>
+                                        <Link href={`/admin/podcast/${e.id}/notes`} className={e.notesStatus === "ready" ? primary : e.notesStatus === "approved" ? primary : secondary}>{e.notesStatus === "ready" ? "Review show notes" : e.notesStatus === "approved" ? "Continue" : "Show notes"}</Link>
                                         <Link href={`/admin/podcast/${e.id}`} className={secondary}>Open review</Link>
                                         {e.docUrl && <a href={e.docUrl} target="_blank" rel="noreferrer" className={secondary}>Transcript Doc</a>}
                                         <button

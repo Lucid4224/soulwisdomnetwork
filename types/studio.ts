@@ -34,8 +34,13 @@ export interface EpisodeSummary {
     stepErrors: { step: string; message: string }[];
     finished: { by: string; at: number } | null;     // marked Finished in the Studio
     youtubeUrl: string | null;
+    // How far an episode has got after speaker review (lib/server/pipeline.ts episodeProgress).
+    progress: EpisodeProgress;
     notesStatus: EpisodeNotes['status'] | null;   // show notes, once the transcript is accepted                // in progress and unchanged for 24 hours (spec 005 section 5)
 }
+
+// How far an episode has got after speaker review (lib/server/pipeline.ts episodeProgress).
+export interface EpisodeProgress { notesApproved: boolean; finalReady: boolean; published: boolean; shortsScheduled: boolean }
 
 export interface IngestRun {
     id: number;
@@ -50,6 +55,7 @@ export interface Pipeline {
     backlog: DriveVideo[];         // in the saved drag-and-drop order
     toProcess: DriveVideo[];
     useDrive: boolean;             // Studio settings: recordings also come in through Drive
+    finalSource: 'descript' | 'editorLight';  // who makes the final cut (Studio settings)
     driveProblem: string | null;   // Drive could not be read; uploads still work
     episodes: EpisodeSummary[];
     runs: IngestRun[];
@@ -73,6 +79,8 @@ export interface EpisodeReview {
     version: number;               // send back when saving; a mismatch means someone else saved
     accepted: { by: string; at: number; version: number | null } | null;   // version null: accepted before it was recorded
     knownNames: string[];          // offered when renaming a voice
+    // How far the episode has got after speaker review (lib/server/pipeline.ts episodeProgress).
+    progress: EpisodeProgress;
 }
 
 // GET /api/studio/episodes/[id]/notes: the Checkpoint B page.

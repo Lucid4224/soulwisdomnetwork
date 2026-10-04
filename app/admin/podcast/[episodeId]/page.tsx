@@ -17,6 +17,8 @@ import { studioFetch } from "@/lib/studioClient";
 import { allLabels, buildLines, findFlags, isNamed, rootLabel, speakerName } from "@/lib/transcript";
 import type { TranscriptCorrections } from "@/types/episode";
 import type { EpisodeReview } from "@/types/studio";
+import { Journey } from "@/components/studio/Journey";
+import type { FinalSource } from "@/components/studio/steps";
 
 const COLORS = ["#f59e0b", "#38bdf8", "#a78bfa", "#34d399", "#f472b6", "#fb7185", "#facc15", "#2dd4bf", "#c084fc", "#94a3b8"];
 const button = "text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 disabled:cursor-not-allowed";
@@ -31,6 +33,8 @@ export default function SpeakerReviewPage() {
     const allowed = profile?.role === "admin" || profile?.role === "producer";
 
     const [review, setReview] = useState<EpisodeReview | null>(null);
+    // The Studio settings decide where "Edit" leads (Descript or Editor Light).
+    const [finalSource, setFinalSource] = useState<FinalSource | null>(null);
     const [corrections, setCorrections] = useState<TranscriptCorrections | null>(null);
     const [error, setError] = useState("");
     const [notice, setNotice] = useState("");
@@ -70,6 +74,13 @@ export default function SpeakerReviewPage() {
     useEffect(() => {
         if (!loading && allowed) load();
     }, [loading, allowed, load]);
+
+    // Load the Studio settings once (ignore errors): it decides where "Edit" leads.
+    useEffect(() => {
+        studioFetch<{ settings: { finalSource: FinalSource } }>("/api/studio/settings")
+            .then(v => setFinalSource(v.settings.finalSource))
+            .catch(() => {});
+    }, []);
 
     // Saves the latest corrections; changes made while a save is running go in the next one.
     // `inflight` is set before the first await and cleared in `finally`, so it can never be
@@ -291,6 +302,10 @@ export default function SpeakerReviewPage() {
                             )}
                         </div>
                     </div>
+                    {review && (
+                        <div className="mt-3"><Journey episodeId={episodeId} source={finalSource}
+                            state={{ accepted: !!review.accepted, ...review.progress }} /></div>
+                    )}
 
                     <ErrorNote message={error} />
                     {!review && !error && <p className="text-gray-400">Loading transcript…</p>}

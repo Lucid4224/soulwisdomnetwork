@@ -80,3 +80,84 @@ export function stageStatus(steps: readonly StepId[], states: Partial<Record<Ste
     if (next && steps.includes(next)) return "next";
     return "waiting";
 }
+
+// Who makes the final cut decides the steps; with Descript they are STEPS and STAGES
+// above, unchanged; with Editor Light there is no edit package or Descript, the edit
+// and its render happen on the show notes page, and the render is the final cut.
+export type FinalSource = "descript" | "editorLight";
+
+export type FlowStep = readonly [StepId, string];
+
+export interface FlowStage { id: StageId; title: string; steps: readonly StepId[]; checkpoint?: string }
+export interface Flow { steps: readonly FlowStep[]; stages: readonly FlowStage[] }
+
+// Editor Light flow: no edit package or Descript; the edit and its render are the final cut.
+const EDITOR_LIGHT_STEPS: readonly FlowStep[] = [
+    ["notes", "Approve the show notes"],
+    ["broll", "Generate b-roll images"],
+    ["final", "Edit and render the final cut"],
+    ["thumbnail", "Pick a thumbnail and approve the episode"],
+    ["youtube", "Upload to YouTube"],
+    ["shorts", "Make and schedule shorts"],
+];
+
+const EDITOR_LIGHT_STAGES: readonly FlowStage[] = [
+    { id: "notes", title: "Show notes", steps: ["notes"], checkpoint: "B" },
+    { id: "broll", title: "B-roll", steps: ["broll"] },
+    { id: "final", title: "Edit and final cut", steps: ["final"] },
+    { id: "thumbnail", title: "Thumbnail and upload", steps: ["thumbnail", "youtube"], checkpoint: "D" },
+    { id: "shorts", title: "Shorts", steps: ["shorts"], checkpoint: "E" },
+];
+
+// The flow for the chosen source; anything else returns the Descript steps and stages.
+export function flowFor(source: FinalSource | null | undefined): Flow {
+    if (source === "editorLight") return { steps: EDITOR_LIGHT_STEPS, stages: EDITOR_LIGHT_STAGES };
+    return { steps: STEPS, stages: STAGES };
+}
+
+// The first step in the flow whose state is not done; undefined when all are done.
+export function nextStep(flow: Flow, states: Partial<Record<StepId, StepState>>): StepId | undefined {
+    return flow.steps.find(([id]) => !states[id]?.done)?.[0];
+}
+
+// The stage in the flow whose steps include the given step; undefined when none.
+export function stageIn(flow: Flow, step: StepId): FlowStage | undefined {
+    return flow.stages.find(s => (s.steps as readonly StepId[]).includes(step));
+}
+
+// The step's label in the flow; the id itself when not found.
+export function labelIn(flow: Flow, step: StepId): string {
+    return flow.steps.find(([id]) => id === step)?.[1] ?? step;
+}
+
+// The journey bar labels, in order across the Studio pages.
+export const JOURNEY = ["Upload", "Speakers", "Show notes", "Edit", "Publish", "Shorts"] as const;
+
+export type JourneyStatus = "done" | "current" | "waiting";
+
+export interface JourneyState { accepted: boolean; notesApproved: boolean; finalReady: boolean; published: boolean; shortsScheduled: boolean }
+
+// One { label, status } per JOURNEY entry; Upload is always done, the first not-done is current.
+export function journey(s: JourneyState): { label: string; status: JourneyStatus }[] {
+    const flags = [true, s.accepted, s.notesApproved, s.finalReady, s.published, s.shortsScheduled];
+    const firstNotDone = flags.findIndex(f => !f);
+    return JOURNEY.map((label, i) => ({
+        label,
+        status: flags[i] ? "done" : i === firstNotDone ? "current" : "waiting",
+    }));
+}
+
+// The href for a journey entry, by index: where the part is worked on.
+export function journeyHref(episodeId: string, index: number, source: FinalSource | null | undefined): string {
+    switch (index) {
+        case 0: return "/admin/podcast";
+        case 1: return `/admin/podcast/${episodeId}`;
+        case 2: return `/admin/podcast/${episodeId}/notes#notes`;
+        case 3: return source === "editorLight"
+            ? `/admin/podcast/${episodeId}/notes#final`
+            : `/admin/podcast/${episodeId}/notes#package`;
+        case 4: return `/admin/podcast/${episodeId}/notes#thumbnail`;
+        case 5: return `/admin/podcast/${episodeId}/notes#shorts`;
+        default: return `/admin/podcast/${episodeId}/notes`;
+    }
+}

@@ -13,6 +13,7 @@ import type { Episode } from '@/types/episode';
 import type { EpisodeReview } from '@/types/studio';
 import { studioDrive } from './drive';
 import { requestNotes } from './notes';
+import { episodeProgress } from './pipeline';
 import { adminBucket, adminDb } from './firebaseAdmin';
 import { HttpError } from './staff';
 
@@ -97,6 +98,7 @@ export async function getReview(id: string): Promise<EpisodeReview> {
         version: episode.correctionsVersion ?? 0,
         accepted,
         knownNames: names,
+        progress: episodeProgress(episode),   // how far the episode has got after speaker review
     };
 }
 

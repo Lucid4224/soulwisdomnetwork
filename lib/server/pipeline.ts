@@ -3,7 +3,7 @@
 
 import { isVideo, listFolderFiles, moveItem, type DriveFile } from '@/agent/src/podcast/drive';
 import type { Episode } from '@/types/episode';
-import type { DriveVideo, EpisodeSummary, Pipeline } from '@/types/studio';
+import type { DriveVideo, EpisodeProgress, EpisodeSummary, Pipeline } from '@/types/studio';
 import { DRIVE_FOLDERS, studioDrive } from './drive';
 import { adminDb } from './firebaseAdmin';
 import { latestIngestRuns } from './github';
@@ -53,6 +53,16 @@ function stepErrors(e: Episode) {
     });
 }
 
+// How far an episode has got after speaker review: which later steps are done.
+export function episodeProgress(e: Episode): EpisodeProgress {
+    return {
+        notesApproved: e.notes?.status === 'approved',
+        finalReady: e.final?.status === 'ready',
+        published: !!e.youtube?.videoId,
+        shortsScheduled: (e.shorts?.items ?? []).some(i => !!i.youtube),
+    };
+}
+
 function summarise(id: string, e: Episode): EpisodeSummary {
     const updatedAt = millis(e.updatedAt);
     const inProgress = e.status === 'ingesting' || e.status === 'transcribing';
@@ -70,6 +80,7 @@ function summarise(id: string, e: Episode): EpisodeSummary {
         updatedAt,
         notesStatus: e.notes?.status ?? null,
         stepErrors: stepErrors(e),
+        progress: episodeProgress(e),
         finished: e.finished ? { by: e.finished.by.name, at: millis(e.finished.at) ?? 0 } : null,
         youtubeUrl: e.youtube?.url ?? null,
         stuck: inProgress && updatedAt !== null && Date.now() - updatedAt > STUCK_MS,
@@ -79,7 +90,7 @@ function summarise(id: string, e: Episode): EpisodeSummary {
 export async function getPipeline(): Promise<Pipeline> {
     // Drive is optional (Studio settings): without it, or when it cannot be read, the page still
     // works for recordings uploaded in the Studio.
-    const { useDrive } = await getSettings();
+    const { useDrive, finalSource } = await getSettings();
     let driveProblem: string | null = null;
     const fromDrive = (folderId: string | undefined) => (useDrive && folderId ? listVideos(folderId) : Promise.resolve([]))
         .catch((e: Error) => { driveProblem = `Drive could not be read: ${e.message}`; return [] as DriveVideo[]; });
@@ -104,7 +115,7 @@ export async function getPipeline(): Promise<Pipeline> {
         .reduce((sum, e) => sum + e.costUsd, 0);
 
     return {
-        backlog: ordered(backlog, order), toProcess, useDrive, driveProblem, episodes, runs, monthCostUsd, dayCostUsd, dailyLimitUsd: DAILY_LIMIT_USD,
+        backlog: ordered(backlog, order), toProcess, useDrive, finalSource, driveProblem, episodes, runs, monthCostUsd, dayCostUsd, dailyLimitUsd: DAILY_LIMIT_USD,
     };
 }
 

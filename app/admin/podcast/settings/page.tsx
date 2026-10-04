@@ -59,6 +59,7 @@ export default function StudioSettingsPage() {
     const [error, setError] = useState("");
     const [notice, setNotice] = useState("");
     const [saving, setSaving] = useState(false);
+    const [dirty, setDirty] = useState(false);
 
     useEffect(() => {
         if (loading || !allowed) return;
@@ -70,7 +71,16 @@ export default function StudioSettingsPage() {
     const set = <K extends keyof StudioSettings>(key: K, value: StudioSettings[K]) => {
         setS(prev => (prev ? { ...prev, [key]: value } : prev));
         setNotice("");
+        setDirty(true);
     };
+
+    // While there are unsaved changes, ask before leaving the page.
+    useEffect(() => {
+        if (!dirty) return;
+        const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+        window.addEventListener("beforeunload", warn);
+        return () => window.removeEventListener("beforeunload", warn);
+    }, [dirty]);
 
     async function save() {
         if (!s) return;
@@ -89,6 +99,7 @@ export default function StudioSettingsPage() {
             setLogoUrl(v.logoUrl);
             setIntroUrl(v.introUrl);
             setNotice("Saved. New jobs use these settings from now on.");
+            setDirty(false);
         } catch (e) {
             setError((e as Error).message);
         } finally {
@@ -149,7 +160,7 @@ export default function StudioSettingsPage() {
                             </Section>
 
                             <Section title="Speakers" intro="Names that are always offered when the transcript is made, and on the speaker review page. One per line. Others are named during speaker review.">
-                                <textarea className={`${field} min-h-24`} value={hostsText} onChange={e => { setHostsText(e.target.value); setNotice(""); }} disabled={off} aria-label="Speaker names" />
+                                <textarea className={`${field} min-h-24`} value={hostsText} onChange={e => { setHostsText(e.target.value); setNotice(""); setDirty(true); }} disabled={off} aria-label="Speaker names" />
                             </Section>
 
                             <Section title="Kind of recording and writing" intro="Shapes how Claude writes the show notes, chapters, YouTube description, Shorts and thumbnail text.">
@@ -225,11 +236,13 @@ export default function StudioSettingsPage() {
                             </Section>
 
                             {isAdmin && (
-                                <div className="flex flex-wrap items-center gap-3">
+                                <div className="sticky bottom-0 z-10 -mx-4 sm:mx-0 flex flex-wrap items-center gap-3 border-t border-white/10 bg-[#130b29]/95 backdrop-blur px-4 py-3 sm:rounded-xl">
                                     <button onClick={() => void save()} disabled={saving} className={primary}>{saving ? "Saving…" : "Save settings"}</button>
-                                    <button onClick={() => { setS({ ...DEFAULT_SETTINGS }); setHostsText(DEFAULT_SETTINGS.hosts.join("\n")); setNotice("Back to the original settings. Press Save to keep them."); }}
+                                    <button onClick={() => { setS({ ...DEFAULT_SETTINGS }); setHostsText(DEFAULT_SETTINGS.hosts.join("\n")); setNotice("Back to the original settings. Press Save to keep them."); setDirty(true); }}
                                         className="text-xs text-gray-400 hover:text-white">Reset to the original settings</button>
-                                    {notice && <span className="text-sm text-green-300">{notice}</span>}
+                                    {notice
+                                        ? <span className="text-sm text-green-300">{notice}</span>
+                                        : dirty && <span className="text-sm text-amber-300">Unsaved changes</span>}
                                 </div>
                             )}
                         </>

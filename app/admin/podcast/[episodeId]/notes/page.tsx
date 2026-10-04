@@ -18,7 +18,8 @@ import { Thumbnails } from "@/components/studio/thumbnails";
 import { Youtube } from "@/components/studio/youtube";
 import { ago, minutes } from "@/components/studio/format";
 import { Part, Stage, StepTracker, type TrackedStage } from "@/components/studio/Stage";
-import { failure, STAGES, STEPS, stageOf, stageStatus, stepLabel, type StageId, type StepId, type StepState } from "@/components/studio/steps";
+import { failure, STAGES, stageStatus, type StageId, type StepId, type StepState, flowFor, labelIn, nextStep, stageIn } from "@/components/studio/steps";
+import { Journey } from "@/components/studio/Journey";
 import { ErrorNote } from "@/components/studio/ErrorNote";
 import { field, hint as small, primary, secondary } from "@/components/studio/ui";
 import { useAutosave } from "@/components/studio/useAutosave";
@@ -291,14 +292,17 @@ export default function ShowNotesPage() {
         stepKeys.current[step] = state.key;
         if (before !== undefined && before !== state.key) setRevision(r => r + 1);
     }, []);
-    const next = STEPS.find(([id]) => !steps[id]?.done)?.[0];
-    const nextStage = next ? stageOf(next).id : undefined;
-    const stages = STAGES.map((s, i) => {
+    // The steps follow who makes the final cut (Descript or Editor Light).
+    const flow = flowFor(settings?.finalSource);
+    const lightFlow = settings?.finalSource === "editorLight";
+    const next = nextStep(flow, steps);
+    const nextStage = next ? stageIn(flow, next)?.id : undefined;
+    const stages = flow.stages.map((s, i) => {
         const status = stageStatus(s.steps, steps, next);
         const states = s.steps.map(id => steps[id]);
         const failedStep = s.steps.find(id => steps[id]?.failed);
-        const detail = status === "next" && next ? `Next: ${stepLabel(next)}`
-            : status === "failed" && failedStep ? `${stepLabel(failedStep)} failed`
+        const detail = status === "next" && next ? `Next: ${labelIn(flow, next)}`
+            : status === "failed" && failedStep ? `${labelIn(flow, failedStep)} failed`
                 : status === "working" ? states.find(x => x?.working)?.summary ?? "" : "";
         return {
             ...s, n: i + 1, status, detail,
@@ -317,7 +321,7 @@ export default function ShowNotesPage() {
         const timer = setTimeout(() => setWaited(true), 5000);
         return () => clearTimeout(timer);
     }, []);
-    const settled = waited || STEPS.every(([id]) => steps[id]);
+    const settled = waited || flow.steps.every(([id]) => steps[id]);
     const reasons = settled ? [
         ...(nextStage ? [`next:${nextStage}`] : []),
         ...stages.filter(s => s.status === "failed").map(s => `failed:${s.id}:${s.steps.map(id => steps[id]?.key).join("|")}`),
@@ -329,7 +333,7 @@ export default function ShowNotesPage() {
         setOpen(o => ({ ...o, ...Object.fromEntries(fresh.map(r => [r.split(":")[1], true])) }));
     }
     const toggle = (id: StageId) => setOpen(o => ({ ...o, [id]: !o[id] }));
-    const setAll = (value: boolean) => setOpen(Object.fromEntries(STAGES.map(s => [s.id, value])));
+    const setAll = (value: boolean) => setOpen(Object.fromEntries(flow.stages.map(s => [s.id, value])));
 
     // Opens the stage an anchor is in and scrolls to it once it is showing.
     const scrollTarget = useRef<string | null>(null);
@@ -638,7 +642,7 @@ export default function ShowNotesPage() {
         ["notes-tags", "Tags"],
     ] : [];
     const stageProps = (id: StageId) => {
-        const s = stages.find(x => x.id === id)!;
+        const s = stages.find(x => x.id === id) ?? { ...STAGES.find(x => x.id === id)!, n: 0, status: "waiting" as const, summary: "", links: [] };
         return {
             id, n: s.n, title: s.title, checkpoint: "checkpoint" in s ? s.checkpoint : undefined,
             status: s.status, summary: s.summary, links: s.links, open: !!open[id], onToggle: () => toggle(id),
@@ -663,6 +667,9 @@ export default function ShowNotesPage() {
                                 {" · "}
                                 <Link href={`/admin/podcast/${episodeId}`} className="hover:text-white hover:underline">Speaker review</Link>
                             </p>
+                        )}
+                        {view && (
+                            <div className="mt-3"><Journey episodeId={episodeId} source={settings?.finalSource} state={{ accepted: view.transcriptAccepted, notesApproved: !!steps.notes?.done, finalReady: !!steps.final?.done, published: !!steps.youtube?.done, shortsScheduled: !!steps.shorts?.done }} /></div>
                         )}
                     </div>
 
@@ -1132,15 +1139,33 @@ export default function ShowNotesPage() {
                                     )}
                                 </Stage>
 
-                                <Stage {...stageProps("package")} intro="Everything for the edit, built from the approved notes, then made into a Descript project. Descript has the final say: the edit happens there.">
-                                    {sinceStage === "package" && changedSince}
-                                    {!upToDate && (
-                                        <NeedsApproval what="build the edit package" approved={!!approved} busy={busy || drafting} onApprove={approve} onDiscard={discard} />
-                                    )}
-                                    <EditPackage episodeId={episodeId} enabled={on} upToDate={upToDate} report={report} revision={revision} />
-                                    {/* Shown with the preview switch on, or when the Studio settings make Editor Light the final cut. */}
-                                    {(process.env.NEXT_PUBLIC_EDITOR_LIGHT === '1' || settings?.finalSource === 'editorLight') && view && (
-                                        <Part title="Edit here instead (preview)">
+                                {!lightFlow && (
+                                    <Stage {...stageProps("package")} intro="Everything for the edit, built from the approved notes, then made into a Descript project. Descript has the final say: the edit happens there.">
+                                        {sinceStage === "package" && changedSince}
+                                        {!upToDate && (
+                                            <NeedsApproval what="build the edit package" approved={!!approved} busy={busy || drafting} onApprove={approve} onDiscard={discard} />
+                                        )}
+                                        <EditPackage episodeId={episodeId} enabled={on} upToDate={upToDate} report={report} revision={revision} />
+                                        {/* With Editor Light set in the Studio settings it has its own stage below; this preview shows
+                                            only with the env switch and the view loaded. */}
+                                        {process.env.NEXT_PUBLIC_EDITOR_LIGHT === '1' && view && (
+                                            <Part title="Edit here instead (preview)">
+                                                <EditorLightStage
+                                                    episodeId={episodeId}
+                                                    words={view.words}
+                                                    videoUrl={view.videoUrl ?? ''}
+                                                />
+                                            </Part>
+                                        )}
+                                    </Stage>
+                                )}
+
+                                <Stage {...stageProps("final")} intro={lightFlow
+                                    ? "Cut the episode here: click words to remove them, preview the cut, then render it. The render is the final cut, set to broadcast loudness, with the chapter times moved onto it."
+                                    : "When the edit in Descript is finished: the finished edit, published from Descript, set to broadcast loudness and saved to Drive, with the chapter times moved onto it."}>
+                                    {sinceStage === "final" && changedSince}
+                                    {lightFlow && view && (
+                                        <Part title="Edit">
                                             <EditorLightStage
                                                 episodeId={episodeId}
                                                 words={view.words}
@@ -1148,10 +1173,6 @@ export default function ShowNotesPage() {
                                             />
                                         </Part>
                                     )}
-                                </Stage>
-
-                                <Stage {...stageProps("final")} intro="When the edit in Descript is finished: the finished edit, published from Descript, set to broadcast loudness and saved to Drive, with the chapter times moved onto it.">
-                                    {sinceStage === "final" && changedSince}
                                     <FinalCut episodeId={episodeId} enabled={on} report={report} revision={revision} />
                                 </Stage>
 
@@ -1201,7 +1222,7 @@ export default function ShowNotesPage() {
                                 {autosave.saveState === "error" && <button onClick={() => { void flush(); }} className={secondary}>Try again</button>}
                                 {next && next !== "notes" && (
                                     <button onClick={() => go(nextStage!)} className={upToDate && !steps[next]?.working ? primary : secondary} title="Open and scroll to the next step">
-                                        {steps[next]?.working ? "In progress" : "Next"}: {stepLabel(next)} →
+                                        {steps[next]?.working ? "In progress" : "Next"}: {labelIn(flow, next)} →
                                     </button>
                                 )}
                                 {upToDate ? (

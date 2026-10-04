@@ -336,9 +336,10 @@ export function Shorts({ episodeId, enabled, report, revision }: { episodeId: st
                                                     onChange={e => { const v = e.target.value; if (v) swapPick(v, s); }}
                                                     className="bg-black/30 border border-white/10 rounded-lg px-2 py-1 text-xs text-gray-200">
                                                     <option value="">Swap for…</option>
-                                                    {swapOptions.map((i, n) => (
+                                                    {/* The place in the schedule, and the name as edited on the page; no byId lookups here. */}
+                                                    {swapOptions.map(i => (
                                                         <option key={i.id} value={i.id}>
-                                                            #{n + 1} {byId.get(i.id)?.headline || byId.get(i.id)?.title || mmss(i.startMs)}
+                                                            #{edits.items.indexOf(i) + 1} {i.headline || i.title || mmss(i.startMs)}
                                                         </option>
                                                     ))}
                                                 </select>
