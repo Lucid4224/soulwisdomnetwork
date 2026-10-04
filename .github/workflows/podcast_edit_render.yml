@@ -31,6 +31,13 @@ jobs:
       with:
         persist-credentials: false
 
+    # The runner starts with about 14 GB free; a 2 hour episode needs more working space.
+    # These preinstalled tools are never used by this job; removing them frees roughly 25 GB.
+    - name: Free disk space
+      run: |
+        sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
+        df -h "$RUNNER_TEMP"
+
     - name: Setup Node.js
       uses: actions/setup-node@v7
       with:
