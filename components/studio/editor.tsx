@@ -12,6 +12,7 @@ import type { SpokenWord } from '@/lib/showNotes';
 import type { Cut, EpisodeEdit } from '@/lib/edit';
 import { keepRanges, editedDuration, suggestCuts } from '@/lib/edit';
 import { primary, secondary, hint } from '@/components/studio/ui';
+import { Timeline } from '@/components/studio/timeline';
 
 interface SpeakerPara {
     speaker: string;
@@ -68,11 +69,13 @@ function scrollBoxTo(box: HTMLElement, target: HTMLElement) {
     box.scrollTop = Math.max(0, elTop - box.clientHeight / 3);
 }
 
-export function Editor({ words, videoUrl, edit, onChange }: {
+// workspace: the full-page editor — a larger video, a taller script and the timeline.
+export function Editor({ words, videoUrl, edit, onChange, workspace = false }: {
     words: SpokenWord[];
     videoUrl: string;
     edit: EpisodeEdit;
     onChange: (e: EpisodeEdit) => void;
+    workspace?: boolean;
 }) {
     const videoRef = useRef<HTMLVideoElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -99,6 +102,8 @@ export function Editor({ words, videoUrl, edit, onChange }: {
 
     // Play mode: 'edited' skips the cuts, 'original' plays everything, so the producer can compare.
     const [playMode, setPlayMode] = useState<'edited' | 'original'>('edited');
+    // currentMs: the video's current time, kept up to date only in workspace mode for the timeline.
+    const [currentMs, setCurrentMs] = useState(0);
     // Hear it: while a preview runs, cuts are played (not skipped) and playback pauses at endMs.
     const previewRef = useRef<{ endMs: number } | null>(null);
 
@@ -588,13 +593,14 @@ export function Editor({ words, videoUrl, edit, onChange }: {
 
             <div className="flex flex-col gap-4 md:flex-row">
                 {/* Video preview */}
-                <div className="md:w-1/2 md:sticky md:top-4 self-start">
+                <div className={`${workspace ? 'md:w-3/5' : 'md:w-1/2'} md:sticky md:top-4 self-start`}>
                     <video
                         ref={videoRef}
                         src={videoUrl}
                         className="w-full rounded-lg bg-black"
                         controls
                         onLoadedMetadata={e => setVideoDuration(e.currentTarget.duration * 1000)}
+                        onTimeUpdate={workspace ? (e => setCurrentMs(e.currentTarget.currentTime * 1000)) : undefined}
                     />
                     {/* Cuts map: every cut on one strip under the video; click a mark to jump there. */}
                     {totalMs > 0 && (
@@ -633,7 +639,7 @@ export function Editor({ words, videoUrl, edit, onChange }: {
                 </div>
 
                 {/* Transcript */}
-                <div ref={transcriptRef} className="md:w-1/2 h-[calc(100vh-220px)] min-h-[400px] overflow-y-auto rounded-lg bg-[#130b29] p-4">
+                <div ref={transcriptRef} className={`${workspace ? 'md:w-2/5 h-[calc(100vh-360px)]' : 'md:w-1/2 h-[calc(100vh-220px)]'} min-h-[400px] overflow-y-auto rounded-lg bg-[#130b29] p-4`}>
                     {paras.map((para, pi) => (
                         <div key={pi} className="mb-4" style={{ contentVisibility: 'auto' }}>
                             <p className="text-sm font-bold text-amber-400 mb-1">
@@ -733,6 +739,18 @@ export function Editor({ words, videoUrl, edit, onChange }: {
                     ))}
                 </div>
             </div>
+
+            {/* workspace: the timeline under the editor. */}
+            {workspace && (
+                <Timeline
+                    words={words}
+                    cuts={edit.cuts}
+                    totalMs={totalMs}
+                    currentMs={currentMs}
+                    editedMs={editedMs}
+                    onSeek={ms => { seekToTime(ms / 1000); setCurrentMs(ms); }}
+                />
+            )}
         </div>
     );
 }
