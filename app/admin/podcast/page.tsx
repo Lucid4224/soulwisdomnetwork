@@ -15,6 +15,7 @@ import { studioFetch } from "@/lib/studioClient";
 import type { DriveVideo, EpisodeSummary, Pipeline } from "@/types/studio";
 import { JOURNEY } from "@/components/studio/steps";
 import { Journey } from "@/components/studio/Journey";
+import { continueTarget, episodeGroups } from "@/lib/studioUi";
 
 const card = "bg-[#1E1035]/60 border border-white/5 rounded-xl p-3";
 const button = "text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 disabled:cursor-not-allowed";
@@ -67,6 +68,8 @@ export default function PodcastStudioPage() {
     const [error, setError] = useState("");
     const [busy, setBusy] = useState<string | null>(null);   // which action is running
     const [notice, setNotice] = useState("");
+    // Upload box: opened by the "Upload a recording" button in the header; always shown while the Studio is empty.
+    const [uploadOpen, setUploadOpen] = useState(false);
     const dragFrom = useRef<number | null>(null);
 
     const load = useCallback(async () => {
@@ -116,16 +119,16 @@ export default function PodcastStudioPage() {
 
     const markFinished = (e: EpisodeSummary, isFinished: boolean) => {
         const question = isFinished
-            ? `Mark "${e.title}" as finished?\n\nIt moves from Accepted to Finished, and its cost and time are posted on the Usage page. You can move it back from the Finished column.`
-            : `Move "${e.title}" back to Accepted?`;
+            ? `Mark "${e.title}" as finished?\n\nIt moves from the episode list to Finished at the bottom of the page, and its cost and time are posted on the Usage page. You can move it back from the Finished section.`
+            : `Move "${e.title}" back to the list?`;
         if (confirm(question)) void setFinished(e, isFinished);
     };
 
     const setFinished = (e: EpisodeSummary, isFinished: boolean) => act(`finished:${e.id}`, async () => {
         await studioFetch(`/api/studio/episodes/${e.id}/finished`, { method: "POST", body: JSON.stringify({ finished: isFinished }) });
         return isFinished
-            ? `"${e.title}" moved to Finished. Its cost and time are posted on the Usage page. Pressed by mistake? Use "Back to Accepted" on it under Finished.`
-            : `"${e.title}" moved back to Accepted.`;
+            ? `"${e.title}" moved to Finished. Its cost and time are posted on the Usage page. Pressed by mistake? Use "Back to the list" on it under Finished.`
+            : `"${e.title}" moved back to the episode list.`;
     });
 
     const processNow = (retryFileId?: string) => act(retryFileId ? `retry:${retryFileId}` : "process", async () => {
@@ -172,21 +175,16 @@ export default function PodcastStudioPage() {
         );
     }
 
-    const by = (status: EpisodeSummary["status"] | EpisodeSummary["status"][]) =>
-        (data?.episodes ?? []).filter(e => ([] as string[]).concat(status).includes(e.status));
-    const processing = by(["ingesting", "transcribing"]);
-    const review = by("awaiting_speaker_review");
-    const accepted = by("speakers_confirmed").filter(e => !e.finished);
-    const finished = by("speakers_confirmed").filter(e => e.finished).sort((a, b) => b.finished!.at - a.finished!.at);
-    const failed = by("failed");
+    // The page's sections: processing, failed, active (in progress) and finished.
+    const { processing, failed, active, finished } = episodeGroups(data?.episodes ?? []);
     const lastRun = data?.runs[0];
     // Nothing anywhere yet: the page opens with how to start.
-    const empty = !!data && !processing.length && !review.length && !accepted.length && !finished.length && !failed.length && !data.backlog.length && !data.toProcess.length;
+    const empty = !!data && !processing.length && !active.length && !finished.length && !failed.length && !data.backlog.length && !data.toProcess.length;
 
     return (
         <AuthGuard>
             <div className="min-h-screen bg-[#130b29] text-gray-100 p-4 sm:p-8">
-                <div className="max-w-7xl mx-auto flex flex-col gap-6">
+                <div className="max-w-5xl mx-auto flex flex-col gap-6">
                     <div className="flex flex-wrap items-end justify-between gap-4">
                         <div>
                             <h1 className="text-3xl font-bold text-amber-400">Podcast Studio</h1>
@@ -205,6 +203,10 @@ export default function PodcastStudioPage() {
                             </p>
                         </div>
                         <div className="flex items-center gap-2">
+                            {/* Upload: the header button that opens the upload box (always shown while the Studio is empty). */}
+                            <button onClick={() => setUploadOpen(o => !o)} aria-expanded={uploadOpen} className={primary}>
+                                {uploadOpen ? "Close upload" : "Upload a recording"}
+                            </button>
                             <button onClick={load} className={secondary}>Refresh</button>
                             <Link href="/admin/podcast/settings" className={secondary}>Studio settings</Link>
                             {profile?.role === "admin" && (
@@ -225,82 +227,25 @@ export default function PodcastStudioPage() {
 
                     {data?.driveProblem && <ErrorNote title="Google Drive" message={data.driveProblem} />}
 
-                    {empty && (
-                        <div className="rounded-2xl border border-amber-400/40 bg-amber-500/5 p-5 flex flex-col gap-2">
-                            <h2 className="text-amber-300 font-semibold">Start here</h2>
+                    {(uploadOpen || empty) && (
+                        <section aria-label="Upload a recording" className="rounded-2xl border border-amber-400/40 bg-amber-500/5 p-5 flex flex-col gap-3">
+                            {empty && <h2 className="text-amber-300 font-semibold">Start here</h2>}
                             <p className="text-sm text-gray-200">
-                                Upload a recording below. The Studio transcribes it, then each episode goes through {JOURNEY.join(" → ")}.
+                                Upload a recording, such as a Zoom recording. The Studio transcribes it, then each episode goes through {JOURNEY.join(" → ")}.
                             </p>
-                            <p className="text-xs text-gray-400">
-                                Set up the <Link href="/admin/podcast/settings" className="text-amber-300 hover:underline">Studio settings</Link> first, so Claude writes for your show, meeting or talk.
-                            </p>
-                        </div>
+                            {/* Any recording, straight from the computer (lib/server/uploads.ts); no Drive needed. */}
+                            <UploadRecording onDone={message => { setNotice(message); setUploadOpen(false); void load(); }} />
+                            {empty && (
+                                <p className="text-xs text-gray-400">
+                                    Set up the <Link href="/admin/podcast/settings" className="text-amber-300 hover:underline">Studio settings</Link> first, so Claude writes for your show, meeting or talk.
+                                </p>
+                            )}
+                        </section>
                     )}
 
-                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                        {/* Any recording, straight from the computer (lib/server/uploads.ts); no Drive needed. */}
-                        <Column title="Upload a recording" hint="A video file, such as a Zoom recording. It is processed straight away and appears under Processing.">
-                            <UploadRecording onDone={message => { setNotice(message); void load(); }} />
-                        </Column>
-
-                        {data?.useDrive !== false && (<>
-                        <Column title="Backlog" count={data?.backlog.length ?? 0} hint="Drag to set the order. The top one goes next.">
-                            <button
-                                onClick={() => queue()}
-                                disabled={busy !== null || !data?.backlog.length}
-                                className={`${primary} self-start`}
-                            >
-                                {busy === "queue:next" ? "Moving…" : "Queue next"}
-                            </button>
-                            {data && !data.backlog.length && <Empty>Nothing in 00 Backlog.</Empty>}
-                            <ol className="flex flex-col gap-2">
-                                {data?.backlog.map((v, i) => (
-                                    <li
-                                        key={v.id}
-                                        draggable
-                                        onDragStart={() => { dragFrom.current = i; }}
-                                        onDragOver={e => e.preventDefault()}
-                                        onDrop={() => { if (dragFrom.current !== null) move(dragFrom.current, i); dragFrom.current = null; }}
-                                        className={`${card} flex items-center gap-2 cursor-grab active:cursor-grabbing`}
-                                    >
-                                        <span className="text-gray-500 text-xs w-5 shrink-0">{i + 1}</span>
-                                        <div className="min-w-0 flex-1">
-                                            <p className="text-sm break-words">{v.name}</p>
-                                            <p className="text-xs text-gray-500">{megabytes(v.sizeBytes)}</p>
-                                        </div>
-                                        <div className="flex flex-col shrink-0">
-                                            <button onClick={() => move(i, i - 1)} disabled={i === 0} className="text-gray-400 hover:text-white disabled:opacity-20 px-1" aria-label="Move up">▲</button>
-                                            <button onClick={() => move(i, i + 1)} disabled={i === data.backlog.length - 1} className="text-gray-400 hover:text-white disabled:opacity-20 px-1" aria-label="Move down">▼</button>
-                                        </div>
-                                        <button onClick={() => queue(v.id)} disabled={busy !== null} className={secondary}>
-                                            {busy === `queue:${v.id}` ? "…" : "Queue"}
-                                        </button>
-                                    </li>
-                                ))}
-                            </ol>
-                        </Column>
-
-                        <Column title="To Process" count={data?.toProcess.length ?? 0} hint="Waiting in 01 To Process. Nothing starts on its own: press Process now when you are ready to work on them.">
-                            <button
-                                onClick={() => processNow()}
-                                disabled={busy !== null || running || !data?.toProcess.length}
-                                className={`${primary} self-start`}
-                                title={data?.toProcess.length ? "" : "Nothing in To Process"}
-                            >
-                                {busy === "process" ? "Starting…" : running ? "Processing…" : "Process now"}
-                            </button>
-                            {data && !data.toProcess.length && <Empty>Nothing waiting.</Empty>}
-                            {data?.toProcess.map(v => (
-                                <div key={v.id} className={card}>
-                                    <p className="text-sm break-words">{v.name}</p>
-                                    <p className="text-xs text-gray-500">{megabytes(v.sizeBytes)} · added {ago(v.addedAt)}</p>
-                                </div>
-                            ))}
-                        </Column>
-                        </>)}
-
+                    {/* Processing: the existing Column and its cards, only when something is in it. */}
+                    {!!processing.length && (
                         <Column title="Processing" count={processing.length} hint="Copying, making the preview, transcribing. About 5–20 minutes each.">
-                            {!processing.length && <Empty>Nothing processing.</Empty>}
                             {processing.map(e => (
                                 <EpisodeCard key={e.id} e={e}>
                                     <p className="text-xs text-amber-300 mt-2">{STAGE_LABEL[e.stage] ?? e.stage}… <span className="text-gray-500">updated {ago(e.updatedAt)}</span></p>
@@ -308,49 +253,11 @@ export default function PodcastStudioPage() {
                                 </EpisodeCard>
                             ))}
                         </Column>
+                    )}
 
-                        <Column title="Needs review" count={review.length} hint="Check the speaker names, then accept the transcript.">
-                            {!review.length && <Empty>Nothing to review.</Empty>}
-                            {review.map(e => (
-                                <EpisodeCard key={e.id} e={e}>
-                                    <div className="flex flex-wrap gap-2 mt-2">
-                                        <Link href={`/admin/podcast/${e.id}`} className={primary}>Review speakers</Link>
-                                        {e.docUrl && <a href={e.docUrl} target="_blank" rel="noreferrer" className={secondary}>Transcript Doc</a>}
-                                    </div>
-                                </EpisodeCard>
-                            ))}
-                        </Column>
-
-                        <Column title="Accepted" count={accepted.length} hint="Speakers confirmed. Ready for the next steps.">
-                            {!accepted.length && <Empty>None yet.</Empty>}
-                            {accepted.map(e => (
-                                <EpisodeCard key={e.id} e={e}>
-                                    <div className="mt-2"><Journey episodeId={e.id} source={data?.finalSource} state={{ accepted: true, ...e.progress }} /></div>
-                                    {e.notesStatus && (
-                                        <p className={`text-xs mt-2 ${NOTES_LABEL[e.notesStatus].tone}`}>Show notes: {NOTES_LABEL[e.notesStatus].text}</p>
-                                    )}
-                                    {(e.stepErrors ?? []).map(s => (
-                                        <ErrorNote key={s.step} title={`${s.step} failed`} message={s.message} className="mt-2" />
-                                    ))}
-                                    <div className="flex flex-wrap gap-2 mt-2">
-                                        <Link href={`/admin/podcast/${e.id}/notes`} className={e.notesStatus === "ready" ? primary : e.notesStatus === "approved" ? primary : secondary}>{e.notesStatus === "ready" ? "Review show notes" : e.notesStatus === "approved" ? "Continue" : "Show notes"}</Link>
-                                        <Link href={`/admin/podcast/${e.id}`} className={secondary}>Open review</Link>
-                                        {e.docUrl && <a href={e.docUrl} target="_blank" rel="noreferrer" className={secondary}>Transcript Doc</a>}
-                                        <button
-                                            onClick={() => markFinished(e, true)}
-                                            disabled={busy !== null}
-                                            className={`${secondary} ml-auto`}
-                                            title="Move it to Finished, when it is on YouTube and its shorts are done"
-                                        >
-                                            {busy === `finished:${e.id}` ? "Moving…" : "Finished ✓"}
-                                        </button>
-                                    </div>
-                                </EpisodeCard>
-                            ))}
-                        </Column>
-
+                    {/* Failed: the existing Column and its cards, only when something is in it. */}
+                    {!!failed.length && (
                         <Column title="Failed" count={failed.length} hint="Stopped with an error. Fix the cause, then retry.">
-                            {!failed.length && <Empty>No failures.</Empty>}
                             {failed.map(e => (
                                 <EpisodeCard key={e.id} e={e}>
                                     <ErrorNote
@@ -364,9 +271,109 @@ export default function PodcastStudioPage() {
                                 </EpisodeCard>
                             ))}
                         </Column>
+                    )}
 
-                        <Column title="Finished" count={finished.length} hint="Done: on YouTube, shorts scheduled. Press Finished on an accepted episode to move it here.">
-                            {!finished.length && <Empty>None yet.</Empty>}
+                    {/* Episodes: every episode being worked on in one list. */}
+                    <Column title="Episodes" count={active.length} hint="Newest activity first. Continue opens the step each episode is on.">
+                        {data && !active.length && <Empty>No episodes in progress. Upload a recording to start one.</Empty>}
+                        {active.map(e => {
+                            const next = continueTarget(e, data?.finalSource);
+                            return (
+                                <EpisodeCard key={e.id} e={e}>
+                                    <div className="mt-2"><Journey episodeId={e.id} source={data?.finalSource} state={{ accepted: e.status === "speakers_confirmed", ...e.progress }} /></div>
+                                    {e.notesStatus && (
+                                        <p className={`text-xs mt-2 ${NOTES_LABEL[e.notesStatus].tone}`}>Show notes: {NOTES_LABEL[e.notesStatus].text}</p>
+                                    )}
+                                    {(e.stepErrors ?? []).map(s => (
+                                        <ErrorNote key={s.step} title={`${s.step} failed`} message={s.message} className="mt-2" />
+                                    ))}
+                                    <div className="flex flex-wrap gap-2 mt-2">
+                                        <Link href={next.href} className={primary}>{next.label} →</Link>
+                                        {e.status === "speakers_confirmed" && <Link href={`/admin/podcast/${e.id}/notes`} className={secondary}>Show notes</Link>}
+                                        {e.status === "speakers_confirmed" && <Link href={`/admin/podcast/${e.id}`} className={secondary}>Speaker review</Link>}
+                                        {e.docUrl && <a href={e.docUrl} target="_blank" rel="noreferrer" className={secondary}>Transcript Doc</a>}
+                                        {e.status === "speakers_confirmed" && (
+                                            <button
+                                                onClick={() => markFinished(e, true)}
+                                                disabled={busy !== null}
+                                                className={`${secondary} ml-auto`}
+                                                title="Move it to Finished, when it is on YouTube and its shorts are done"
+                                            >
+                                                {busy === `finished:${e.id}` ? "Moving…" : "Finished ✓"}
+                                            </button>
+                                        )}
+                                    </div>
+                                </EpisodeCard>
+                            );
+                        })}
+                    </Column>
+
+                    {/* Drive: Backlog and To Process, unchanged. */}
+                    {data?.useDrive !== false && (
+                        <div className="grid gap-4 md:grid-cols-2">
+                            <Column title="Backlog" count={data?.backlog.length ?? 0} hint="Drag to set the order. The top one goes next.">
+                                <button
+                                    onClick={() => queue()}
+                                    disabled={busy !== null || !data?.backlog.length}
+                                    className={`${primary} self-start`}
+                                >
+                                    {busy === "queue:next" ? "Moving…" : "Queue next"}
+                                </button>
+                                {data && !data.backlog.length && <Empty>Nothing in 00 Backlog.</Empty>}
+                                <ol className="flex flex-col gap-2">
+                                    {data?.backlog.map((v, i) => (
+                                        <li
+                                            key={v.id}
+                                            draggable
+                                            onDragStart={() => { dragFrom.current = i; }}
+                                            onDragOver={e => e.preventDefault()}
+                                            onDrop={() => { if (dragFrom.current !== null) move(dragFrom.current, i); dragFrom.current = null; }}
+                                            className={`${card} flex items-center gap-2 cursor-grab active:cursor-grabbing`}
+                                        >
+                                            <span className="text-gray-500 text-xs w-5 shrink-0">{i + 1}</span>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-sm break-words">{v.name}</p>
+                                                <p className="text-xs text-gray-500">{megabytes(v.sizeBytes)}</p>
+                                            </div>
+                                            <div className="flex flex-col shrink-0">
+                                                <button onClick={() => move(i, i - 1)} disabled={i === 0} className="text-gray-400 hover:text-white disabled:opacity-20 px-1" aria-label="Move up">▲</button>
+                                                <button onClick={() => move(i, i + 1)} disabled={i === data.backlog.length - 1} className="text-gray-400 hover:text-white disabled:opacity-20 px-1" aria-label="Move down">▼</button>
+                                            </div>
+                                            <button onClick={() => queue(v.id)} disabled={busy !== null} className={secondary}>
+                                                {busy === `queue:${v.id}` ? "…" : "Queue"}
+                                            </button>
+                                        </li>
+                                    ))}
+                                </ol>
+                            </Column>
+
+                            <Column title="To Process" count={data?.toProcess.length ?? 0} hint="Waiting in 01 To Process. Nothing starts on its own: press Process now when you are ready to work on them.">
+                                <button
+                                    onClick={() => processNow()}
+                                    disabled={busy !== null || running || !data?.toProcess.length}
+                                    className={`${primary} self-start`}
+                                    title={data?.toProcess.length ? "" : "Nothing in To Process"}
+                                >
+                                    {busy === "process" ? "Starting…" : running ? "Processing…" : "Process now"}
+                                </button>
+                                {data && !data.toProcess.length && <Empty>Nothing waiting.</Empty>}
+                                {data?.toProcess.map(v => (
+                                    <div key={v.id} className={card}>
+                                        <p className="text-sm break-words">{v.name}</p>
+                                        <p className="text-xs text-gray-500">{megabytes(v.sizeBytes)} · added {ago(v.addedAt)}</p>
+                                    </div>
+                                ))}
+                            </Column>
+                        </div>
+                    )}
+
+                    {/* Finished: folded at the bottom, opened to see what is done. */}
+                    <details className="bg-[#1E1035]/30 border border-white/5 rounded-2xl p-4">
+                        <summary className="font-semibold text-gray-100 cursor-pointer">
+                            Finished {finished.length > 0 && <span className="text-gray-500 font-normal">{finished.length}</span>}
+                        </summary>
+                        <div className="flex flex-col gap-3 mt-3">
+                            {finished.length === 0 && <Empty>None yet. Press Finished on an episode when it is on YouTube and its shorts are done.</Empty>}
                             {finished.map(e => (
                                 <EpisodeCard key={e.id} e={e}>
                                     <p className="text-xs text-emerald-300 mt-2">✓ Finished {ago(e.finished!.at)} by {e.finished!.by}</p>
@@ -374,13 +381,13 @@ export default function PodcastStudioPage() {
                                         <Link href={`/admin/podcast/${e.id}/notes`} className={secondary}>Show notes</Link>
                                         {e.youtubeUrl && <a href={e.youtubeUrl} target="_blank" rel="noreferrer" className={secondary}>On YouTube ↗</a>}
                                         <button onClick={() => markFinished(e, false)} disabled={busy !== null} className={`${secondary} ml-auto`}>
-                                            {busy === `finished:${e.id}` ? "Moving…" : "Back to Accepted"}
+                                            {busy === `finished:${e.id}` ? "Moving…" : "Back to the list"}
                                         </button>
                                     </div>
                                 </EpisodeCard>
                             ))}
-                        </Column>
-                    </div>
+                        </div>
+                    </details>
 
                     <SetupCheck />
                 </div>
