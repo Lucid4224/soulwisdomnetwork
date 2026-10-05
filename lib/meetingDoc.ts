@@ -11,7 +11,8 @@ function esc(text: string): string {
 }
 
 // One paragraph in the document body, with an optional style.
-function para(text: string, style?: string): string {
+// Shared with the transcript download, lib/transcriptExport.ts.
+export function para(text: string, style?: string): string {
     return style
         ? `<w:p><w:pPr><w:pStyle w:val="${style}"/></w:pPr><w:r><w:t xml:space="preserve">${esc(text)}</w:t></w:r></w:p>`
         : `<w:p><w:r><w:t xml:space="preserve">${esc(text)}</w:t></w:r></w:p>`;
@@ -57,6 +58,11 @@ export function meetingDocx(m: {
         }
     }
 
+    return wordFile(body);
+}
+
+// A Word .docx from paragraphs made with para(), US Letter, 1 inch margins, Calibri 11.
+export function wordFile(body: string[]): Uint8Array {
     const documentXml =
         `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n` +
         `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">` +

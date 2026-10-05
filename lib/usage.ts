@@ -31,6 +31,7 @@ const ITEMS: { test: RegExp; label: string; service: string }[] = [
     { test: /^thumbnail_text$/, label: 'Thumbnail texts', service: 'Anthropic (Claude)' },
     { test: /^shorts_titles$/, label: 'Shorts headlines and titles', service: 'Anthropic (Claude)' },
     { test: /^shorts_pick$/, label: "Claude's picks for Shorts", service: 'Anthropic (Claude)' },
+    { test: /^writing_extras$/, label: 'Social posts and follow-up email', service: 'Anthropic (Claude)' },
     { test: /^broll_\d+$/, label: 'B-roll images', service: 'OpenAI' },
     { test: /^thumbnail_image$/, label: 'Thumbnail AI background', service: 'OpenAI' },
 ];

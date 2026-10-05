@@ -8,6 +8,7 @@ import type { ShortAspect, ShortEdit, ShortRenderInputs } from '@/lib/shorts';
 import type { ReviewUtterance } from '@/lib/transcript';
 import type { ThumbKind } from '@/lib/thumbnail';
 import type { YoutubeMetadata } from '@/lib/youtube';
+import type { Extras } from '@/lib/extras';
 import type { DetectedSpeaker, EpisodeBroll, EpisodeDescript, EpisodeFinal, EpisodePackage, EpisodeNotes, EpisodeStage, EpisodeShorts, EpisodeStatus, EpisodeThumbnails, EpisodeYoutube, TranscriptCorrections } from './episode';
 
 export interface DriveVideo {
@@ -81,6 +82,15 @@ export interface EpisodeReview {
     knownNames: string[];          // offered when renaming a voice
     // How far the episode has got after speaker review (lib/server/pipeline.ts episodeProgress).
     progress: EpisodeProgress;
+}
+
+// The social posts and follow-up email on the show notes page.
+export interface ExtrasView {
+    status: 'queued' | 'working' | 'ready' | 'failed' | null;
+    error: string | null;
+    direction: string;
+    result: Extras | null;
+    generatedAt: number | null;
 }
 
 // GET /api/studio/episodes/[id]/notes: the Checkpoint B page.

@@ -1,4 +1,5 @@
 // Spec 005 step 5: draft the show notes for one episode from its accepted transcript.
+// The same run also writes the social posts and follow-up email when those were asked for.
 // Runs in GitHub Actions (.github/workflows/podcast_notes.yml), started by the Podcast
 // Studio when a transcript is accepted or a producer asks for new notes.
 // docs/specs/007-show-notes.md
@@ -10,6 +11,7 @@ import { getStorage } from 'firebase-admin/storage';
 import { mmss, mergeRedraft, parseShowNotes, redraftDirection } from '../../../lib/showNotes';
 import type { Episode } from '../../../types/episode';
 import { loadAlert } from './config';
+import { writeExtras } from './extras';
 import { draftNotes, NOTES_EFFORT, NOTES_MODEL, type ReviewedLine } from './notesDraft';
 import { describeError, failureSubject, sendEmail } from './notify';
 import { loadSettings, storageBucket } from './settings';
@@ -28,10 +30,13 @@ const serviceAccount = JSON.parse(required('PODCAST_SA_JSON'));
 initializeApp({ credential: cert(serviceAccount), storageBucket: storageBucket(serviceAccount) });
 const ref = getFirestore().collection('episodes').doc(episodeId);
 let approved = false;   // never overwrite approved notes, even to record a failure
+let extrasRun = false;  // the extras run, so the catch handler knows which failure to record
 
 async function main() {
     const episode = (await ref.get()).data() as Episode | undefined;
     if (!episode) throw new Error(`Episode ${episodeId} not found`);
+    // Notes waiting to be drafted go first; the other run started does the extras.
+    if (episode.extras?.status === 'queued' && episode.notes?.status !== 'queued') return runExtras(episode);
     const reviewedPath = episode.review?.reviewedPath;
     if (episode.status !== 'speakers_confirmed' || !reviewedPath) {
         throw new Error('The transcript has not been accepted yet');
@@ -93,9 +98,39 @@ async function main() {
     ].join('\n'));
 }
 
+// Writes the social posts and follow-up email when the producer asked for them; the notes are already approved.
+async function runExtras(episode: Episode) {
+    extrasRun = true;
+    await ref.update({
+        'extras.status': 'working',
+        'extras.startedAt': FieldValue.serverTimestamp(),
+        'extras.error': null,
+        updatedAt: FieldValue.serverTimestamp(),
+    });
+    const client = new Anthropic({ apiKey: required('ANTHROPIC_API_KEY') });
+    const settings = await loadSettings(getFirestore());
+    const { extras, usd } = await writeExtras(client, episode, settings);
+    await ref.update({
+        'extras.status': 'ready',
+        'extras.result': extras,
+        'extras.generatedAt': FieldValue.serverTimestamp(),
+        'extras.error': null,
+        'costs.items': FieldValue.arrayUnion({ item: 'writing_extras', usd, at: new Date() }),
+        'costs.totalUsd': FieldValue.increment(usd),
+        updatedAt: FieldValue.serverTimestamp(),
+    });
+}
+
 main().catch(async error => {
     const message = (error as Error).message;
     console.error(`❌ ${message}`);
+    if (extrasRun) {
+        await ref.update({ 'extras.status': 'failed', 'extras.error': message, updatedAt: FieldValue.serverTimestamp() })
+            .catch(() => {});
+        await sendEmail({ alert }, failureSubject(`Social posts failed: ${episodeId}`, message),
+            `The social posts and follow-up email could not be written.\n\n${describeError(message)}\n\nTry again from the show notes page.${runUrl ? `\n\nRun log: ${runUrl}` : ''}`);
+        process.exit(1);
+    }
     if (!approved) {
         await ref.update({ 'notes.status': 'failed', 'notes.error': message, updatedAt: FieldValue.serverTimestamp() })
             .catch(() => {});

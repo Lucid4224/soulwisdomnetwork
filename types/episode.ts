@@ -5,6 +5,7 @@ import type { ShowNotes } from '../lib/showNotes';
 import type { RedraftScope } from '../lib/showNotes';
 import type { ThumbKind } from '../lib/thumbnail';
 import type { EpisodeEdit } from '../lib/edit';
+import type { Extras } from '../lib/extras';
 
 // Firestore `episodes/{driveFileId}` — written by agent/src/podcast/ingest.ts via the
 // Admin SDK. See docs/specs/005-podcast-production-pipeline.md, steps 1-3.
@@ -295,6 +296,17 @@ export interface EpisodeShorts {
     direction?: string | null;            // the producer's direction for the last picks
 }
 
+// Social posts and follow-up email Claude writes from the approved show notes.
+export interface EpisodeExtras {
+    status: 'queued' | 'working' | 'ready' | 'failed';
+    requestedAt?: unknown;
+    startedAt?: unknown;
+    generatedAt?: unknown;
+    error?: string | null;
+    direction?: string;
+    result?: Extras | null;
+}
+
 export interface Episode {
     title: string;                        // from the file name, Zoom prefix stripped
     recordedAt: string | null;            // ISO date from a Zoom file name, if present
@@ -346,6 +358,7 @@ export interface Episode {
     approval?: EpisodeApproval;           // Checkpoint D
     youtube?: EpisodeYoutube;             // the upload, spec 005 step 13
     shorts?: EpisodeShorts;               // shorts and Checkpoint E, spec 005 step 14
+    extras?: EpisodeExtras;                // social posts and follow-up email from the approved notes
     corrections?: TranscriptCorrections;  // speaker review fixes, a layer over raw.json
     correctionsVersion?: number;          // bumped on every save; stops two people overwriting
     costs: { items: CostItem[]; totalUsd: number };

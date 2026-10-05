@@ -27,6 +27,7 @@ import { useAuth } from "@/context/AuthContext";
 import { BROLL_STYLE_IDS, BROLL_STYLES, BROLL_USD_PER_IMAGE, type BrollStyle } from "@/lib/broll";
 import { chooseDescription, locate, mmss, notesChanges, sameNotes, youtubeDescription, type ShowNotes, type TeaserClip } from "@/lib/showNotes";
 import { meetingDocx } from "@/lib/meetingDoc";
+import { TranscriptDownloads, WritingExtras } from "@/components/studio/extras";
 import { studioFetch } from "@/lib/studioClient";
 import type { EpisodeNotesView } from "@/types/studio";
 import { Editor } from "@/components/studio/editor";
@@ -624,6 +625,8 @@ export default function ShowNotesPage() {
             onRestore={() => restore(madeFrom.version, !!madeFrom.notes)} />
     );
     const upToDate = status === "approved" && !!approved && !notesChanged;
+    // A meeting: the format says so, or the notes have decisions or action items.
+    const meeting = settings?.format === "meeting" || (notes?.decisions?.length ?? 0) > 0 || (notes?.actionItems?.length ?? 0) > 0;
     // Images are made from the approved ideas, so only offered when the page shows exactly those.
     const brollChanged = brollPending ?? 0;
     const brollBlocked = !upToDate || broll.working || broll.starting;
@@ -640,6 +643,8 @@ export default function ShowNotesPage() {
         ["notes-chapters", "Chapters", `${notes.chapters.length}`],
         ["notes-quotes", "Key quotes", `${notes.quotes.length}`],
         ["notes-tags", "Tags"],
+        ["notes-extras", "Social posts"],
+        ["notes-downloads", "Downloads"],
     ] : [];
     const stageProps = (id: StageId) => {
         const s = stages.find(x => x.id === id) ?? { ...STAGES.find(x => x.id === id)!, n: 0, status: "waiting" as const, summary: "", links: [] };
@@ -999,6 +1004,19 @@ export default function ShowNotesPage() {
                                                     />
                                                 </label>
                                             ))}
+                                        </Part>
+
+                                        {/* Social posts and follow-up email from the approved notes */}
+                                        <Part id="notes-extras" title={meeting ? "Social posts and follow-up email" : "Social posts"}
+                                            hint="Claude writes a LinkedIn post, an Instagram caption and a post for X from the approved notes, each ready to copy.">
+                                            {upToDate
+                                                ? <WritingExtras episodeId={episodeId} meeting={meeting} />
+                                                : <p className={small}>Approve the show notes first; the posts are written from them.</p>}
+                                        </Part>
+
+                                        {/* The accepted transcript as Word, plain text and captions */}
+                                        <Part id="notes-downloads" title="Transcript downloads" hint="The accepted transcript, with times from the original recording.">
+                                            <TranscriptDownloads title={view.title} words={view.words} />
                                         </Part>
                                     </div>
                                     <div className="flex flex-col gap-3 border-t border-white/5 pt-4">
