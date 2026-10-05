@@ -10,6 +10,7 @@ import { spawn } from 'child_process';
 import { keepRanges, editedDuration, editedTime, editedWords, applyToChapters, applyToQuotes, type EpisodeEdit } from '../../../lib/edit';
 import { buildCues, toSrt } from '../../../lib/captions';
 import { kenBurns, normalizeLoudness, probeDuration } from './media';
+import { musicMix } from '../../../lib/aiMedia';
 
 // ─── helpers ───────────────────────────────────────────────────────────────
 
@@ -46,7 +47,7 @@ function audioFilter(clean: string, noiseModel: string | undefined, segDur: numb
 
 // ─── types ──────────────────────────────────────────────────────────────────
 
-interface BrollArg { atMs: number; seconds: number; image: string }
+interface BrollArg { atMs: number; seconds: number; image: string; video?: string }
 
 interface RenderReport {
     inputSeconds: number;
@@ -70,6 +71,8 @@ export async function renderEdit(opts: {
     detect?: 'auphonic';
     noiseModel?: string;
     blockMinutes?: number;
+    // Background music under the episode (Part H): looped, quietened to volumeDb and ducked under speech.
+    music?: { file: string; volumeDb: number };
     // The accepted transcript and show-note times, when known: their new times are written
     // next to the output, so the final cut never has to be transcribed again.
     words?: { text: string; start: number; end: number }[];
@@ -108,14 +111,16 @@ export async function renderEdit(opts: {
     // Pre-render b-roll clips with kenBurns to temp files.
     const tmpDir = path.join(path.dirname(opts.out), `_broll_${Date.now()}`);
     const brollFiles: string[] = [];
+    if (opts.broll || opts.music) fs.mkdirSync(tmpDir, { recursive: true });
     if (opts.broll) {
-        fs.mkdirSync(tmpDir, { recursive: true });
         for (let i = 0; i < opts.broll.length; i++) {
             const b = opts.broll[i];
             const editedAt = editedTime(b.atMs, ranges, true);
             if (editedAt === null) { brollFiles.push(''); continue; }
             const brollOut = path.join(tmpDir, `broll_${i}.mp4`);
-            await kenBurns(b.image, brollOut, b.seconds, 'in', 30);
+            // An AI video clip fills the frame for the moment's length; a still gets the slow zoom.
+            if (b.video) await fitClip(b.video, brollOut, b.seconds);
+            else await kenBurns(b.image, brollOut, b.seconds, 'in', 30);
             brollFiles.push(brollOut);
         }
     }
@@ -219,6 +224,15 @@ export async function renderEdit(opts: {
         const episodeAudioIdx = (!useBlocks && cleanedAudio) ? (inputs.push(cleanedAudio), idx++) : episodeIdx;
         const brollIdxs: number[] = [];
         for (const bf of brollFiles) { if (bf) { inputs.push(bf); brollIdxs.push(idx++); } else brollIdxs.push(-1); }
+        // The music bed, looped to the edited episode's length so it never runs out.
+        let musicIdx = -1;
+        if (opts.music) {
+            const bed = path.join(tmpDir, 'music_bed.wav');
+            await run('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', '-stream_loop', '-1', '-i', opts.music.file,
+                '-t', Math.max(0.1, editedMs / 1000).toFixed(3), '-ar', '48000', '-ac', '2', '-c:a', 'pcm_s16le', bed]);
+            inputs.push(bed);
+            musicIdx = idx++;
+        }
 
         let filter = '';
 
@@ -297,7 +311,9 @@ export async function renderEdit(opts: {
         const allA: string[] = [];
         for (let i = 0; i < teaserLabels.length; i += 2) { allV.push(teaserLabels[i]); allA.push(teaserLabels[i + 1]); }
         if (introIdx >= 0) { allV.push('intv'); allA.push('inta'); }
-        allV.push(epV); allA.push('epa');
+        // With music, the episode's sound is the mix of speech and the ducked music bed.
+        if (musicIdx >= 0) filter += musicMix(musicIdx, opts.music!.volumeDb);
+        allV.push(epV); allA.push(musicIdx >= 0 ? 'epm' : 'epa');
         if (outroIdx >= 0) { allV.push('outv'); allA.push('outa'); }
         const finalInterleave: string[] = [];
         for (let i = 0; i < allV.length; i++) { finalInterleave.push(allV[i]); finalInterleave.push(allA[i]); }
@@ -353,6 +369,14 @@ export async function renderEdit(opts: {
         try { fs.rmSync(tmpDir, { recursive: true }); } catch {}
         if (blockDir) { try { fs.rmSync(blockDir, { recursive: true }); } catch {} }
     }
+}
+
+// An AI video clip as b-roll: filled and cropped to 1920x1080 at 30 fps, without sound, exactly
+// `seconds` long (looped when the clip is shorter).
+async function fitClip(input: string, output: string, seconds: number) {
+    await run('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', '-stream_loop', '-1', '-i', input, '-t', seconds.toFixed(3),
+        '-vf', 'scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,fps=30,format=yuv420p',
+        '-an', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '18', output]);
 }
 
 // ─── command line ────────────────────────────────────────────────────────────

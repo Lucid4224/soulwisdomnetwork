@@ -55,6 +55,8 @@ jobs:
         EPISODE_ID: ${{ inputs.episode_id }}
         PODCAST_SA_JSON: ${{ secrets.PODCAST_SA_JSON }}
         RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+        # Part H: composes background music when the Studio settings ask for it (optional secret).
+        ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
         ALERT_EMAIL: ${{ vars.ALERT_EMAIL }}
         DRIVE_PROCESSED_FOLDER_ID: ${{ vars.DRIVE_PROCESSED_FOLDER_ID }}
         DRIVE_FINAL_FOLDER_ID: ${{ vars.DRIVE_FINAL_FOLDER_ID }}

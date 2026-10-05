@@ -4,11 +4,14 @@
 //
 // BROLL_INDEX set: regenerate that one image. Unset: generate every image that is missing
 // or whose idea or style has changed since it was made, and drop images for ideas that were removed.
+// With "AI video clips" on in the Studio settings (Part H), each moment also gets a Sora video clip,
+// made with the same OPENAI_API_KEY; a clip that fails leaves the still in its place.
 
 import OpenAI from 'openai';
 import { cert, initializeApp } from 'firebase-admin/app';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
+import { SORA_MODEL, SORA_SIZE, soraSeconds, soraUsd, videoPrompt } from '../../../lib/aiMedia';
 import { BROLL_MODEL, BROLL_QUALITY, BROLL_SIZE, BROLL_USD_PER_IMAGE, brollPrompt, type BrollStyle } from '../../../lib/broll';
 import type { BrollImage, Episode } from '../../../types/episode';
 import { loadAlert } from './config';
@@ -17,6 +20,8 @@ import { loadSettings, storageBucket } from './settings';
 
 // Images at once; each takes up to a minute or two.
 const PARALLEL = 3;
+// How long to wait for one Sora clip, checking every 10 seconds.
+const VIDEO_WAIT_MS = 12 * 60_000;
 
 function required(name: string) {
     const value = process.env[name];
@@ -39,7 +44,7 @@ const failureEmail = (message: string, what: string) => sendEmail({ alert }, fai
 
 async function main() {
     // The Studio settings' image style, in place of the built-in brand style when set.
-    const { imageStyle } = await loadSettings(getFirestore());
+    const { imageStyle, brollVideo } = await loadSettings(getFirestore());
     const episode = (await ref.get()).data() as Episode | undefined;
     if (!episode) throw new Error(`Episode ${episodeId} not found`);
     const ideas = episode.notes?.status === 'approved' ? episode.notes.approved?.broll ?? [] : [];
@@ -52,7 +57,8 @@ async function main() {
     const todo = only !== null
         ? [only]
         : ideas.map((_, i) => i).filter(i =>
-            existing[i]?.idea !== ideas[i].idea.trim() || (existing[i]?.style ?? 'photo') !== styleOf(i));
+            existing[i]?.idea !== ideas[i].idea.trim() || (existing[i]?.style ?? 'photo') !== styleOf(i)
+            || (brollVideo && !existing[i]?.videoPath));
     const removed = only === null ? Object.keys(existing).filter(k => Number(k) >= ideas.length) : [];
 
     await ref.update({
@@ -91,10 +97,53 @@ async function main() {
                 updatedAt: FieldValue.serverTimestamp(),
             });
             console.log(`  ✅ ${i + 1} (${style}): ${idea.idea.slice(0, 70)}`);
+            if (brollVideo) await makeClip(i, prompt, idea.durationSeconds);
         } catch (error) {
             const message = (error as Error).message;
             console.error(`  ❌ ${i + 1}: ${message}`);
             failures.push(`Image ${i + 1}: ${message}`);
+        }
+    }
+
+    // One Sora clip for moment i: create, wait until it is done, download, save beside the still.
+    // A failure is recorded on the image and the still stays in use.
+    async function makeClip(i: number, stillPrompt: string, durationSeconds: number) {
+        const key = required('OPENAI_API_KEY');
+        const seconds = soraSeconds(durationSeconds);
+        try {
+            const form = new FormData();
+            form.append('model', SORA_MODEL);
+            form.append('prompt', videoPrompt(stillPrompt));
+            form.append('seconds', String(seconds));
+            form.append('size', SORA_SIZE);
+            const created = await fetch('https://api.openai.com/v1/videos', { method: 'POST', headers: { Authorization: `Bearer ${key}` }, body: form });
+            if (!created.ok) throw new Error(`Sora answered ${created.status}: ${(await created.text()).slice(0, 200)}`);
+            let job = await created.json() as { id: string; status: string; error?: { message?: string } };
+            const until = Date.now() + VIDEO_WAIT_MS;
+            while (job.status === 'queued' || job.status === 'in_progress') {
+                if (Date.now() > until) throw new Error('Sora took too long');
+                await new Promise(r => setTimeout(r, 10_000));
+                const polled = await fetch(`https://api.openai.com/v1/videos/${job.id}`, { headers: { Authorization: `Bearer ${key}` } });
+                if (!polled.ok) throw new Error(`Sora answered ${polled.status}`);
+                job = await polled.json() as typeof job;
+            }
+            if (job.status !== 'completed') throw new Error(job.error?.message ?? `Sora ended ${job.status}`);
+            const content = await fetch(`https://api.openai.com/v1/videos/${job.id}/content`, { headers: { Authorization: `Bearer ${key}` } });
+            if (!content.ok) throw new Error(`The clip could not be downloaded (${content.status})`);
+            const videoPath = `episodes/${episodeId}/broll/${String(i + 1).padStart(2, '0')}-${Date.now()}.mp4`;
+            await bucket.file(videoPath).save(Buffer.from(await content.arrayBuffer()), { contentType: 'video/mp4', resumable: false });
+            const usd = soraUsd(seconds);
+            await ref.update({
+                [`broll.images.${i}.videoPath`]: videoPath, [`broll.images.${i}.videoUsd`]: usd, [`broll.images.${i}.videoError`]: null,
+                'costs.items': FieldValue.arrayUnion({ item: `broll_video_${i + 1}`, usd, at: new Date() }),
+                'costs.totalUsd': FieldValue.increment(usd),
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+            console.log(`  🎬 ${i + 1}: ${seconds}s clip`);
+        } catch (error) {
+            const message = (error as Error).message;
+            console.error(`  ⚠️ clip ${i + 1}: ${message}`);
+            await ref.update({ [`broll.images.${i}.videoError`]: message }).catch(() => {});
         }
     }
 

@@ -198,6 +198,48 @@ export default function StudioSettingsPage() {
                                     <textarea className={`${field} min-h-24`} value={s.imageStyle} onChange={e => set("imageStyle", e.target.value)} disabled={off} maxLength={1500}
                                         placeholder="e.g. Clean, bright, modern office photography, soft daylight, blue and white palette." />
                                 </Field>
+                                {/* Part H: also make each b-roll moment as an AI video clip (OpenAI Sora). */}
+                                <label className="flex items-start gap-2 text-sm text-gray-200">
+                                    <input type="checkbox" checked={s.brollVideo} onChange={e => set("brollVideo", e.target.checked)} disabled={off} className="mt-1" />
+                                    <span>Also make each b-roll moment as an AI video clip (OpenAI Sora)<span className={`block ${hint}`}>About $0.80 for an 8-second clip, on the OpenAI key; the account needs at least $10 of API credit for Sora. The Editor Light render uses the clip in place of the still; if a clip fails, the still is used.</span></span>
+                                </label>
+                            </Section>
+
+                            {/* Part H: background music for the Editor Light render. */}
+                            <Section title="Background music" intro="Plays quietly under the episode in the Editor Light render and dips whenever someone speaks. Teasers, intro and outro keep their own sound.">
+                                <div className="flex flex-col gap-2">
+                                    <Choice name="music" value="none" current={s.music} label="No music" disabled={off} onPick={() => set("music", "none")} />
+                                    <Choice name="music" value="upload" current={s.music} label="My own music track" disabled={off} onPick={() => set("music", "upload")} />
+                                    <Choice name="music" value="generate" current={s.music} label="Music composed by AI (ElevenLabs)" disabled={off} onPick={() => set("music", "generate")} />
+                                </div>
+                                {s.music === "upload" && (
+                                    <div className="flex flex-col gap-2 pl-6">
+                                        {s.musicPath && <p className={hint}>A track is uploaded. Use music you have the rights to; YouTube may claim music that is not yours.</p>}
+                                        {isAdmin && (
+                                            <UploadAsset kind="music" label={s.musicPath ? "Replace the track (MP3, M4A or WAV)" : "Upload a track (MP3, M4A or WAV)"}
+                                                accept="audio/mpeg,audio/mp4,audio/x-m4a,audio/wav,audio/aac"
+                                                onUploaded={p => { set("musicPath", p); setNotice("Track uploaded. Press Save to use it."); }} />
+                                        )}
+                                    </div>
+                                )}
+                                {s.music === "generate" && (
+                                    <div className="flex flex-col gap-2 pl-6">
+                                        <Field label="What the music should sound like" help="Composed as an instrumental, three minutes long, looped under the episode. It needs the ELEVENLABS_API_KEY secret in GitHub; without it the render has no music and says so.">
+                                            <textarea className={`${field} min-h-24`} value={s.musicPrompt} onChange={e => set("musicPrompt", e.target.value)} disabled={off} maxLength={500} />
+                                        </Field>
+                                    </div>
+                                )}
+                                {s.music !== "none" && (
+                                    <Field label="How loud the music is" help="How far under the voice it sits. -24 dB is a gentle bed.">
+                                        <select value={s.musicVolumeDb} onChange={e => set("musicVolumeDb", Number(e.target.value))} disabled={off} className={field}>
+                                            <option value={-30}>-30 dB</option>
+                                            <option value={-27}>-27 dB</option>
+                                            <option value={-24}>-24 dB (suggested)</option>
+                                            <option value={-21}>-21 dB</option>
+                                            <option value={-18}>-18 dB</option>
+                                        </select>
+                                    </Field>
+                                )}
                             </Section>
 
                             <Section title="Finished video" intro="What plays around the episode, and who makes the final cut.">

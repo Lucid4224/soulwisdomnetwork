@@ -5,6 +5,7 @@
 // comes from. Shared by the Studio pages, the server routes and the GitHub Actions jobs.
 
 import { z } from 'zod';
+import { DEFAULT_MUSIC_PROMPT, MUSIC_MODES } from './aiMedia';
 
 export const SETTINGS_DOC = { collection: 'settings', id: 'studio' } as const;
 
@@ -37,6 +38,11 @@ export const StudioSettingsSchema = z.object({
     colors: z.object({ background: hex, backgroundBottom: hex, accent: hex }),
     logoPath: z.string().max(300).nullable(),     // Cloud Storage; null uses the site's logo
     imageStyle: z.string().trim().max(1500),      // AI image look; empty keeps the built-in Soul Wisdom styles
+    brollVideo: z.boolean(),                      // also make each b-roll moment as an AI video clip (OpenAI Sora)
+    music: z.enum(MUSIC_MODES),                   // background music: none, an uploaded track, or composed by ElevenLabs
+    musicPath: z.string().max(300).nullable(),    // Cloud Storage, when music is 'upload'
+    musicPrompt: z.string().trim().max(500),      // what ElevenLabs composes, when music is 'generate'
+    musicVolumeDb: z.number().int().min(-40).max(-6),   // how far under the voice the music sits
     intro: z.enum(['show', 'custom', 'none']),    // the show's intro (also the outro), your own, or none
     introPath: z.string().max(300).nullable(),    // Cloud Storage, when intro is 'custom'
     teasers: z.boolean(),                         // "In this episode" clips before the intro
@@ -63,6 +69,11 @@ export const DEFAULT_SETTINGS: StudioSettings = {
     colors: { background: '#140a2e', backgroundBottom: '#2a1552', accent: '#f7c65b' },
     logoPath: null,
     imageStyle: '',
+    brollVideo: false,
+    music: 'none',
+    musicPath: null,
+    musicPrompt: DEFAULT_MUSIC_PROMPT,
+    musicVolumeDb: -24,
     intro: 'show',
     introPath: null,
     teasers: true,

@@ -31,6 +31,8 @@ export interface EditRenderDeps {
     showIntro?: string;                  // the show's intro in the repository, when there is no edit package
     // Cuts a plain teaser clip from the recording, when there is no edit package to take clips from.
     cutClip?: (input: string, output: string, startSeconds: number, durationSeconds: number) => Promise<void>;
+    // Composes the background music (ElevenLabs) into `dest`, when the settings ask for generated music.
+    makeMusic?: (prompt: string, dest: string) => Promise<void>;
 }
 
 export interface EditRenderPlan {
@@ -40,7 +42,9 @@ export interface EditRenderPlan {
     teaserClips: { startMs: number; endMs: number }[];   // to cut from the recording when there is no package
     intro: string | null;                // Storage path; also closes the episode as the outro
     showIntro: boolean;                  // use the show's intro from the repository (no package)
-    broll: { atMs: number; seconds: number; image: string }[];   // image = Storage path
+    broll: { atMs: number; seconds: number; image: string; video?: string }[];   // Storage paths; video when an AI clip was made
+    // Background music (Part H): an uploaded track, or a prompt to compose one; null for none.
+    music: { path: string | null; prompt: string | null; volumeDb: number } | null;
     wordsPath: string | null;            // reviewed transcript, Storage path
     chapters: { title: string; startMs: number }[];
     quotes: { text: string; speaker: string; startMs: number; endMs: number }[];
@@ -84,7 +88,9 @@ export function planEditRender(episode: Episode, settings: StudioSettings = DEFA
         teaserClips,
         intro,
         showIntro,
-        broll: images.map(i => ({ atMs: i.startMs, seconds: i.durationSeconds, image: i.path })),
+        broll: images.map(i => ({ atMs: i.startMs, seconds: i.durationSeconds, image: i.path, ...(i.videoPath ? { video: i.videoPath } : {}) })),
+        music: settings.music === 'upload' && settings.musicPath ? { path: settings.musicPath, prompt: null, volumeDb: settings.musicVolumeDb }
+            : settings.music === 'generate' ? { path: null, prompt: settings.musicPrompt, volumeDb: settings.musicVolumeDb } : null,
         wordsPath: episode.review?.reviewedPath ?? null,
         chapters: notes?.chapters ?? [],
         quotes: (notes?.quotes ?? []).filter(q => q.endMs > q.startMs)
@@ -129,8 +135,25 @@ export async function runEditRender(episodeId: string, deps: EditRenderDeps, wor
     }
     const intro = plan.intro ? await get(plan.intro, 'intro')
         : plan.showIntro && deps.showIntro && fs.existsSync(deps.showIntro) ? deps.showIntro : undefined;
-    const broll: { atMs: number; seconds: number; image: string }[] = [];
-    for (const [i, b] of plan.broll.entries()) broll.push({ ...b, image: await get(b.image, `broll-${i + 1}`) });
+    const broll: { atMs: number; seconds: number; image: string; video?: string }[] = [];
+    for (const [i, b] of plan.broll.entries()) {
+        broll.push({ ...b, image: await get(b.image, `broll-${i + 1}`), ...(b.video ? { video: await get(b.video, `broll-video-${i + 1}`) } : {}) });
+    }
+    // The music bed: the uploaded track, or one composed now; a failure leaves the episode without music.
+    let music: { file: string; volumeDb: number } | undefined;
+    if (plan.music?.path) music = { file: await get(plan.music.path, 'music'), volumeDb: plan.music.volumeDb };
+    else if (plan.music?.prompt !== undefined && plan.music?.prompt !== null) {
+        if (!deps.makeMusic) plan.warnings.push('Music is set to be composed, but this run cannot compose it, so the episode has no music.');
+        else {
+            const file = path.join(workDir, 'music.mp3');
+            try {
+                await deps.makeMusic(plan.music.prompt, file);
+                music = { file, volumeDb: plan.music.volumeDb };
+            } catch (error) {
+                plan.warnings.push(`The music could not be composed (${(error as Error).message}), so the episode has no music.`);
+            }
+        }
+    }
     let words: TimedWord[] | undefined;
     if (plan.wordsPath) {
         const local = await get(plan.wordsPath, 'reviewed');
@@ -144,6 +167,7 @@ export async function runEditRender(episodeId: string, deps: EditRenderDeps, wor
         teasers: teasers.length ? teasers : undefined,
         intro, outro: intro,
         broll: broll.length ? broll : undefined,
+        music,
         words, chapters: plan.chapters, quotes: plan.quotes,
     });
 

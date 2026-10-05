@@ -1,4 +1,4 @@
-// Uploads from the Studio: a recording (a new episode), a logo or an intro video. The browser
+// Uploads from the Studio: a recording (a new episode), a logo, an intro video or a music track (Part H). The browser
 // sends the file straight to Cloud Storage through a one-time upload link made here, so nothing
 // in the browser needs Storage access (storage.rules stays closed) and no Drive is involved.
 // A finished recording becomes an episode and the ingest job is started for it, which then
@@ -13,15 +13,19 @@ import { startIngest } from './github';
 import { HttpError } from './staff';
 import { getSettings } from './studioSettings';
 
-export type UploadKind = 'episode' | 'logo' | 'intro';
+export type UploadKind = 'episode' | 'logo' | 'intro' | 'music';
 
-const MAX_BYTES: Record<UploadKind, number> = { episode: 20e9, logo: 5e6, intro: 2e9 };
+const MAX_BYTES: Record<UploadKind, number> = { episode: 20e9, logo: 5e6, intro: 2e9, music: 2e8 };
 const TYPES: Record<UploadKind, RegExp> = {
     episode: /^video\//,
     logo: /^image\/(png|jpeg)$/,
     intro: /^video\/(mp4|quicktime)$/,
+    music: /^audio\/(mpeg|mp4|x-m4a|wav|x-wav|aac)$/,
 };
-const EXT: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'video/mp4': 'mp4', 'video/quicktime': 'mov' };
+const EXT: Record<string, string> = {
+    'image/png': 'png', 'image/jpeg': 'jpg', 'video/mp4': 'mp4', 'video/quicktime': 'mov',
+    'audio/mpeg': 'mp3', 'audio/mp4': 'm4a', 'audio/x-m4a': 'm4a', 'audio/wav': 'wav', 'audio/x-wav': 'wav', 'audio/aac': 'aac',
+};
 
 // Keeps a file name safe as part of a Storage path.
 const safeName = (s: string) => s.replace(/[^\w.\- ]+/g, '-').replace(/\s+/g, ' ').trim().slice(0, 150) || 'recording.mp4';
@@ -37,7 +41,7 @@ export async function startUpload(body: { kind?: string; fileName?: string; cont
     const contentType = String(body.contentType ?? '');
     const size = Number(body.size ?? 0);
     if (!fileName || !TYPES[kind].test(contentType)) {
-        throw new HttpError(400, kind === 'logo' ? 'The logo must be a PNG or JPEG image' : kind === 'intro' ? 'The intro must be an MP4 or MOV video' : 'Choose a video recording (an MP4 from Zoom works)');
+        throw new HttpError(400, kind === 'logo' ? 'The logo must be a PNG or JPEG image' : kind === 'intro' ? 'The intro must be an MP4 or MOV video' : kind === 'music' ? 'The music must be an MP3, M4A, WAV or AAC file' : 'Choose a video recording (an MP4 from Zoom works)');
     }
     if (!(size > 0) || size > MAX_BYTES[kind]) throw new HttpError(400, `That file is too large (the limit is ${MAX_BYTES[kind] / 1e9} GB)`);
     if (!/^https?:\/\/[^/\s]+$/.test(origin)) throw new HttpError(400, 'Upload from the Studio page');

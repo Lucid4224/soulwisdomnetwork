@@ -3,10 +3,12 @@
 // as final.ts does, then hands them to runEditRender in editRenderJob.ts. On failure it
 // marks the render failed and emails the alert address, so the Studio can offer a retry.
 
+import * as fs from 'fs';
 import * as path from 'path';
 import { cert, initializeApp } from 'firebase-admin/app';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
+import { musicRequest } from '../../../lib/aiMedia';
 import { mmss } from '../../../lib/showNotes';
 import type { Episode } from '../../../types/episode';
 import { loadAlert } from './config';
@@ -60,6 +62,15 @@ async function main() {
         settings: await loadSettings(getFirestore()),
         showIntro: path.resolve('assets/podcast/intro.mp4'),
         cutClip: async (input, output, start, seconds) => { await cutClip(input, output, start, seconds, true); },
+        // Background music composed by ElevenLabs (Part H), with the ELEVENLABS_API_KEY secret.
+        makeMusic: async (prompt, dest) => {
+            const key = process.env.ELEVENLABS_API_KEY;
+            if (!key) throw new Error('the ELEVENLABS_API_KEY secret is not set in GitHub');
+            const request = musicRequest(prompt);
+            const res = await fetch(request.url, { method: 'POST', headers: { 'xi-api-key': key, 'Content-Type': 'application/json' }, body: JSON.stringify(request.body) });
+            if (!res.ok) throw new Error(`ElevenLabs answered ${res.status}: ${(await res.text()).slice(0, 200)}`);
+            fs.writeFileSync(dest, Buffer.from(await res.arrayBuffer()));
+        },
     }, workDir);
     const episode = (await ref.get()).data() as Episode;
     console.log(`✅ Rendered ${mmss(result.durationSeconds * 1000)}, ${result.cuts} cuts: ${result.driveUrl}`);

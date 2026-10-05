@@ -102,6 +102,10 @@ export interface BrollImage {
     path: string;                         // Cloud Storage object path, PNG
     usd: number;
     createdAt: unknown;                   // Firestore Timestamp
+    // Part H: the same moment as an AI video clip (OpenAI Sora), when the Studio settings ask for one.
+    videoPath?: string | null;            // Cloud Storage object path, MP4
+    videoUsd?: number;
+    videoError?: string | null;           // the last attempt failed; the still is used meanwhile
 }
 
 export interface EpisodeBroll {

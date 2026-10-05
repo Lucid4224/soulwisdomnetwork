@@ -2,18 +2,19 @@
 
 // Uploads from the Studio (lib/server/uploads.ts): asks the server for a one-time upload link,
 // sends the file straight to Cloud Storage with a progress bar, and, for a recording, turns it
-// into an episode. Used on the Studio page (recordings) and the Settings page (logo, intro).
+// into an episode. Used on the Studio page (recordings) and the Settings page (logo, intro, music).
 
 import { useRef, useState } from "react";
 import { studioFetch } from "@/lib/studioClient";
 import { field, hint, primary, secondary } from "@/components/studio/ui";
 
-type Kind = "episode" | "logo" | "intro";
+type Kind = "episode" | "logo" | "intro" | "music";
 
 // Some browsers leave the type empty for video files; the extension says what it is.
 const BY_EXTENSION: Record<string, string> = {
     mp4: "video/mp4", m4v: "video/mp4", mov: "video/quicktime", webm: "video/webm", mkv: "video/x-matroska",
     png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg",
+    mp3: "audio/mpeg", m4a: "audio/mp4", wav: "audio/wav", aac: "audio/aac",
 };
 const typeOf = (file: File) => file.type || BY_EXTENSION[file.name.split(".").pop()?.toLowerCase() ?? ""] || "";
 
@@ -92,7 +93,7 @@ export function UploadRecording({ onDone }: { onDone: (message: string) => void 
 }
 
 // A logo or intro on the Settings page: uploads and hands back the Storage path to save.
-export function UploadAsset({ kind, label, accept, onUploaded }: { kind: "logo" | "intro"; label: string; accept: string; onUploaded: (path: string) => void }) {
+export function UploadAsset({ kind, label, accept, onUploaded }: { kind: "logo" | "intro" | "music"; label: string; accept: string; onUploaded: (path: string) => void }) {
     const [share, setShare] = useState<number | null>(null);
     const [error, setError] = useState("");
     async function pick(file: File | undefined) {
