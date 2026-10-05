@@ -2,6 +2,8 @@
 // notes page imports it and the full-page editor reuses it with workspace. It loads
 // the edit via GET, saves via PUT with useAutosave, and renders the Editor component.
 // `workspace` is the full-page editor.
+// Part I: it also loads the Studio's captions setting and the overlay image links for the full-page
+// editor, and gives the editor Claude's retakes as a toolbar tool.
 
 "use client";
 
@@ -13,12 +15,62 @@ import { mmss, type SpokenWord } from '@/lib/showNotes';
 import type { EpisodeEdit } from '@/lib/edit';
 import type { EditRenderView } from '@/lib/server/editRender';
 import { studioFetch } from '@/lib/studioClient';
+import type { CaptionChoice } from '@/lib/onScreen';
+import { addRetakes } from '@/lib/retakes';
+import type { StudioSettings } from '@/lib/studioSettings';
+import type { RetakesView } from '@/types/studio';
+
+// Claude's retakes in the toolbar: ask Claude to look, then add what it found as suggested cuts to review.
+function RetakesTool({ episodeId, edit, onAdd }: { episodeId: string; edit: EpisodeEdit; onAdd: (e: EpisodeEdit) => void }) {
+    const [view, setView] = useState<RetakesView | null>(null);
+    const [error, setError] = useState('');
+    const load = useCallback(() => {
+        studioFetch<RetakesView>(`/api/studio/episodes/${episodeId}/retakes`).then(setView).catch(e => setError((e as Error).message));
+    }, [episodeId]);
+    useEffect(() => { load(); }, [load]);
+    const running = view?.status === 'queued' || view?.status === 'working';
+    useEffect(() => {
+        if (!running) return;
+        const timer = setInterval(load, 15_000);
+        return () => clearInterval(timer);
+    }, [running, load]);
+    const start = async () => {
+        setError('');
+        try {
+            await studioFetch(`/api/studio/episodes/${episodeId}/retakes`, { method: 'POST' });
+            load();
+        } catch (e) {
+            setError((e as Error).message);
+        }
+    };
+    const have = new Set(edit.cuts.map(c => `${c.startMs}-${c.endMs}`));
+    const fresh = (view?.found ?? []).filter(r => !have.has(`${r.startMs}-${r.endMs}`));
+    return (
+        <>
+            <button type="button" onClick={() => void start()} disabled={running} className={secondary}
+                title="Claude reads the transcript for false starts and repeated takes (about $0.30)">
+                {running ? 'Claude is looking for retakes…' : view?.status === 'ready' ? 'Look for retakes again' : 'Find retakes with Claude'}
+            </button>
+            {view?.status === 'ready' && fresh.length > 0 && (
+                <button type="button" className={primary} onClick={() => onAdd({ ...edit, cuts: addRetakes(edit.cuts, fresh) })}>
+                    Add {fresh.length} retake{fresh.length === 1 ? '' : 's'} to review
+                </button>
+            )}
+            {view?.status === 'ready' && view.found.length === 0 && <span className={small}>Claude found no retakes.</span>}
+            {view?.status === 'failed' && <span className="text-sm text-red-300">Retakes: {view.error}</span>}
+            {error && <span className="text-sm text-red-300">{error}</span>}
+        </>
+    );
+}
 
 export function EditorLightStage({ episodeId, words, videoUrl, workspace = false }: {
     episodeId: string; words: SpokenWord[]; videoUrl: string; workspace?: boolean;
 }) {
     const [edit, setEdit] = useState<EpisodeEdit>({ cuts: [], version: 0 });
     const [loaded, setLoaded] = useState(false);
+    // Links to the overlay images, and the Studio's captions setting, for the full-page editor's preview.
+    const [overlayUrls, setOverlayUrls] = useState<Record<string, string>>({});
+    const [studioCaptions, setStudioCaptions] = useState<CaptionChoice | undefined>(undefined);
     const { change, reset, flush, saveState, saveError } = useAutosave<EpisodeEdit>(
         async (value, version) => {
             const res = await studioFetch<{ version: number }>(`/api/studio/episodes/${episodeId}/edit`, {
@@ -31,14 +83,23 @@ export function EditorLightStage({ episodeId, words, videoUrl, workspace = false
     );
 
     useEffect(() => {
-        studioFetch<{ edit: EpisodeEdit }>(`/api/studio/episodes/${episodeId}/edit`)
+        studioFetch<{ edit: EpisodeEdit; overlayUrls?: Record<string, string> }>(`/api/studio/episodes/${episodeId}/edit`)
             .then((data) => {
                 setEdit(data.edit);
+                setOverlayUrls(data.overlayUrls ?? {});
                 reset(data.edit.version);
                 setLoaded(true);
             })
             .catch(() => { setLoaded(true); });
     }, [episodeId, reset]);
+
+    // The Studio's captions setting, read once for the full-page editor.
+    useEffect(() => {
+        if (!workspace) return;
+        studioFetch<{ settings: StudioSettings }>('/api/studio/settings')
+            .then(v => setStudioCaptions({ on: v.settings.burnCaptions, style: v.settings.captionStyle }))
+            .catch(() => {});
+    }, [workspace]);
 
     // The render of the saved edit: checked on load and every 15 s while it runs.
     const [render, setRender] = useState<EditRenderView | null>(null);
@@ -88,6 +149,9 @@ export function EditorLightStage({ episodeId, words, videoUrl, workspace = false
             videoUrl={videoUrl}
             edit={edit}
             workspace={workspace}
+            studioCaptions={studioCaptions}
+            overlayUrls={overlayUrls}
+            tools={<RetakesTool episodeId={episodeId} edit={edit} onAdd={e => { setEdit(e); change(e); }} />}
             onChange={(e) => { setEdit(e); change(e); }}
         />
     );

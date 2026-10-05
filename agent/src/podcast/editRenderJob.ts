@@ -9,10 +9,12 @@
 // or none), whether teaser clips play first, and whether this render becomes the episode's
 // final cut in place of Descript's, which the thumbnails, Shorts and YouTube steps then use.
 // With the default settings and a built edit package, it renders exactly as before.
+// Part I: captions (the edit's own choice or the Studio's), text overlays and image overlays go to the renderer.
 
 import * as fs from 'fs';
 import * as path from 'path';
 import type { EpisodeEdit } from '../../../lib/edit';
+import { captionLook, type CaptionStyle, type ImageOverlay, type TextOverlay } from '../../../lib/onScreen';
 import type { TimedWord } from '../../../lib/retime';
 import { DEFAULT_SETTINGS, type StudioSettings } from '../../../lib/studioSettings';
 import type { Episode, EpisodeEditRender } from '../../../types/episode';
@@ -45,6 +47,8 @@ export interface EditRenderPlan {
     broll: { atMs: number; seconds: number; image: string; video?: string }[];   // Storage paths; video when an AI clip was made
     // Background music (Part H): an uploaded track, or a prompt to compose one; null for none.
     music: { path: string | null; prompt: string | null; volumeDb: number } | null;
+    // On screen (Part I): the captions look (null for none), text overlays and image overlays (Storage paths).
+    onScreen: { captions: CaptionStyle | null; texts: TextOverlay[]; images: ImageOverlay[] };
     wordsPath: string | null;            // reviewed transcript, Storage path
     chapters: { title: string; startMs: number }[];
     quotes: { text: string; speaker: string; startMs: number; endMs: number }[];
@@ -78,6 +82,9 @@ export function planEditRender(episode: Episode, settings: StudioSettings = DEFA
     const intro = settings.intro === 'custom' ? settings.introPath
         : settings.intro === 'show' && pkg ? pkg.introPath ?? null : null;
     const showIntro = settings.intro === 'show' && !pkg;
+    const captions = captionLook(edit, settings);
+    const wordsPath = episode.review?.reviewedPath ?? null;
+    if (captions && !wordsPath) warnings.push('Captions are on, but the transcript is not accepted, so no captions were burned in.');
     if (!pkg && (settings.teasers || settings.intro === 'show')) {
         warnings.push('The edit package is not built, so the teaser clips are cut plainly from the recording and the show\'s intro comes from the site\'s files.');
     }
@@ -91,7 +98,12 @@ export function planEditRender(episode: Episode, settings: StudioSettings = DEFA
         broll: images.map(i => ({ atMs: i.startMs, seconds: i.durationSeconds, image: i.path, ...(i.videoPath ? { video: i.videoPath } : {}) })),
         music: settings.music === 'upload' && settings.musicPath ? { path: settings.musicPath, prompt: null, volumeDb: settings.musicVolumeDb }
             : settings.music === 'generate' ? { path: null, prompt: settings.musicPrompt, volumeDb: settings.musicVolumeDb } : null,
-        wordsPath: episode.review?.reviewedPath ?? null,
+        onScreen: {
+            captions: wordsPath ? captions : null,
+            texts: (edit.overlays ?? []).filter((o): o is TextOverlay => o.type === 'text'),
+            images: (edit.overlays ?? []).filter((o): o is ImageOverlay => o.type === 'image'),
+        },
+        wordsPath,
         chapters: notes?.chapters ?? [],
         quotes: (notes?.quotes ?? []).filter(q => q.endMs > q.startMs)
             .map(q => ({ text: q.text, speaker: q.speaker, startMs: q.startMs, endMs: q.endMs })),
@@ -154,6 +166,11 @@ export async function runEditRender(episodeId: string, deps: EditRenderDeps, wor
             }
         }
     }
+    // Image overlays, downloaded once each; the renderer leaves out what has nothing to show.
+    const images: { overlay: ImageOverlay; file: string }[] = [];
+    for (const [i, o] of plan.onScreen.images.entries()) images.push({ overlay: o, file: await get(o.path, `overlay-${i + 1}`) });
+    const onScreen = plan.onScreen.captions || plan.onScreen.texts.length || images.length
+        ? { captions: plan.onScreen.captions, texts: plan.onScreen.texts, images } : undefined;
     let words: TimedWord[] | undefined;
     if (plan.wordsPath) {
         const local = await get(plan.wordsPath, 'reviewed');
@@ -168,6 +185,7 @@ export async function runEditRender(episodeId: string, deps: EditRenderDeps, wor
         intro, outro: intro,
         broll: broll.length ? broll : undefined,
         music,
+        ...(onScreen ? { onScreen } : {}),
         words, chapters: plan.chapters, quotes: plan.quotes,
     });
 

@@ -166,11 +166,12 @@ export function createYoutube(creds: YoutubeCredentials) {
 
     const deleteCaption = (id: string) => call('DELETE', `${API}/captions?id=${encodeURIComponent(id)}`, { what: 'caption delete' });
 
-    async function insertCaption(videoId: string, name: string, srt: string) {
+    // A caption track; `language` is YouTube's code for it (Part I adds translated tracks).
+    async function insertCaption(videoId: string, name: string, srt: string, language = 'en') {
         const boundary = `swc${Date.now()}`;
         const body = [
             `--${boundary}`, 'Content-Type: application/json; charset=UTF-8', '',
-            JSON.stringify({ snippet: { videoId, language: 'en', name, isDraft: false } }),
+            JSON.stringify({ snippet: { videoId, language, name, isDraft: false } }),
             `--${boundary}`, 'Content-Type: application/octet-stream', '',
             srt,
             `--${boundary}--`, '',
@@ -191,5 +192,10 @@ export function createYoutube(creds: YoutubeCredentials) {
         return true;
     }
 
-    return { upload, getVideo, updateVideo, setThumbnail, listCaptions, deleteCaption, insertCaption, addToPlaylist };
+    // The title and description in other languages (Part I); YouTube shows each viewer their own.
+    const setLocalizations = (videoId: string, localizations: Record<string, { title: string; description: string }>) =>
+        call<VideoResource>('PUT', `${API}/videos?part=localizations`,
+            { body: JSON.stringify({ id: videoId, localizations }), type: 'application/json', what: 'translated title and description' });
+
+    return { upload, getVideo, updateVideo, setThumbnail, listCaptions, deleteCaption, insertCaption, addToPlaylist, setLocalizations };
 }

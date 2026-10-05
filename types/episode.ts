@@ -6,6 +6,7 @@ import type { RedraftScope } from '../lib/showNotes';
 import type { ThumbKind } from '../lib/thumbnail';
 import type { EpisodeEdit } from '../lib/edit';
 import type { Extras } from '../lib/extras';
+import type { Retake } from '../lib/retakes';
 
 // Firestore `episodes/{driveFileId}` — written by agent/src/podcast/ingest.ts via the
 // Admin SDK. See docs/specs/005-podcast-production-pipeline.md, steps 1-3.
@@ -311,6 +312,30 @@ export interface EpisodeExtras {
     result?: Extras | null;
 }
 
+// Part I: the final cut's captions translated by Claude, one SRT per language, with the YouTube
+// title and description in each language (empty when the notes were not approved).
+export interface EpisodeTranslations {
+    status: 'queued' | 'working' | 'ready' | 'failed';
+    languages: string[];                  // the languages asked for
+    requestedAt?: unknown;
+    startedAt?: unknown;
+    generatedAt?: unknown;
+    error?: string | null;
+    finalAt?: number;                     // the final cut they were made from (its finishedAt in ms)
+    tracks?: Record<string, { path: string; title: string; description: string; missing: number }>;
+}
+
+// Part I: retakes Claude found in the accepted transcript, offered in the editor as suggested cuts.
+export interface EpisodeRetakes {
+    status: 'queued' | 'working' | 'ready' | 'failed';
+    requestedAt?: unknown;
+    startedAt?: unknown;
+    generatedAt?: unknown;
+    error?: string | null;
+    found?: Retake[];
+    notFound?: number;                    // answers that were not word for word in the transcript
+}
+
 export interface Episode {
     title: string;                        // from the file name, Zoom prefix stripped
     recordedAt: string | null;            // ISO date from a Zoom file name, if present
@@ -363,6 +388,8 @@ export interface Episode {
     youtube?: EpisodeYoutube;             // the upload, spec 005 step 13
     shorts?: EpisodeShorts;               // shorts and Checkpoint E, spec 005 step 14
     extras?: EpisodeExtras;                // social posts and follow-up email from the approved notes
+    translations?: EpisodeTranslations;    // captions, title and description in other languages (Part I)
+    retakes?: EpisodeRetakes;              // retakes Claude found, for the editor (Part I)
     corrections?: TranscriptCorrections;  // speaker review fixes, a layer over raw.json
     correctionsVersion?: number;          // bumped on every save; stops two people overwriting
     costs: { items: CostItem[]; totalUsd: number };

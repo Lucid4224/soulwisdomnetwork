@@ -3,6 +3,7 @@
 // Studio settings (lib/studioSettings.ts): the show or channel, its speakers, the kind of
 // recording and how Claude writes for it, the brand look, the intro and teasers, who makes the
 // final cut, and where recordings come from. Everyone in the Studio can see them; an admin saves.
+// Part I: captions burned into the render (their look) and the languages captions are translated into.
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -10,6 +11,9 @@ import AuthGuard from "@/components/auth/AuthGuard";
 import { ErrorNote } from "@/components/studio/ErrorNote";
 import { field, hint, primary } from "@/components/studio/ui";
 import { UploadAsset } from "@/components/studio/upload";
+import { LookFields } from "@/components/studio/onScreen";
+import { LANGUAGES, LANGUAGES_MAX } from "@/lib/translate";
+import type { CaptionStyle } from "@/lib/onScreen";
 import { useAuth } from "@/context/AuthContext";
 import { DEFAULT_SETTINGS, FORMAT_LABELS, FORMATS, type StudioSettings } from "@/lib/studioSettings";
 import { studioFetch } from "@/lib/studioClient";
@@ -240,6 +244,34 @@ export default function StudioSettingsPage() {
                                         </select>
                                     </Field>
                                 )}
+                            </Section>
+
+                            {/* Part I: captions burned into the Editor Light render, and the languages they are translated into. */}
+                            <Section title="Captions" intro="Captions burned into the picture help the many people who watch with the sound off. Each video can change this in the full-page editor's On screen panel.">
+                                <label className="flex items-center gap-2 text-sm text-gray-200">
+                                    <input type="checkbox" checked={s.burnCaptions} onChange={e => set("burnCaptions", e.target.checked)} disabled={off} />
+                                    Burn captions into the Editor Light render
+                                </label>
+                                <fieldset disabled={off} className="flex flex-col gap-1">
+                                    <span className="text-sm text-gray-200">How they look</span>
+                                    <LookFields look={s.captionStyle} onChange={c => set("captionStyle", { ...s.captionStyle, ...c } as CaptionStyle)} />
+                                    <span className={hint}>Font, size, colour, background and position. The full-page editor shows them over the video as it plays.</span>
+                                </fieldset>
+                                <fieldset disabled={off} className="flex flex-col gap-1">
+                                    <span className="text-sm text-gray-200">Languages to translate the captions into</span>
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-1 text-sm text-gray-200">
+                                        {LANGUAGES.map(l => (
+                                            <label key={l.code} className="flex items-center gap-2">
+                                                <input type="checkbox" checked={s.captionLanguages.includes(l.code)}
+                                                    onChange={() => set("captionLanguages", s.captionLanguages.includes(l.code)
+                                                        ? s.captionLanguages.filter(c => c !== l.code)
+                                                        : s.captionLanguages.length < LANGUAGES_MAX ? [...s.captionLanguages, l.code] : s.captionLanguages)} />
+                                                {l.name}
+                                            </label>
+                                        ))}
+                                    </div>
+                                    <span className={hint}>Ticked first on each episode&apos;s show notes page, where Claude translates the final cut&apos;s captions, title and description (about $0.40 a language). Each goes to YouTube as its own caption track.</span>
+                                </fieldset>
                             </Section>
 
                             <Section title="Finished video" intro="What plays around the episode, and who makes the final cut.">

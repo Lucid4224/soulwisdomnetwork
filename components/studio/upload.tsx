@@ -2,13 +2,14 @@
 
 // Uploads from the Studio (lib/server/uploads.ts): asks the server for a one-time upload link,
 // sends the file straight to Cloud Storage with a progress bar, and, for a recording, turns it
-// into an episode. Used on the Studio page (recordings) and the Settings page (logo, intro, music).
+// into an episode. Used on the Studio page (recordings), the Settings page (logo, intro, music) and the
+// editor (overlay images, Part I).
 
 import { useRef, useState } from "react";
 import { studioFetch } from "@/lib/studioClient";
 import { field, hint, primary, secondary } from "@/components/studio/ui";
 
-type Kind = "episode" | "logo" | "intro" | "music";
+type Kind = "episode" | "logo" | "intro" | "music" | "overlay";
 
 // Some browsers leave the type empty for video files; the extension says what it is.
 const BY_EXTENSION: Record<string, string> = {

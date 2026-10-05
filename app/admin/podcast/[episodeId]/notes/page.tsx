@@ -28,6 +28,7 @@ import { BROLL_STYLE_IDS, BROLL_STYLES, BROLL_USD_PER_IMAGE, type BrollStyle } f
 import { chooseDescription, locate, mmss, notesChanges, sameNotes, youtubeDescription, type ShowNotes, type TeaserClip } from "@/lib/showNotes";
 import { meetingDocx } from "@/lib/meetingDoc";
 import { TranscriptDownloads, WritingExtras } from "@/components/studio/extras";
+import { Translations } from "@/components/studio/translations";
 import { studioFetch } from "@/lib/studioClient";
 import type { EpisodeNotesView } from "@/types/studio";
 import { EditorLightStage } from "@/components/studio/editorLight";
@@ -1104,6 +1105,10 @@ export default function ShowNotesPage() {
                                         </Part>
                                         <Part id="youtube" title="YouTube upload" hint="The approved episode, with the final cut's chapters, the approved thumbnail, captions and the AI disclosure.">
                                             <Youtube episodeId={episodeId} enabled={on} report={report} revision={revision} />
+                                        </Part>
+                                        {/* Part I: the captions, title and description in other languages, for viewers beyond English. */}
+                                        <Part id="translations" title="Captions in other languages" hint="Claude translates the final cut's captions, title and description; YouTube shows each viewer their own language.">
+                                            <Translations episodeId={episodeId} />
                                         </Part>
                                     </div>
                                 </Stage>

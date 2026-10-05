@@ -47,8 +47,9 @@ jobs:
     - name: Install Dependencies
       run: npm ci
 
+    # Part I: the caption and text fonts beyond the Outfit pair in agent/assets/fonts (lib/onScreen.ts FONTS).
     - name: Install ffmpeg
-      run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+      run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg fonts-open-sans fonts-roboto fonts-lato fonts-ebgaramond fonts-dejavu-core
 
     - name: Render the edit
       env:

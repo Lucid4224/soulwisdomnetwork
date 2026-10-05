@@ -1,11 +1,13 @@
 // Why: the Descript-style timeline under the editor — a ruler, speaker turns in
 // colour, cut marks, a red playhead, zoom in and out, click anywhere to jump there.
+// Part I: an "On screen" row shows the text (violet) and images (sky) laid over the video.
 
 "use client";
 
 import { useEffect, useRef, useState } from 'react';
 import type { SpokenWord } from '@/lib/showNotes';
 import type { Cut } from '@/lib/edit';
+import type { Overlay } from '@/lib/onScreen';
 import {
     msAt, pct, speakerBlocks, speakerColors, tickLabel, ticks, zoomIn, zoomOut, ZOOMS,
 } from '@/lib/timeline';
@@ -34,8 +36,8 @@ function usePlayheadScroll(scrollRef: React.RefObject<HTMLDivElement | null>, wi
     }, [scrollRef, widthPx, zoom, currentMs, totalMs]);
 }
 
-export function Timeline({ words, cuts, totalMs, currentMs, editedMs, onSeek }: {
-    words: SpokenWord[]; cuts: Cut[]; totalMs: number; currentMs: number; editedMs: number; onSeek: (ms: number) => void;
+export function Timeline({ words, cuts, overlays = [], totalMs, currentMs, editedMs, onSeek }: {
+    words: SpokenWord[]; cuts: Cut[]; overlays?: Overlay[]; totalMs: number; currentMs: number; editedMs: number; onSeek: (ms: number) => void;
 }) {
     const [zoom, setZoom] = useState(1);
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -153,6 +155,20 @@ export function Timeline({ words, cuts, totalMs, currentMs, editedMs, onSeek }: 
                             />
                         ))}
                     </div>
+
+                    {/* On screen: a 12px row, shown when there are overlays; text violet, images sky. */}
+                    {overlays.length > 0 && (
+                        <div className="relative h-3 mt-1" aria-label="On-screen items">
+                            {overlays.map(o => (
+                                <span
+                                    key={o.id}
+                                    className={`absolute top-0 h-full rounded-sm ${o.type === 'text' ? 'bg-violet-400' : 'bg-sky-400'}`}
+                                    style={blockStyle({ startMs: o.atMs, endMs: o.atMs + o.seconds * 1000 })}
+                                    title={`${o.type === 'text' ? o.text : o.name} ${mmss(o.atMs)}`}
+                                />
+                            ))}
+                        </div>
+                    )}
 
                     {/* Playhead: a 2px red line over all rows at left pct(currentMs)%. */}
                     <div

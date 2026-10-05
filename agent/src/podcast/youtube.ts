@@ -7,6 +7,8 @@
 // The video is uploaded once. Running it again updates that video's title, description, tags,
 // thumbnail and captions, and keeps whatever visibility was set in YouTube Studio. With the
 // YOUTUBE_PLAYLIST_ID repo variable set, each video is also added to that playlist (the podcast).
+// Part I: captions translated in the Studio go up as tracks of their own, with the title and
+// description in each language; running it again after translating adds them to a video already up.
 
 import * as fs from 'fs';
 import * as path from 'path';
@@ -15,6 +17,7 @@ import { FieldValue, getFirestore, type Timestamp } from 'firebase-admin/firesto
 import { getStorage } from 'firebase-admin/storage';
 import { buildCues, toSrt } from '../../../lib/captions';
 import type { TimedWord } from '../../../lib/retime';
+import { languageName } from '../../../lib/translate';
 import { youtubeMetadata } from '../../../lib/youtube';
 import type { Episode } from '../../../types/episode';
 import { loadAlert } from './config';
@@ -145,6 +148,37 @@ async function main() {
         const message = (error as Error).message;
         console.warn(`  ⚠️ ${message}`);
         warnings.push(`The captions were not added: ${message}`);
+    }
+
+    // Translated captions (Part I): each language replaces its own earlier track; the title and
+    // description in each language go up together at the end.
+    const translations = episode.translations?.status === 'ready' ? episode.translations : undefined;
+    if (translations?.tracks && Object.keys(translations.tracks).length) {
+        if (translations.finalAt !== finalAt) warnings.push('The translated captions were made from an earlier final cut; translate them again so they match.');
+        const localizations: Record<string, { title: string; description: string }> = {};
+        let existing: Awaited<ReturnType<typeof youtube.listCaptions>> = [];
+        try { existing = await youtube.listCaptions(videoId); } catch { /* inserted below without replacing */ }
+        for (const [code, track] of Object.entries(translations.tracks)) {
+            try {
+                const [srt] = await withRetry('Storage download', () => bucket.file(track.path).download());
+                for (const c of existing) {
+                    if (c.snippet.language === code && c.snippet.name === languageName(code)) await youtube.deleteCaption(c.id);
+                }
+                await youtube.insertCaption(videoId, languageName(code), srt.toString('utf8'), code);
+                if (track.title) localizations[code] = { title: track.title, description: track.description };
+                console.log(`  ✅ ${languageName(code)} captions added`);
+            } catch (error) {
+                warnings.push(`The ${languageName(code)} captions were not added: ${(error as Error).message}`);
+            }
+        }
+        if (Object.keys(localizations).length) {
+            try {
+                await youtube.setLocalizations(videoId, localizations);
+                console.log('  ✅ Title and description added in other languages');
+            } catch (error) {
+                warnings.push(`The translated titles and descriptions were not added: ${(error as Error).message}`);
+            }
+        }
     }
 
     // The channel's podcast (repo variable YOUTUBE_PLAYLIST_ID); runs on updates too, so older uploads get added.

@@ -6,6 +6,8 @@
 
 import { z } from 'zod';
 import { DEFAULT_MUSIC_PROMPT, MUSIC_MODES } from './aiMedia';
+import { CaptionStyleSchema, DEFAULT_CAPTION_STYLE } from './onScreen';
+import { LANGUAGE_CODES, LANGUAGES_MAX } from './translate';
 
 export const SETTINGS_DOC = { collection: 'settings', id: 'studio' } as const;
 
@@ -43,6 +45,9 @@ export const StudioSettingsSchema = z.object({
     musicPath: z.string().max(300).nullable(),    // Cloud Storage, when music is 'upload'
     musicPrompt: z.string().trim().max(500),      // what ElevenLabs composes, when music is 'generate'
     musicVolumeDb: z.number().int().min(-40).max(-6),   // how far under the voice the music sits
+    burnCaptions: z.boolean(),                    // captions burned into the Editor Light render (Part I)
+    captionStyle: CaptionStyleSchema,             // their font, size, colour, background and position
+    captionLanguages: z.array(z.enum(LANGUAGE_CODES)).max(LANGUAGES_MAX),   // languages the captions are translated into
     intro: z.enum(['show', 'custom', 'none']),    // the show's intro (also the outro), your own, or none
     introPath: z.string().max(300).nullable(),    // Cloud Storage, when intro is 'custom'
     teasers: z.boolean(),                         // "In this episode" clips before the intro
@@ -74,6 +79,9 @@ export const DEFAULT_SETTINGS: StudioSettings = {
     musicPath: null,
     musicPrompt: DEFAULT_MUSIC_PROMPT,
     musicVolumeDb: -24,
+    burnCaptions: false,
+    captionStyle: DEFAULT_CAPTION_STYLE,
+    captionLanguages: [],
     intro: 'show',
     introPath: null,
     teasers: true,

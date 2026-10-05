@@ -9,6 +9,7 @@ import type { ReviewUtterance } from '@/lib/transcript';
 import type { ThumbKind } from '@/lib/thumbnail';
 import type { YoutubeMetadata } from '@/lib/youtube';
 import type { Extras } from '@/lib/extras';
+import type { Retake } from '@/lib/retakes';
 import type { DetectedSpeaker, EpisodeBroll, EpisodeDescript, EpisodeFinal, EpisodePackage, EpisodeNotes, EpisodeStage, EpisodeShorts, EpisodeStatus, EpisodeThumbnails, EpisodeYoutube, TranscriptCorrections } from './episode';
 
 export interface DriveVideo {
@@ -90,6 +91,27 @@ export interface ExtrasView {
     error: string | null;
     direction: string;
     result: Extras | null;
+    generatedAt: number | null;
+}
+
+// GET /api/studio/episodes/[id]/translations: the final cut's captions in other languages (Part I).
+export interface TranslationsView {
+    status: 'queued' | 'working' | 'ready' | 'failed' | null;
+    error: string | null;
+    languages: string[];                  // asked for last time, or the Studio's languages
+    canStart: string | null;              // null when translating can start; otherwise why not
+    tracks: { code: string; name: string; url: string | null; missing: number; withTitle: boolean }[];
+    stale: boolean;                       // the final cut changed since they were made
+    onYoutube: boolean;                   // the episode is already on YouTube (upload again to add them)
+    generatedAt: number | null;
+}
+
+// GET /api/studio/episodes/[id]/retakes: retakes Claude found for the editor (Part I).
+export interface RetakesView {
+    status: 'queued' | 'working' | 'ready' | 'failed' | null;
+    error: string | null;
+    found: Retake[];
+    notFound: number;
     generatedAt: number | null;
 }
 

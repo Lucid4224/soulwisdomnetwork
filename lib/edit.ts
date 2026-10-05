@@ -2,16 +2,20 @@
 // Cuts, kept ranges, time mapping, and suggestions for filler words, repeats, and pauses.
 
 import type { SpokenWord } from './showNotes';
+import type { CaptionChoice, Overlay } from './onScreen';
 
 export interface Cut {
     startMs: number;
     endMs: number;
-    reason: 'filler' | 'pause' | 'repeat' | 'manual';
+    reason: 'filler' | 'pause' | 'repeat' | 'manual' | 'retake';   // 'retake': found by Claude (Part I)
 }
 
 export interface EpisodeEdit {
     cuts: Cut[];
     version: number;
+    // Part I: text and image overlays, and this video's own captions choice (null or missing: the Studio's).
+    overlays?: Overlay[];
+    captions?: CaptionChoice | null;
 }
 
 export interface KeptRange {
